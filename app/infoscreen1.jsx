@@ -26,10 +26,10 @@ export default function App() {
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
               {/* تصحيح الكلمة الإنجليزية "superpowers" */}
-              Transform your lectures into superpowers
+              Turn your boring lectures into fun activities
             </Text>
             <Text style={styles.subtitleText}>
-              Summarize lessons, create quizzes, and generate flashcards with a single click.
+              Summarize lessons, create quizzes, access to degital library, and generate flashcards with a single click.
             </Text>
           </View>
         </View>
@@ -77,8 +77,7 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    // تخصيص ارتفاع ثابت بنسبة مئوية من مساحة الـ upperContainer لتقليل الفراغ
-    height: "65%", 
+    height: "75%", 
     resizeMode: "contain",
   },
 
@@ -95,8 +94,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "bold",
     fontSize: 28,
-    paddingBottom: 15,
-    marginTop:-15
+    paddingBottom: 20,
+    marginTop:-10
   },
   subtitleText: {
     color: "#a7adb8ff",
@@ -109,7 +108,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: "40%", // قللنا المسافة قليلاً
+    marginBottom: "12%", // قللنا المسافة قليلاً
   },
   indicator: {
     width: 12,

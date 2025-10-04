@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    marginBottom:"8%",
+    marginBottom:"10%",
   },
   text: {
     color: 'white',

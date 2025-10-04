@@ -25,7 +25,7 @@ export default function App() {
               Turn boring lectures into fun activities
             </Text>
             <Text style={styles.subtitleText}>
-              We have all the lessons, instant summary, quizzes with a click, and professional review
+              Access all curricula, summarize instantly, create quizzes in a click, and master your exams. 
             </Text>
           </View>
         </View>
@@ -68,7 +68,8 @@ const styles = StyleSheet.create({
   imageStyle: {
     width: "100%",
     resizeMode: "contain",
-    borderWidth:1
+    borderWidth:1,
+
   },
   textContainer: {
     alignItems: "center",
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 16,
     lineHeight: 24,
-    maxWidth: '90%',
+    maxWidth: '97%',
   },
   indicatorContainer: {
     flexDirection: "row",

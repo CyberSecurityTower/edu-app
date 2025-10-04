@@ -65,10 +65,10 @@ const styles = StyleSheet.create({
   bottomContainer: {
     marginBottom: '25%',
   },
-  // 3. أزلنا خاصية الـ height من هنا لأنها أصبحت ديناميكية
   imageStyle: {
     width: "100%",
     resizeMode: "contain",
+    borderWidth:1
   },
   textContainer: {
     alignItems: "center",

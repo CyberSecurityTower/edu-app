@@ -22,10 +22,10 @@ export default function App() {
           />
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
-              Transform your lectures into superwors
+              Turn boring lectures into fun activities
             </Text>
             <Text style={styles.subtitleText}>
-              Summarize lessons, create quizzes, and generate flashcards with a single click.
+              We have all the lessons, instant summary, quizzes with a click, and professional review
             </Text>
           </View>
         </View>

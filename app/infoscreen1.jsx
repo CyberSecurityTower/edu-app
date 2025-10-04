@@ -1,16 +1,24 @@
-import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
-import { useWindowDimensions } from "react-native";
-    
+
+// لاحظ أننا أزلنا تعريف const { height } من هنا
+
 export default function App() {
-   const { height } = useWindowDimensions()
+  // نعرف الطول والعرض هنا داخل المكون
+  const { height } = useWindowDimensions();
+
+  // 1. نُعرّف النمط الديناميكي هنا بالداخل
+  const dynamicImageStyle = {
+    height: height * 0.55,
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.mainContainer}>
         <View style={styles.upperContainer}>
           <Image
             source={require("../assets/images/tst.png")}
-            style={styles.imageStyle}
+            style={[styles.imageStyle, dynamicImageStyle]}
           />
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
@@ -52,14 +60,14 @@ const styles = StyleSheet.create({
   },
   upperContainer: {
     alignItems: 'center',
-    marginTop: "16%", // <-- أعدت هذه القيمة لتوازن أفضل
+    marginTop: "16%",
   },
   bottomContainer: {
-    marginBottom: '25%', // <-- التعديل 1: زدنا القيمة لرفع الجزء السفلي
+    marginBottom: '25%',
   },
+  // 3. أزلنا خاصية الـ height من هنا لأنها أصبحت ديناميكية
   imageStyle: {
     width: "100%",
-    height: height * 0.45, // <-- التعديل 2 (الأهم): استخدم قيمة ثابتة ومناسبة
     resizeMode: "contain",
   },
   textContainer: {
@@ -83,7 +91,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 50,
+    marginBottom: 45,
+    marginTop:25
   },
   indicator: {
     width: 12,

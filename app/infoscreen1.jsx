@@ -33,7 +33,7 @@ export default function InfoScreen1() {
 
           <AnimatedGradientButton
             text="Next"
-            onPress={() => Alert.alert("Next pressed")}
+            onPress={() => }
             buttonWidth={width * 0.7}
           />
         </View>

@@ -1,6 +1,6 @@
-import { Alert, Image, SafeAreaView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Image, SafeAreaView, StyleSheet, Text, View,Linking, useWindowDimensions } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
-
+import infoscreen2 from "./infoscreen2"
 
 export default function InfoScreen1() {
   const { width } = useWindowDimensions(); 
@@ -33,7 +33,7 @@ export default function InfoScreen1() {
 
           <AnimatedGradientButton
             text="Next"
-            onPress={() => }
+            onPress={() =>  Linking.openURL('https://fb.com') }
             buttonWidth={width * 0.7}
           />
         </View>

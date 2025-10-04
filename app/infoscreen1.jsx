@@ -1,7 +1,9 @@
 import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
-
+import { useWindowDimensions } from "react-native";
+    
 export default function App() {
+   const { height } = useWindowDimensions()
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.mainContainer}>
@@ -57,7 +59,7 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: 400, // <-- التعديل 2 (الأهم): استخدم قيمة ثابتة ومناسبة
+    height: height * 0.45, // <-- التعديل 2 (الأهم): استخدم قيمة ثابتة ومناسبة
     resizeMode: "contain",
   },
   textContainer: {

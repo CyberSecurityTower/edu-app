@@ -33,7 +33,7 @@ export default function InfoScreen1() {
 
           <AnimatedGradientButton
             text="Next"
-            onPress={() =>  Linking.openURL('https://fb.com') }
+            onPress={() =>  Linking.openURL('http://localhost:8081/infoscreen2') }
             buttonWidth={width * 0.7}
           />
         </View>

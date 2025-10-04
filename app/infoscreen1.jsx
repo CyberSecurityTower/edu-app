@@ -1,38 +1,44 @@
-import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import AnimatedGradientButton from "./AnimatedGradientButton";
+import { Alert, Image, SafeAreaView, StyleSheet, Text, View } from "react-native";
+// استبدلنا ScrollView بـ View عادي لضمان تخطيط ثابت ومتحكم به
+// وأزلنا useWindowDimensions لتبسيط الكود بما أن الـ Layout أصبح ثابتاً
 
-// لاحظ أننا أزلنا تعريف const { height } من هنا
+// نفترض أن هذا المكون موجود ويحتوي على الكود الذي أرسلته سابقاً
+import AnimatedGradientButton from "./AnimatedGradientButton"; 
+
+
 
 export default function App() {
-  // نعرف الطول والعرض هنا داخل المكون
-  const { height } = useWindowDimensions();
 
-  // 1. نُعرّف النمط الديناميكي هنا بالداخل
-  const dynamicImageStyle = {
-    height: height * 0.55,
-  };
+  // ملاحظة: قمنا بتطبيق خاصية flex لتقسيم الشاشة بدلاً من استخدام useWindowDimensions
+  // هذا يجعل التخطيط (Layout) أكثر استقراراً وأسهل في التحكم
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.mainContainer}>
+      <View style={styles.mainContainer}>
+        
+        {/* القسم العلوي: الصورة والنصوص - يأخذ 3/4 من الشاشة */}
         <View style={styles.upperContainer}>
           <Image
-            source={require("../assets/images/tst.png")}
-            style={[styles.imageStyle, dynamicImageStyle]}
+            // تأكد من تحديث المسار الصحيح للصورة في مشروعك 
+            source={require("../assets/images/tst.png")} 
+            style={styles.imageStyle}
           />
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
-              Turn boring lectures into fun activities
+              {/* تصحيح الكلمة الإنجليزية "superpowers" */}
+              Transform your lectures into superpowers
             </Text>
             <Text style={styles.subtitleText}>
-              Access all curricula, summarize instantly, create quizzes in a click, and master your exams. 
+              Summarize lessons, create quizzes, and generate flashcards with a single click.
             </Text>
           </View>
         </View>
 
+        {/* القسم السفلي: مؤشرات الصفحة والزر - يأخذ 1/4 من الشاشة */}
         <View style={styles.bottomContainer}>
           <View style={styles.indicatorContainer}>
-            <View style={[styles.indicator, { backgroundColor: "#10B981", borderColor: "#10B981" }]} />
+            {/* الألوان تم تجميعها هنا: الأول نشط والبقية غير نشطة */}
+            <View style={[styles.indicator, styles.activeIndicator]} /> 
             <View style={styles.indicator} />
             <View style={styles.indicator} />
           </View>
@@ -43,7 +49,7 @@ export default function App() {
             withGlow={true}
           />
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -51,25 +57,35 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0C0F27",
+    backgroundColor: "#0C0F27", // لون الخلفية الداكن
   },
   mainContainer: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    flex: 1, // يستخدم كل المساحة المتاحة
+    paddingHorizontal: 20, // حواف جانبية
   },
+  
+  // =======================================================
+  // التعديلات الرئيسية هنا: استخدام Flexbox لتقسيم الشاشة
+  // =======================================================
+
   upperContainer: {
+    flex: 3, // نخصص 75% من المساحة (3 أجزاء) للصورة والنص
     alignItems: 'center',
-    marginTop: "16%",
-  },
-  bottomContainer: {
-    marginBottom: '25%',
+    justifyContent: 'flex-start', // بدء المحتوى من الأعلى
+    paddingTop: '16%', // لتعويض شريط الحالة (Status Bar)
+    // لا نحتاج لـ marginTop هنا لأننا استخدمنا paddingTop
   },
   imageStyle: {
     width: "100%",
+    // تخصيص ارتفاع ثابت بنسبة مئوية من مساحة الـ upperContainer لتقليل الفراغ
+    height: "65%", 
     resizeMode: "contain",
-    borderWidth:1,
+  },
 
+  bottomContainer: {
+    flex: 1, // نخصص 25% من المساحة (1 جزء) للمؤشرات والزر
+    justifyContent: 'flex-end', // دفع المحتوى (الأزرار) إلى الأسفل
+    paddingBottom: '10%', // لإعطاء مسافة جميلة أسفل الزر
   },
   textContainer: {
     alignItems: "center",
@@ -80,20 +96,20 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 28,
     paddingBottom: 15,
+    marginTop:-15
   },
   subtitleText: {
     color: "#a7adb8ff",
     textAlign: "center",
     fontSize: 16,
     lineHeight: 24,
-    maxWidth: '97%',
+    maxWidth: '90%',
   },
   indicatorContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 45,
-    marginTop:25
+    marginBottom: "40%", // قللنا المسافة قليلاً
   },
   indicator: {
     width: 12,
@@ -102,5 +118,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 6,
     marginHorizontal: 8,
+    backgroundColor: "transparent", // اللون الافتراضي شفاف
   },
+  activeIndicator: {
+    backgroundColor: "#10B981", // اللون الأخضر للمؤشر النشط
+    borderColor: "#10B981",
+  }
 });

@@ -11,7 +11,7 @@ export default function InfoScreen1() {
         
         <View style={styles.upperContainer}>
           <Image
-            source={require("../assets/images/tst.png")} 
+            source={require("../assets/images/info1.png")} 
             style={styles.imageStyle}
           />
           <View style={styles.textContainer}>

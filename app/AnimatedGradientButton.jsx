@@ -4,25 +4,28 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
+// 1. أزلنا 'export default' من هنا
 const AnimatedGradientButton = ({ text, onPress, withGlow = false, buttonWidth = 240 }) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedValue, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: false,
-        }),
-      ])
-    ).start();
-  }, [animatedValue]);
+    if (withGlow) { // نشغل الأنيميشن فقط إذا كان التوهج مطلوبًا
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(animatedValue, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: false, // useNativeDriver: true لا يعمل مع الألوان أو التدرجات
+          }),
+          Animated.timing(animatedValue, {
+            toValue: 0,
+            duration: 1500,
+            useNativeDriver: false,
+          }),
+        ])
+      ).start();
+    }
+  }, [animatedValue, withGlow]);
 
   const startX = animatedValue.interpolate({
     inputRange: [0, 1],
@@ -34,23 +37,29 @@ const AnimatedGradientButton = ({ text, onPress, withGlow = false, buttonWidth =
     outputRange: [0.5, 2.5],
   });
 
+  // 2. تحسين الأنماط الديناميكية لتكون نسبية (أفضل للتجاوب)
   const dynamicStyles = {
     button: {
       width: buttonWidth,
-      height: 60,
-      borderRadius: 30,
+      height: buttonWidth * 0.25, // الارتفاع = ربع العرض (للحفاظ على النسبة)
+      borderRadius: buttonWidth * 0.125, // نصف الارتفاع
     },
     glow: {
       width: buttonWidth,
-      height: 70,
-      borderRadius: 35,
-      backgroundColor: '#10B981',
+      height: buttonWidth * 0.29, // نسبة عرض إلى ارتفاع مختلفة قليلاً للتوهج
+      borderRadius: buttonWidth * 0.145,
+      backgroundColor: '#10B981', // يمكنك تمرير اللون كـ prop أيضًا
       opacity: 0.4,
     },
     text: {
-      fontSize: buttonWidth > 200 ? 20 : 18,
+      fontSize: buttonWidth * 0.08, // حجم الخط يعتمد على عرض الزر
     }
   };
+
+  const glowScale = animatedValue.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.1, 1], // يكبر ثم يصغر
+  });
 
   return (
     <View style={styles.container}>
@@ -59,16 +68,7 @@ const AnimatedGradientButton = ({ text, onPress, withGlow = false, buttonWidth =
           <Animated.View
             style={[
               dynamicStyles.glow,
-              {
-                transform: [
-                  {
-                    scale: animatedValue.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [1, 1.1, 1],
-                    }),
-                  },
-                ],
-              },
+              { transform: [{ scale: glowScale }] },
             ]}
           />
         </View>
@@ -101,7 +101,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    marginBottom: "10%",
+    // 3. أزلنا الهامش السفلي (marginBottom) من هنا
+    // من الأفضل أن يتحكم المكون الأب في هوامش الزر
   },
   text: {
     color: 'white',

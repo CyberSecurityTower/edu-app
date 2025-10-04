@@ -1,5 +1,5 @@
 import { Alert, Image, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import AnimatedGradientButton from "./AnimatedGradientButton"; 
+import AnimatedGradientButton from "./AnimatedGradientButton";
 import { useWindowDimensions } from "react-native";
 
 

@@ -9,8 +9,10 @@ export default function InfoScreen2() {
         <View style={styles.upperContainer}>
           <Image
             source={require("../assets/images/info2.png")} 
-            style={styles.imageStyle}
-          />
+            style={styles.imageStyle}/>
+
+            
+          
         </View>
 
       </View>
@@ -21,7 +23,7 @@ export default function InfoScreen2() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#090c24ff",
+    backgroundColor: "#0F151F",
   },
   mainContainer: {
     flex: 1,
@@ -35,7 +37,7 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: "75%", 
+    height: "50%", 
     resizeMode: "contain",
   },
   bottomContainer: {

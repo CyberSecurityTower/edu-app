@@ -1,27 +1,21 @@
-import { Alert, Image, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, SafeAreaView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
-import { useWindowDimensions } from "react-native";
 
 
-export default function App() {
-const { width } = useWindowDimensions(); 
-  // ملاحظة: قمنا بتطبيق خاصية flex لتقسيم الشاشة بدلاً من استخدام useWindowDimensions
-  // هذا يجعل التخطيط (Layout) أكثر استقراراً وأسهل في التحكم
+export default function InfoScreen1() {
+  const { width } = useWindowDimensions(); 
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.mainContainer}>
         
-        {/* القسم العلوي: الصورة والنصوص - يأخذ 3/4 من الشاشة */}
         <View style={styles.upperContainer}>
           <Image
-            // تأكد من تحديث المسار الصحيح للصورة في مشروعك 
             source={require("../assets/images/tst.png")} 
             style={styles.imageStyle}
           />
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
-              {/* تصحيح الكلمة الإنجليزية "superpowers" */}
               Turn your boring lectures into fun activities
             </Text>
             <Text style={styles.subtitleText}>
@@ -30,21 +24,18 @@ const { width } = useWindowDimensions();
           </View>
         </View>
 
-        {/* القسم السفلي: مؤشرات الصفحة والزر - يأخذ 1/4 من الشاشة */}
         <View style={styles.bottomContainer}>
           <View style={styles.indicatorContainer}>
-            {/* الألوان تم تجميعها هنا: الأول نشط والبقية غير نشطة */}
             <View style={[styles.indicator, styles.activeIndicator]} /> 
             <View style={styles.indicator} />
             <View style={styles.indicator} />
           </View>
 
- <AnimatedGradientButton
-      text="Next"
-      onPress={() => Alert.alert("Next pressed")}
-      withGlow={true}
-      buttonWidth={width * 0.7}
-    />
+          <AnimatedGradientButton
+            text="Next"
+            onPress={() => Alert.alert("Next pressed")}
+            buttonWidth={width * 0.7}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -54,34 +45,27 @@ const { width } = useWindowDimensions();
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0C0F27", // لون الخلفية الداكن
+    backgroundColor: "#0C0F27",
   },
   mainContainer: {
-    flex: 1, // يستخدم كل المساحة المتاحة
-    paddingHorizontal: 20, // حواف جانبية
+    flex: 1,
+    paddingHorizontal: 20,
   },
-  
-  // =======================================================
-  // التعديلات الرئيسية هنا: استخدام Flexbox لتقسيم الشاشة
-  // =======================================================
-
   upperContainer: {
-    flex: 3, // نخصص 75% من المساحة (3 أجزاء) للصورة والنص
+    flex: 3, 
     alignItems: 'center',
-    justifyContent: 'flex-start', // بدء المحتوى من الأعلى
-    paddingTop: '16%', // لتعويض شريط الحالة (Status Bar)
-    // لا نحتاج لـ marginTop هنا لأننا استخدمنا paddingTop
+    justifyContent: 'flex-start',
+    paddingTop: '16%', 
   },
   imageStyle: {
     width: "100%",
     height: "75%", 
     resizeMode: "contain",
   },
-
   bottomContainer: {
-    flex: 1, // نخصص 25% من المساحة (1 جزء) للمؤشرات والزر
-    justifyContent: 'flex-end', // دفع المحتوى (الأزرار) إلى الأسفل
-    paddingBottom: '10%', // لإعطاء مسافة جميلة أسفل الزر
+    flex: 1, 
+    justifyContent: 'flex-end',
+    paddingBottom: '10%',
   },
   textContainer: {
     alignItems: "center",
@@ -105,7 +89,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: "12%", // قللنا المسافة قليلاً
+    marginBottom: "12%",
   },
   indicator: {
     width: 12,
@@ -114,10 +98,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 6,
     marginHorizontal: 8,
-    backgroundColor: "transparent", // اللون الافتراضي شفاف
+    backgroundColor: "transparent",
   },
   activeIndicator: {
-    backgroundColor: "#10B981", // اللون الأخضر للمؤشر النشط
+    backgroundColor: "#10B981",
     borderColor: "#10B981",
   }
 });

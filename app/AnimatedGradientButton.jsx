@@ -4,7 +4,6 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-// 1. تم حذف prop الـ "withGlow" لأنه لم يعد مستخدماً
 const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
 
@@ -13,12 +12,12 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
-          duration: 900,
+          duration: 1000,
           useNativeDriver: false,
         }),
         Animated.timing(animatedValue, {
           toValue: 0,
-          duration: 900,
+          duration: 1100,
           useNativeDriver: false,
         }),
       ])

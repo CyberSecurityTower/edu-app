@@ -1,14 +1,10 @@
 import { Alert, Image, SafeAreaView, StyleSheet, Text, View } from "react-native";
-// استبدلنا ScrollView بـ View عادي لضمان تخطيط ثابت ومتحكم به
-// وأزلنا useWindowDimensions لتبسيط الكود بما أن الـ Layout أصبح ثابتاً
-
-// نفترض أن هذا المكون موجود ويحتوي على الكود الذي أرسلته سابقاً
 import AnimatedGradientButton from "./AnimatedGradientButton"; 
-
+import { useWindowDimensions } from "react-native";
 
 
 export default function App() {
-
+const { width } = useWindowDimensions(); 
   // ملاحظة: قمنا بتطبيق خاصية flex لتقسيم الشاشة بدلاً من استخدام useWindowDimensions
   // هذا يجعل التخطيط (Layout) أكثر استقراراً وأسهل في التحكم
 
@@ -43,11 +39,12 @@ export default function App() {
             <View style={styles.indicator} />
           </View>
 
-          <AnimatedGradientButton
-            text="Next"
-            onPress={() => Alert.alert("Next pressed")}
-            withGlow={true}
-          />
+ <AnimatedGradientButton
+      text="Next"
+      onPress={() => Alert.alert("Next pressed")}
+      withGlow={true}
+      buttonWidth={width * 0.7}
+    />
         </View>
       </View>
     </SafeAreaView>

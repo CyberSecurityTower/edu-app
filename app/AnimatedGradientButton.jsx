@@ -4,7 +4,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-const AnimatedGradientButton = ({ text, onPress, withGlow = false }) => {
+const AnimatedGradientButton = ({ text, onPress, withGlow = false, buttonWidth = 240 }) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -34,21 +34,53 @@ const AnimatedGradientButton = ({ text, onPress, withGlow = false }) => {
     outputRange: [0.5, 2.5],
   });
 
+  const dynamicStyles = {
+    button: {
+      width: buttonWidth,
+      height: 60,
+      borderRadius: 30,
+    },
+    glow: {
+      width: buttonWidth,
+      height: 70,
+      borderRadius: 35,
+      backgroundColor: '#10B981',
+      opacity: 0.4,
+    },
+    text: {
+      fontSize: buttonWidth > 200 ? 20 : 18,
+    }
+  };
+
   return (
     <View style={styles.container}>
       {withGlow && (
         <View style={styles.glowWrapper}>
-          <View style={styles.glow} />
+          <Animated.View
+            style={[
+              dynamicStyles.glow,
+              {
+                transform: [
+                  {
+                    scale: animatedValue.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [1, 1.1, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
         </View>
       )}
       <Pressable onPress={onPress}>
         <AnimatedGradient
-          colors={['rgba(86, 7, 255, 1)','#10B981']}
+          colors={['rgba(86, 7, 255, 1)', '#10B981']}
           start={{ x: startX, y: 0.5 }}
           end={{ x: endX, y: 0.5 }}
-          style={styles.button}
+          style={[styles.button, dynamicStyles.button]}
         >
-          <Text style={styles.text}>{text}</Text>
+          <Text style={[styles.text, dynamicStyles.text]}>{text}</Text>
         </AnimatedGradient>
       </Pressable>
     </View>
@@ -65,26 +97,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glow: {
-    width: 240,
-    height: 70,
-    borderRadius: 35,
-
-  },
   button: {
-    width: 240,
-    height: 60,
-    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    marginBottom:"10%",
+    marginBottom: "10%",
   },
   text: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 20,
   },
 });
-
-export default AnimatedGradientButton;

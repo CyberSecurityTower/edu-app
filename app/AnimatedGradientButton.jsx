@@ -53,7 +53,7 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
     <View style={styles.container}>
       <Pressable onPress={onPress}>
         <AnimatedGradient
-          colors={['rgba(86, 7, 255, 1)', '#10B981']}
+          colors={['rgba(7, 152, 255, 1)', '#10B981']}
           start={{ x: startX, y: 0.5 }}
           end={{ x: endX, y: 0.5 }}
           style={[styles.button, dynamicStyles.button]}

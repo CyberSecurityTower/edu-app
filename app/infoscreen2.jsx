@@ -10,11 +10,30 @@ export default function InfoScreen2() {
           <Image
             source={require("../assets/images/info2.png")} 
             style={styles.imageStyle}/>
+             <View style={styles.textContainer}>
+                        <Text style={styles.titleText}>
+                          Study smarter,{'\n'}not harder
+                        </Text>
+                        <Text style={styles.subtitleText}>
+                          Our intelligent system helps you focus of what truly matters, saving you hours of manual work
+                        </Text>
+              </View>
 
-            
+          <View style={styles.bottomContainer}>
+          <View style={styles.indicatorContainer}>
+            <View style={[styles.indicator, styles.activeIndicator]} /> 
+            <View style={styles.indicator} />
+            <View style={styles.indicator} />
+          </View>
+
+          <AnimatedGradientButton
+            text="Next"
+            onPress={() =>  Linking.openURL('http://localhost:8081/infoscreen2') }
+            buttonWidth={width * 0.7}
+          />
           
         </View>
-
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -52,7 +71,7 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
     fontWeight: "bold",
-    fontSize: 28,
+    fontSize: 35,
     paddingBottom: 20,
     marginTop:-10
   },

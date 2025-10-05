@@ -1,6 +1,5 @@
-import { Alert, Image, SafeAreaView, StyleSheet, Text, View,Linking, useWindowDimensions } from "react-native";
+import { Image, Linking, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
-import infoscreen2 from "./infoscreen2"
 
 export default function InfoScreen1() {
   const { width } = useWindowDimensions(); 
@@ -28,13 +27,15 @@ export default function InfoScreen1() {
           <View style={styles.indicatorContainer}>
             <View style={[styles.indicator, styles.activeIndicator]} /> 
             <View style={styles.indicator} />
+
             <View style={styles.indicator} />
           </View>
 
           <AnimatedGradientButton
             text="Next"
             onPress={() =>  Linking.openURL('http://localhost:8081/infoscreen2') }
-            buttonWidth={width * 0.7}
+            buttonWidth={width * 0.2}
+            style={{width:20}}
           />
         </View>
       </View>

@@ -21,16 +21,11 @@ export default function InfoScreen2() {
 
           <View style={styles.bottomContainer}>
           <View style={styles.indicatorContainer}>
-            <View style={[styles.indicator, styles.activeIndicator]} /> 
-            <View style={styles.indicator} />
+            <View style={styles.indicator} /> 
+            <View style={[styles.indicator, styles.activeIndicator]} />
             <View style={styles.indicator} />
           </View>
-
-          <AnimatedGradientButton
-            text="Next"
-            onPress={() =>  Linking.openURL('http://localhost:8081/infoscreen2') }
-            buttonWidth={width * 0.7}
-          />
+          <BUTTON
           
         </View>
         </View>

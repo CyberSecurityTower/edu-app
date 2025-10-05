@@ -1,5 +1,6 @@
-import { Alert, Image, SafeAreaView, StyleSheet, Text, View,Linking, useWindowDimensions } from "react-native";
+import { Alert, Image, SafeAreaView, StyleSheet, Text, View,Linking, useWindowDimensions, Pressable } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
+import { Button } from "react-native-web";
 
 export default function InfoScreen2() {
   const {width} = useWindowDimensions();
@@ -25,8 +26,13 @@ export default function InfoScreen2() {
             <View style={[styles.indicator, styles.activeIndicator]} />
             <View style={styles.indicator} />
           </View>
-          <BUTTON
-          
+
+          <Pressable>
+         <View style={{width:"180%",height:"55%",backgroundColor:"red", borderRadius:50}}>
+          <Text style={{textAlign:"center"}}>Next</Text>
+        </View>
+          </Pressable>
+
         </View>
         </View>
       </View>

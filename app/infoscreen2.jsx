@@ -1,12 +1,9 @@
 import { Alert, Image, SafeAreaView, StyleSheet, Text, View, useWindowDimensions, Pressable } from "react-native";
-// استوردنا المكون الذي بنيته
-import AnimatedGradientButton from "./AnimatedGradientButton"; 
+import AnimatedGradientButton from "./AnimatedGradientButton";
 
-// قم بتغيير اسم المكون لتجنب التكرار في React Native
 export default function InfoScreen2() {
   const { width } = useWindowDimensions();
 
-  // دوال التنقل الوهمية
   const handlePrevious = () => Alert.alert("Previous pressed");
   const handleNext = () => Alert.alert("Next pressed");
 
@@ -16,7 +13,6 @@ export default function InfoScreen2() {
 
         <View style={styles.upperContainer}>
           <Image
-            // تأكد من تحديث المسار الصحيح للصورة في مشروعك 
             source={require("../assets/images/info2.png")} 
             style={styles.imageStyle}
           />
@@ -31,25 +27,21 @@ export default function InfoScreen2() {
         </View>
 
         <View style={styles.bottomContainer}>
-          {/* مؤشرات الصفحة */}
           <View style={styles.indicatorContainer}>
             <View style={styles.indicator} />
             <View style={[styles.indicator, styles.activeIndicator]} />
             <View style={styles.indicator} />
           </View>
 
-
           <View style={styles.buttonGroup}>
-            {/* زر Previous - أصبح زر حافة (Outline Button) */}
             <Pressable style={[styles.previousButton, {width: width * 0.35}]} onPress={handlePrevious}>
                 <Text style={styles.previousButtonText}>Previous</Text>
             </Pressable>
 
-            {/* زر Next - يستخدم المكون الرئيسي AnimatedGradientButton */}
             <AnimatedGradientButton
               text="Next"
               onPress={handleNext}
-              buttonWidth={width * 0.50} // نخصص مساحة أكبر للزر الأساسي
+              buttonWidth={width * 0.5} 
             />
           </View>
         </View>
@@ -61,7 +53,7 @@ export default function InfoScreen2() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0F151F", // *تم توحيد اللون مع الشاشة الأولى*
+    backgroundColor: "#0C0F27",
   },
   mainContainer: {
     flex: 1,
@@ -75,8 +67,9 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: "85%", // زيادة الارتفاع لملء الشاشة بشكل أفضل
+    height: "55%", 
     resizeMode: "contain",
+    marginBottom: 20,
   },
   bottomContainer: {
     flex: 1,
@@ -90,22 +83,22 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
     fontWeight: "bold",
-    fontSize: 34, 
+    fontSize: 28,
     paddingBottom: 20,
-    marginTop: "-15%",
+    marginTop: -10,
   },
   subtitleText: {
     color: "#a7adb8ff",
     textAlign: "center",
     fontSize: 16,
     lineHeight: 24,
-    maxWidth: '80%',
+    maxWidth: '90%',
   },
   indicatorContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: "11%",
+    marginBottom: "12%",
   },
   indicator: {
     width: 12,
@@ -122,20 +115,20 @@ const styles = StyleSheet.create({
   },
   buttonGroup: {
     flexDirection: 'row',
-    justifyContent: 'space-between', // وضع زر في اليمين وآخر في اليسار
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 5,
   },
   previousButton: {
-    height: 50, // نفس ارتفاع الزر المتدرج تقريباً
-    borderRadius: 25,
+    height: 55, 
+    borderRadius: 27.5,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#4B5563', // حافة باللون الداكن المناسب للخلفية
+    borderColor: '#4B5563',
   },
   previousButtonText: {
-    color: '#a7adb8ff', // لون نص هادئ
+    color: '#a7adb8ff',
     fontWeight: 'bold',
     fontSize: 18,
   }

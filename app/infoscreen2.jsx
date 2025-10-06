@@ -27,14 +27,33 @@ export default function InfoScreen2() {
             <View style={styles.indicator} />
           </View>
 
-          <Pressable justifyContent="flex-start">
-         <View style={{width:"180%",height:"55%",backgroundColor:"red", borderRadius:50,justifyContent:"center"}}>
-          <Text style={{textAlign:"center",color:"white",fontSize:20}}>Next</Text>
-        </View>
-        <View style={{width:"180%",height:"55%",backgroundColor:"red", borderRadius:50,justifyContent:"center"}}>
-          <Text style={{textAlign:"center",color:"white",fontSize:20}}>Next</Text>
-        </View>
-          </Pressable>
+<Pressable style={{ flexDirection: "row", justifyContent: "center", alignItems: "center" }}>
+  <View
+    style={{
+      width: "50%",
+      height: "65%",
+      backgroundColor: "red",
+      borderRadius: 50,
+      justifyContent: "center",
+      marginHorizontal: 5,
+    }}
+  >
+    <Text style={{ textAlign: "center", color: "white", fontSize: 20 }}>Next</Text>
+  </View>
+
+  <View
+    style={{
+      width: "50%",
+      height: "65%",
+      backgroundColor: "red",
+      borderRadius: 50,
+      justifyContent: "center",
+      marginHorizontal: 5,
+    }}
+  >
+    <Text style={{ textAlign: "center", color: "white", fontSize: 20 }}>Next</Text>
+  </View>
+</Pressable>
 
         </View>
         </View>

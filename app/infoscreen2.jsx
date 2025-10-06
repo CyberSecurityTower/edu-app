@@ -38,7 +38,7 @@ export default function InfoScreen2() {
             <View style={styles.indicator} />
           </View>
 
-          {/* أزرار التنقل - الآن مهيكلة بشكل احترافي */}
+
           <View style={styles.buttonGroup}>
             {/* زر Previous - أصبح زر حافة (Outline Button) */}
             <Pressable style={[styles.previousButton, {width: width * 0.35}]} onPress={handlePrevious}>
@@ -49,7 +49,7 @@ export default function InfoScreen2() {
             <AnimatedGradientButton
               text="Next"
               onPress={handleNext}
-              buttonWidth={width * 0.5} // نخصص مساحة أكبر للزر الأساسي
+              buttonWidth={width * 0.50} // نخصص مساحة أكبر للزر الأساسي
             />
           </View>
         </View>
@@ -75,13 +75,13 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: "75%", // زيادة الارتفاع لملء الشاشة بشكل أفضل
+    height: "85%", // زيادة الارتفاع لملء الشاشة بشكل أفضل
     resizeMode: "contain",
   },
   bottomContainer: {
     flex: 1,
     justifyContent: 'flex-end',
-    paddingBottom: '15%',
+    paddingBottom: '10%',
   },
   textContainer: {
     alignItems: "center",
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
     fontWeight: "bold",
-    fontSize: 34, // تم تصغير الخط قليلاً ليتناسب مع سطرين
+    fontSize: 34, 
     paddingBottom: 20,
     marginTop: "-15%",
   },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: "12%",
+    marginBottom: "11%",
   },
   indicator: {
     width: 12,
@@ -120,9 +120,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#10B981",
     borderColor: "#10B981",
   },
-  // =======================================================
-  // الأنماط الجديدة لمجموعة الأزرار والتناسق
-  // =======================================================
   buttonGroup: {
     flexDirection: 'row',
     justifyContent: 'space-between', // وضع زر في اليمين وآخر في اليسار

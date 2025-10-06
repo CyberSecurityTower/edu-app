@@ -62,11 +62,12 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "78%", 
     resizeMode: "contain",
+    marginLeft:10
   },
   bottomContainer: {
     flex: 1, 
     justifyContent: 'flex-end',
-    paddingBottom: '10%',
+    paddingBottom: '15%',
   },
   textContainer: {
     alignItems: "center",
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 28,
     paddingBottom: 20,
-    marginTop:"-10%"
+    marginTop:"-12%"
   },
   subtitleText: {
     color: "#a7adb8ff",

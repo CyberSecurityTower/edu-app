@@ -60,14 +60,14 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: "78%", 
+    height: "75%", 
     resizeMode: "contain",
     marginLeft:10
   },
   bottomContainer: {
     flex: 1, 
     justifyContent: 'flex-end',
-    paddingBottom: '15%',
+    paddingBottom: '16%',
   },
   textContainer: {
     alignItems: "center",
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 28,
     paddingBottom: 20,
-    marginTop:"-12%"
+    marginTop:"-15%"
   },
   subtitleText: {
     color: "#a7adb8ff",

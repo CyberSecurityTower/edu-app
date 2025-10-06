@@ -49,7 +49,7 @@ const Screen3 = ({ width }) => (
   <View style={[styles.page, { width }]}>
     <View style={styles.upperContainer}>
       <Image
-        source={require("../assets/images/info3.png")} // ستحتاج لإضافة صورة ثالثة
+        source={require("../assets/images/info1.png")} // ستحتاج لإضافة صورة ثالثة
         style={styles.imageStyle}
       />
       <View style={styles.textContainer}>

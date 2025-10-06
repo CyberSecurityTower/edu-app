@@ -34,7 +34,7 @@ export default function InfoScreen1() {
           <AnimatedGradientButton
             text="Next"
             onPress={() =>  Linking.openURL('http://localhost:8081/infoscreen2') }
-            buttonWidth={width * 0.2}
+            buttonWidth={width * 0.64}
             style={{width:20}}
           />
         </View>
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: "75%", 
+    height: "78%", 
     resizeMode: "contain",
   },
   bottomContainer: {
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 28,
     paddingBottom: 20,
-    marginTop:-10
+    marginTop:"-10%"
   },
   subtitleText: {
     color: "#a7adb8ff",

@@ -23,14 +23,14 @@ export default function InfoScreen2() {
           <View style={styles.bottomContainer}>
           <View style={styles.indicatorContainer}>
             <View style={styles.indicator} /> 
-            <View style={[styles.indicator, styles.activeIndicator]} />
-            <View style={styles.indicator} />
+            <View style={[styles.indicator,styles.activeIndicator]}/>
+            <View style={styles.indicator}/>
           </View>
 
-<Pressable style={{ flexDirection: "row", justifyContent: "center", alignItems: "center" }}>
+<Pressable style={{ flexDirection: "row", justifyContent: "space-around", alignItems: "center" }}>
   <View
     style={{
-      width: "50%",
+      width: "45%",
       height: "65%",
       backgroundColor: "grey",
       borderRadius: 50,
@@ -43,7 +43,7 @@ export default function InfoScreen2() {
 
   <View
     style={{
-      width: "50%",
+      width: "45%",
       height: "65%",
       backgroundColor: "red",
       borderRadius: 50,

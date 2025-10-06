@@ -53,7 +53,7 @@ export default function InfoScreen2() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0C0F27",
+    backgroundColor: "#0F151F",
   },
   mainContainer: {
     flex: 1,
@@ -67,14 +67,14 @@ const styles = StyleSheet.create({
   },
   imageStyle: {
     width: "100%",
-    height: "55%", 
+    height: "76%", 
     resizeMode: "contain",
     marginBottom: 20,
   },
   bottomContainer: {
     flex: 1,
     justifyContent: 'flex-end',
-    paddingBottom: '10%',
+    paddingBottom: '11%',
   },
   textContainer: {
     alignItems: "center",
@@ -83,9 +83,9 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
     fontWeight: "bold",
-    fontSize: 28,
+    fontSize: 34,
     paddingBottom: 20,
-    marginTop: -10,
+    marginTop: "-15%",
   },
   subtitleText: {
     color: "#a7adb8ff",
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: "12%",
+    marginBottom: "16%",
   },
   indicator: {
     width: 12,
@@ -120,8 +120,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   previousButton: {
-    height: 55, 
-    borderRadius: 27.5,
+    height: 58, 
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

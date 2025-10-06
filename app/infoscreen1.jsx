@@ -1,49 +1,42 @@
-import { Alert, Image, SafeAreaView, StyleSheet, Text, View, useWindowDimensions, Pressable } from "react-native";
+import { Image, Linking, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
 
-export default function InfoScreen2() {
-  const { width } = useWindowDimensions();
-
-  const handlePrevious = () => Alert.alert("Previous pressed");
-  const handleNext = () => Alert.alert("Next pressed");
+export default function InfoScreen1() {
+  const { width } = useWindowDimensions(); 
 
   return (
-    <SafeAreaView style={styles.safeArea} >
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.mainContainer}>
-
+        
         <View style={styles.upperContainer}>
           <Image
-            source={require("../assets/images/info2.png")} 
+            source={require("../assets/images/info1.png")} 
             style={styles.imageStyle}
           />
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
-              Study smarter,{'\n'}not harder
+              Turn your boring lectures into fun activities
             </Text>
             <Text style={styles.subtitleText}>
-              Our intelligent system helps you focus on what truly matters, saving you hours of manual work.
+              Summarize lessons, create quizzes, access to degital library, and generate flashcards with a single click.
             </Text>
           </View>
         </View>
 
         <View style={styles.bottomContainer}>
           <View style={styles.indicatorContainer}>
+            <View style={[styles.indicator, styles.activeIndicator]} /> 
             <View style={styles.indicator} />
-            <View style={[styles.indicator, styles.activeIndicator]} />
+
             <View style={styles.indicator} />
           </View>
 
-          <View style={styles.buttonGroup}>
-            <Pressable style={[styles.previousButton, {width: width * 0.35}]} onPress={handlePrevious}>
-                <Text style={styles.previousButtonText}>Previous</Text>
-            </Pressable>
-
-            <AnimatedGradientButton
-              text="Next"
-              onPress={handleNext}
-              buttonWidth={width * 0.5} 
-            />
-          </View>
+          <AnimatedGradientButton
+            text="Next"
+            onPress={() =>  Linking.openURL('http://localhost:8081/infoscreen2') }
+            buttonWidth={width * 0.64}
+            style={{width:20}}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -60,21 +53,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   upperContainer: {
-    flex: 3,
+    flex: 3, 
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: '16%',
+    paddingTop: '16%', 
   },
   imageStyle: {
     width: "100%",
-    height: "55%", 
+    height: "75%", 
     resizeMode: "contain",
-    marginBottom: 20,
+    marginLeft:10
   },
   bottomContainer: {
-    flex: 1,
+    flex: 1, 
     justifyContent: 'flex-end',
-    paddingBottom: '10%',
+    paddingBottom: '16%',
   },
   textContainer: {
     alignItems: "center",
@@ -85,7 +78,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 28,
     paddingBottom: 20,
-    marginTop: -10,
+    marginTop:"-2%"
   },
   subtitleText: {
     color: "#a7adb8ff",
@@ -112,24 +105,5 @@ const styles = StyleSheet.create({
   activeIndicator: {
     backgroundColor: "#10B981",
     borderColor: "#10B981",
-  },
-  buttonGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-  },
-  previousButton: {
-    height: 55, 
-    borderRadius: 27.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#4B5563',
-  },
-  previousButtonText: {
-    color: '#a7adb8ff',
-    fontWeight: 'bold',
-    fontSize: 18,
   }
 });

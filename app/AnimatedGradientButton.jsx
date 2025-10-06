@@ -12,7 +12,7 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
-          duration: 1000,
+          duration: 900,
           useNativeDriver: false,
         }),
         Animated.timing(animatedValue, {
@@ -39,8 +39,8 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
   const dynamicStyles = {
     button: {
       width: buttonWidth,
-      height: buttonWidth * 0.25,
-      borderRadius: buttonWidth * 0.125,
+      height: buttonWidth * 0.30,
+      borderRadius: buttonWidth * 0.2,
     },
     text: {
       fontSize: buttonWidth * 0.08,

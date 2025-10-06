@@ -32,13 +32,13 @@ export default function InfoScreen2() {
     style={{
       width: "50%",
       height: "65%",
-      backgroundColor: "red",
+      backgroundColor: "grey",
       borderRadius: 50,
       justifyContent: "center",
       marginHorizontal: 5,
     }}
   >
-    <Text style={{ textAlign: "center", color: "white", fontSize: 20 }}>Next</Text>
+    <Text style={{ textAlign: "center", color: "white", fontSize: 20 }}>Previous</Text>
   </View>
 
   <View

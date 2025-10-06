@@ -174,10 +174,10 @@ const styles = StyleSheet.create({
     paddingTop: '5%',
   },
   imageStyle: {
-    width: "100%",
-    height: "65%",
+    width: "101%",
+    height: "35%",
     resizeMode: "contain",
-    marginBottom: 20,
+    marginTop:"-20%"
   },
   textContainer: {
     alignItems: "center",
@@ -188,6 +188,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 28,
     paddingBottom: 20,
+    marginTop:"10%"
   },
   subtitleText: {
     color: "#a7adb8ff",

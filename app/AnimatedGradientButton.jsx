@@ -38,8 +38,8 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
 
   const dynamicStyles = {
     button: {
-      width: buttonWidth,
-      height: buttonWidth * 0.24,
+      width: buttonWidth-97,
+      height: buttonWidth * 0.22,
       borderRadius: buttonWidth * 0.2,
     },
     text: {

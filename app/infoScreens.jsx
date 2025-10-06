@@ -1,11 +1,6 @@
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRef, useState } from "react";
-import AnimatedGradientButton from "./AnimatedGradientButton"; // تأكد من أن المسار صحيح
-
-// =======================================================
-// 1. تعريف محتوى كل شاشة كمكونات داخلية منفصلة
-// =======================================================
-
+import AnimatedGradientButton from "./AnimatedGradientButton"; 
 const Screen1 = ({ width }) => (
   <View style={[styles.page, { width }]}>
     <View style={styles.upperContainer}>
@@ -26,7 +21,7 @@ const Screen1 = ({ width }) => (
 );
 
 const Screen2 = ({ width }) => (
-  <View style={[styles.page, { width }]}>
+  <View style={[styles.page, { width },{backgroundColor:"#0F151F"}]}>
     <View style={styles.upperContainer}>
       <Image
         source={require("../assets/images/info2.png")}

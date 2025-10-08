@@ -7,7 +7,7 @@ const Screen1 = ({ width }) => (
     <View style={styles.topSpacer} />
     <Image
       source={require("../assets/images/info1.png")}
-      style={styles.imageStyle}
+      style={styles.imageStyle1}
     />
     <View style={styles.textContainer}>
       <Text style={styles.titleText}>
@@ -26,7 +26,7 @@ const Screen2 = ({ width }) => (
     <View style={styles.topSpacer} />
     <Image
       source={require("../assets/images/info2.png")}
-      style={styles.imageStyle}
+      style={styles.imageStyle2}
     />
     <View style={styles.textContainer}>
       <Text style={styles.titleText}>
@@ -44,7 +44,7 @@ const Screen3 = ({ width }) => (
   <View style={[styles.page, { width }]}>
     <View style={styles.topSpacer} />
     <Image
-      source={require("../assets/images/info1.png")}
+      source={require("../assets/images/info3.png")}
       style={styles.imageStyle}
     />
     <View style={styles.textContainer}>
@@ -152,7 +152,17 @@ const styles = StyleSheet.create({
   topSpacer: {
     flex: 0.5,
   },
-  imageStyle: {
+  imageStyle1: {
+    width: "100%",
+    flex: 3.2,
+    resizeMode: "contain",
+  },
+    imageStyle2: {
+    width: "100%",
+    flex: 3.2,
+    resizeMode: "contain",
+  },
+    imageStyle3: {
     width: "100%",
     flex: 3.2,
     resizeMode: "contain",

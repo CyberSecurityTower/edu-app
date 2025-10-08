@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, Text, StyleSheet } from 'react-native';
 import OnboardingScreen from './OnboardingScreen.jsx';
-
+import CreateAccount from "./CreateAccountScreen";
 const PlaceholderScreen = () => (
   <SafeAreaView style={styles.container}>
     <Text style={styles.text}>Create Account Screen (Placeholder)</Text>
@@ -17,17 +17,3 @@ export default function App() {
 
   return <PlaceholderScreen />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0C0F27'
-  },
-  text: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold'
-  }
-});

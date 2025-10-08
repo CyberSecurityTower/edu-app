@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { SafeAreaView, Text, StyleSheet } from 'react-native';
 import OnboardingScreen from './OnboardingScreen.jsx';
-import CreateAccount from "./CreateAccountScreen";
+import CreateAccount from "./CreateAccountScreen.jsx";
 const PlaceholderScreen = () => (
-  <SafeAreaView style={styles.container}>
-    <Text style={styles.text}>Create Account Screen (Placeholder)</Text>
+  <SafeAreaView>
+    <CreateAccount/>
   </SafeAreaView>
 );
 

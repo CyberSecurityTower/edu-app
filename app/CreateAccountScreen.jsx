@@ -4,10 +4,14 @@ import AnimatedGradientButton from "./AnimatedGradientButton";
 
 export default function CreateAccount(){
     return(
-        <SafeAreaView style={{backgroundColor:"white"}}>
+        <>
+        
         <ScrollView>
-
+            <View style={{width:"100%",height:"100%",height:120,justifyContent:"center"}}>
+                <Text style={{color:"white",fontSize:22}}>hiiii</Text>
+            </View>
         </ScrollView>
-        </SafeAreaView>
+        
+        </>
     );
 }

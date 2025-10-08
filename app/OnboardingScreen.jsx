@@ -63,7 +63,7 @@ export default function OnboardingScreen({ onComplete }) {
           subtitle={"Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click."}
           customStyles={{
             imageStyle: { flex: 3 },
-            textContainer: { flex: 1.8, paddingTop: '0%' }
+            textContainer: { flex: 1.8 }
           }}
         />
         <OnboardingPage
@@ -72,8 +72,8 @@ export default function OnboardingScreen({ onComplete }) {
           title={"Study smarter,\not harder"}
           subtitle={"Our intelligent system helps you focus on what truly matters, saving you hours of manual work."}
           customStyles={{
-            imageStyle: { flex: 2 },
-            textContainer: { flex: 2, paddingTop: '8%' }
+            imageStyle: { flex: 3 },
+            textContainer: { flex: 1.8 }
           }}
         />
         <OnboardingPage
@@ -82,8 +82,9 @@ export default function OnboardingScreen({ onComplete }) {
           title={"Start your free\ntrial now"}
           subtitle={"Get 3 days of full access. No credit card required. Unlock your full potential."}
           customStyles={{
-            imageStyle: { flex: 1.8 },
-            textContainer: { flex: 2.2, paddingTop: '10%' }
+            imageStyle: { flex: 3 },
+            textContainer: { flex: 2, paddingTop: '10%' },
+            safeArea:{backgroundColor:"white"}
           }}
         />
       </ScrollView>

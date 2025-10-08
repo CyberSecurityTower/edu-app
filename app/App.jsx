@@ -3,9 +3,9 @@ import { SafeAreaView, Text, StyleSheet } from 'react-native';
 import OnboardingScreen from './OnboardingScreen.jsx';
 import CreateAccount from "./CreateAccountScreen.jsx";
 const PlaceholderScreen = () => (
-  <SafeAreaView>
+
     <CreateAccount/>
-  </SafeAreaView>
+  
 );
 
 export default function App() {

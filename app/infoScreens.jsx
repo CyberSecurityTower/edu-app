@@ -169,7 +169,8 @@ const styles = StyleSheet.create({
     flex: 0.4,
     alignItems: "center",
     justifyContent: 'center',
-    paddingTop: 20, // لإعطاء مسافة بين الصورة والنص
+    top:10
+
   },
   titleText: {
     color: "white",

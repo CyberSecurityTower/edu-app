@@ -4,10 +4,13 @@ import AnimatedGradientButton from './AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 
 export default function CreateAccountScreen({ navigation }) {
-    const [fullName, setFullName] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [termsError, setTermsError] = useState(false);
 
@@ -26,12 +29,33 @@ export default function CreateAccountScreen({ navigation }) {
         });
     };
 
+    const validateEmail = (email) => {
+        const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+        return re.test(String(email).toLowerCase());
+    };
+
     const handleCreateAccount = () => {
+        if (!firstName || !lastName || !email || !password || !confirmPassword) {
+            alert('Please fill in all fields.');
+            return;
+        }
+        if (!validateEmail(email)) {
+            alert('Please enter a valid email address.');
+            return;
+        }
+        if (password !== confirmPassword) {
+            alert('Passwords do not match.');
+            return;
+        }
+        if (password.length < 6) {
+            alert('Password must be at least 6 characters long.');
+            return;
+        }
         if (!agreedToTerms) {
             triggerShake();
             return;
         }
-        alert('Account creation logic goes here!');
+        alert('Validation successful! Account creation logic goes here.');
     };
 
     const animatedStyle = {
@@ -62,13 +86,22 @@ export default function CreateAccountScreen({ navigation }) {
                         </View>
 
                         <View style={styles.formContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Full Name"
-                                placeholderTextColor="#8A94A4"
-                                value={fullName}
-                                onChangeText={setFullName}
-                            />
+                            <View style={styles.nameContainer}>
+                                <TextInput
+                                    style={[styles.input, styles.nameInput]}
+                                    placeholder="First Name"
+                                    placeholderTextColor="#8A94A4"
+                                    value={firstName}
+                                    onChangeText={setFirstName}
+                                />
+                                <TextInput
+                                    style={[styles.input, styles.nameInput]}
+                                    placeholder="Last Name"
+                                    placeholderTextColor="#8A94A4"
+                                    value={lastName}
+                                    onChangeText={setLastName}
+                                />
+                            </View>
                             <TextInput
                                 style={styles.input}
                                 placeholder="Email Address"
@@ -91,6 +124,19 @@ export default function CreateAccountScreen({ navigation }) {
                                     <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
                                 </Pressable>
                             </View>
+                             <View style={styles.passwordContainer}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder="Confirm Password"
+                                    placeholderTextColor="#8A94A4"
+                                    secureTextEntry={!isConfirmPasswordVisible}
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                />
+                                <Pressable onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}>
+                                    <Feather name={isConfirmPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
+                                </Pressable>
+                            </View>
                         </View>
 
                         <View style={styles.footerContainer}>
@@ -103,7 +149,7 @@ export default function CreateAccountScreen({ navigation }) {
                                 </Text>
                             </Animated.View>
                             <AnimatedGradientButton
-                                text="Create My Account & Start Trial"
+                                text="Create Account"
                                 onPress={handleCreateAccount}
                                 buttonWidth={'100%'}
                             />
@@ -138,19 +184,19 @@ const styles = StyleSheet.create({
     },
     headerContainer: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: 30,
     },
     logo: {
-        width: 80,
-        height: 80,
+        width: 170,
+        height: 170,
         resizeMode: 'contain',
-        marginBottom: 20,
+        marginBottom: 15,
     },
     title: {
         color: 'white',
-        fontSize: 28,
+        fontSize: 26,
         fontWeight: 'bold',
-        marginBottom: 10,
+        marginBottom: 8,
         textAlign: 'center',
     },
     subtitle: {
@@ -161,14 +207,21 @@ const styles = StyleSheet.create({
     formContainer: {
         marginBottom: 20,
     },
+    nameContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    nameInput: {
+        width: '48%',
+    },
     input: {
         backgroundColor: '#1E293B',
         color: 'white',
         paddingHorizontal: 15,
-        paddingVertical: 18,
+        paddingVertical: 16,
         borderRadius: 12,
         fontSize: 16,
-        marginBottom: 20,
+        marginBottom: 18,
         borderWidth: 1,
         borderColor: '#334155',
     },
@@ -179,12 +232,13 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#334155',
+        marginBottom: 18,
     },
     passwordInput: {
         flex: 1,
         color: 'white',
         paddingHorizontal: 15,
-        paddingVertical: 18,
+        paddingVertical: 16,
         fontSize: 16,
     },
     footerContainer: {
@@ -193,7 +247,7 @@ const styles = StyleSheet.create({
     termsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: 25,
         width: '100%',
     },
     checkbox: {
@@ -218,7 +272,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     termsErrorText: {
-        color: '#EF4444', // Red color for error
+        color: '#EF4444',
     },
     linkText: {
         color: '#10B981',
@@ -226,7 +280,7 @@ const styles = StyleSheet.create({
         textDecorationLine: 'underline',
     },
     loginLink: {
-        marginTop: 25,
+        marginTop: 20,
     },
     loginText: {
         color: '#a7adb8ff',

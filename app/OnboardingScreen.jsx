@@ -85,7 +85,7 @@ export default function OnboardingScreen({ onComplete }) {
           title={"Start your free\ntrial now"}
           subtitle={"Get full access. No credit card required.\n Unlock your full potential."}
           customStyles={{
-            imageStyle: { flex: 3.2,width:"100%" },
+            imageStyle: { flex: 4 },
             textContainer: { flex: 2 }
           }}
         />

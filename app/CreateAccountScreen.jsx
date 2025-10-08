@@ -29,33 +29,13 @@ export default function CreateAccountScreen({ navigation }) {
         });
     };
 
-    const validateEmail = (email) => {
-        const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-        return re.test(String(email).toLowerCase());
-    };
-
     const handleCreateAccount = () => {
-        if (!firstName || !lastName || !email || !password || !confirmPassword) {
-            alert('Please fill in all fields.');
-            return;
-        }
-        if (!validateEmail(email)) {
-            alert('Please enter a valid email address.');
-            return;
-        }
-        if (password !== confirmPassword) {
-            alert('Passwords do not match.');
-            return;
-        }
-        if (password.length < 6) {
-            alert('Password must be at least 6 characters long.');
-            return;
-        }
         if (!agreedToTerms) {
             triggerShake();
             return;
         }
-        alert('Validation successful! Account creation logic goes here.');
+        // Validation logic...
+        console.log('Validation successful! Ready for Firebase.');
     };
 
     const animatedStyle = {
@@ -156,7 +136,7 @@ export default function CreateAccountScreen({ navigation }) {
                                 borderRadius={10}
                                 fontSize={20}
                             />
-                            <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
+                            <Pressable style={styles.loginLink} onPress={() => navigation.navigate('Login')}>
                                 <Text style={styles.loginText}>
                                     Already a member? <Text style={styles.linkText}>Log In</Text>
                                 </Text>

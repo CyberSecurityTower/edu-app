@@ -1,19 +1,20 @@
-import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image } from 'react-native';
-import AnimatedGradientButton from './AnimatedGradientButton';
-import { Feather } from '@expo/vector-icons';
+import React, 'useState'
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image } from 'react-native'
+import AnimatedGradientButton from './AnimatedGradientButton'
+import { Feather } from '@expo/vector-icons'
 
 export default function LoginScreen({ navigation }) {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false)
 
     const handleLogin = () => {
         if (!email || !password) {
-            alert('Please enter both email and password.');
-            return;
+            alert('Please enter both email and password.')
+            return
         }
-        console.log('Attempting login with:', email);
+        console.log('Attempting login with:', email)
+        // Soon, we will add Firebase login logic here!
     };
 
     return (
@@ -74,7 +75,7 @@ export default function LoginScreen({ navigation }) {
                                 borderRadius={10}
                                 fontSize={20}
                             />
-                            <Pressable style={styles.signupLink} onPress={() => { /* Navigate to Create Account */ }}>
+                            <Pressable style={styles.signupLink} onPress={() => navigation.navigate('CreateAccount')}>
                                 <Text style={styles.signupText}>
                                     Don't have an account? <Text style={styles.linkText}>Create one</Text>
                                 </Text>

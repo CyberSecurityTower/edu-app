@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+// أضفنا Image هنا
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image } from 'react-native';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 
@@ -31,8 +32,18 @@ export default function CreateAccountScreen({ navigation }) {
                 >
                     <View style={styles.contentWrapper}>
                         <View style={styles.headerContainer}>
-                            <Text style={styles.title}>Create Account</Text>
-                            <Text style={styles.subtitle}>Let's get you started on your learning journey!</Text>
+                            {/* ======================================================= */}
+                            {/* 1. الإضافة الجديدة: الشعار */}
+                            {/* ======================================================= */}
+                            <Image
+                                source={require('../assets/images/logo_accountCreating.png')}
+                                style={styles.logo}
+                            />
+                            {/* ======================================================= */}
+                            {/* 2. التحسين النفسي: تغيير النصوص */}
+                            {/* ======================================================= */}
+                            <Text style={styles.title}>Join the Future of Learning</Text>
+                            <Text style={styles.subtitle}>Create your account to unlock your potential.</Text>
                         </View>
 
                         <View style={styles.formContainer}>
@@ -77,13 +88,13 @@ export default function CreateAccountScreen({ navigation }) {
                                 </Text>
                             </View>
                             <AnimatedGradientButton
-                                text="Create Account"
+                                text="Create My Account"
                                 onPress={handleCreateAccount}
                                 buttonWidth={'100%'}
                             />
                             <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
                                 <Text style={styles.loginText}>
-                                    Already have an account? <Text style={styles.linkText}>Log In</Text>
+                                    Already a member? <Text style={styles.linkText}>Log In</Text>
                                 </Text>
                             </Pressable>
                         </View>
@@ -104,7 +115,7 @@ const styles = StyleSheet.create({
     },
     scrollViewContent: {
         flexGrow: 1,
-        justifyContent: 'center', // **التغيير الرئيسي الأول: التمركز العمودي**
+        justifyContent: 'center',
     },
     contentWrapper: {
         paddingHorizontal: 20,
@@ -112,13 +123,20 @@ const styles = StyleSheet.create({
     },
     headerContainer: {
         alignItems: 'center',
-        marginBottom: 40, // زيادة المسافة العلوية
+        marginBottom: 40,
+    },
+    logo: {
+        width: 80,
+        height: 80,
+        resizeMode: 'contain',
+        marginBottom: 20,
     },
     title: {
         color: 'white',
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: 'bold',
         marginBottom: 10,
+        textAlign: 'center',
     },
     subtitle: {
         color: '#a7adb8ff',
@@ -126,7 +144,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     formContainer: {
-        marginBottom: 20, // **التغيير الرئيسي الثاني: استخدام المسافات بدلاً من flex**
+        marginBottom: 20,
     },
     input: {
         backgroundColor: '#1E293B',
@@ -154,7 +172,7 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         fontSize: 16,
     },
-    footerContainer: { // **التغيير الرئيسي الثالث: تجميع العناصر السفلية**
+    footerContainer: {
         alignItems: 'center',
     },
     termsContainer: {
@@ -181,7 +199,7 @@ const styles = StyleSheet.create({
     },
     termsText: {
         color: '#a7adb8ff',
-        fontSize: 13,
+        fontSize: 14, 
         flex: 1,
     },
     linkText: {

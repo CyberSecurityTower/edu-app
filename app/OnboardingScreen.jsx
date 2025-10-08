@@ -1,14 +1,9 @@
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRef, useState } from "react";
-import AnimatedGradientButton from "./AnimatedGradientButton"; 
-
-// =======================================================
-// 1. تعريف محتوى كل شاشة كمكونات داخلية نظيفة
-// =======================================================
+import AnimatedGradientButton from "./AnimatedGradientButton";
 
 const Screen1 = ({ width }) => (
   <View style={[styles.page, { width }]}>
-    {/* تم استخدام Flexbox لتوزيع المساحة بشكل مثالي */}
     <View style={styles.topSpacer} />
     <Image
       source={require("../assets/images/info1.png")}
@@ -49,7 +44,7 @@ const Screen3 = ({ width }) => (
   <View style={[styles.page, { width }]}>
     <View style={styles.topSpacer} />
     <Image
-      source={require("../assets/images/info1.png")} // تأكد من إضافة صورة ثالثة هنا
+      source={require("../assets/images/info1.png")}
       style={styles.imageStyle}
     />
     <View style={styles.textContainer}>
@@ -63,10 +58,6 @@ const Screen3 = ({ width }) => (
     <View style={styles.bottomSpacer} />
   </View>
 );
-
-// =======================================================
-// 2. المكون الرئيسي الذي يجمع كل شيء
-// =======================================================
 
 export default function OnboardingScreen({ onComplete }) {
   const { width } = useWindowDimensions();
@@ -82,8 +73,7 @@ export default function OnboardingScreen({ onComplete }) {
     if (activeIndex < 2) {
       scrollViewRef.current?.scrollTo({ x: width * (activeIndex + 1), animated: true });
     } else {
-      // onComplete(); 
-      alert("Navigate to Create Account Screen");
+      onComplete();
     }
   };
 
@@ -149,10 +139,6 @@ export default function OnboardingScreen({ onComplete }) {
   );
 }
 
-// =======================================================
-// 3. الأنماط الموحدة والمُعاد هيكلتها لـ Flexbox
-// =======================================================
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -163,20 +149,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  // تم استخدام هذه العناصر للتحكم الدقيق في التموضع العمودي
   topSpacer: {
-    flex: 0.5, // مساحة فارغة في الأعلى
+    flex: 0.5,
   },
   imageStyle: {
     width: "100%",
-    flex: 2, // الصورة تأخذ الحصة الأكبر من المساحة
+    flex: 3.2,
     resizeMode: "contain",
   },
   textContainer: {
-    flex: 2, // حاوية النص تأخذ حصة مساوية للصورة
+    flex: 2,
     alignItems: "center",
-    justifyContent: 'flex-start', // بدء النص من الأعلى
-    paddingTop: '5%',
+    justifyContent: 'flex-start',
+  },
+  bottomSpacer: {
+    flex: 1,
   },
   titleText: {
     color: "white",

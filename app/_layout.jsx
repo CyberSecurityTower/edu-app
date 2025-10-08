@@ -1,6 +1,6 @@
  import { Stack } from 'expo-router';
     import { useState } from 'react';
-    import OnboardingScreen from '../OnboardingScreen'; // Adjust path if needed
+    import OnboardingScreen from '../components/OnboardingScreen'; 
 
     export default function RootLayout() {
       const [showOnboarding, setShowOnboarding] = useState(true);

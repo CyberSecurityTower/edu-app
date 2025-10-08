@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated } from 'react-native';
-import AnimatedGradientButton from './AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
-import {Link} from 'expo-router'
+import { Link } from 'expo-router';
+import { useRef, useState } from 'react';
+import { Animated, Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import AnimatedGradientButton from '../components/AnimatedGradientButton';
 export default function CreateAccountScreen({ navigation }) {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');

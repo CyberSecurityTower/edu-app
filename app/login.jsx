@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
-import AnimatedGradientButton from './AnimatedGradientButton';
-import { Link } from 'expo-router';
+import AnimatedGradientButton from '../components/AnimatedGradientButton';
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')

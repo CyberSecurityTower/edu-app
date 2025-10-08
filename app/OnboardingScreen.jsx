@@ -2,60 +2,22 @@ import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, use
 import { useRef, useState } from "react";
 import AnimatedGradientButton from "./AnimatedGradientButton";
 
-const Screen1 = ({ width }) => (
+const OnboardingPage = ({ width, imageSource, title, subtitle, customStyles = {} }) => (
   <View style={[styles.page, { width }]}>
-    <View style={styles.topSpacer} />
+    <View style={[styles.topSpacer, customStyles.topSpacer]} />
     <Image
-      source={require("../assets/images/info1.png")}
-      style={styles.imageStyle1}
+      source={imageSource}
+      style={[styles.imageStyle, customStyles.imageStyle]}
     />
-    <View style={styles.textContainer}>
-      <Text style={styles.titleText}>
-        Turn your boring lectures into fun activities
+    <View style={[styles.textContainer, customStyles.textContainer]}>
+      <Text style={[styles.titleText, customStyles.titleText]}>
+        {title}
       </Text>
-      <Text style={styles.subtitleText}>
-        Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click.
+      <Text style={[styles.subtitleText, customStyles.subtitleText]}>
+        {subtitle}
       </Text>
     </View>
-    <View style={styles.bottomSpacer} />
-  </View>
-);
-
-const Screen2 = ({ width }) => (
-  <View style={[styles.page, { width }]}>
-    <View style={styles.topSpacer} />
-    <Image
-      source={require("../assets/images/info2.png")}
-      style={styles.imageStyle2}
-    />
-    <View style={styles.textContainer}>
-      <Text style={styles.titleText}>
-        Study smarter,{'\n'}not harder
-      </Text>
-      <Text style={styles.subtitleText}>
-        Our intelligent system helps you focus on what truly matters, saving you hours of manual work.
-      </Text>
-    </View>
-    <View style={styles.bottomSpacer} />
-  </View>
-);
-
-const Screen3 = ({ width }) => (
-  <View style={[styles.page, { width }]}>
-    <View style={styles.topSpacer} />
-    <Image
-      source={require("../assets/images/info3.png")}
-      style={styles.imageStyle}
-    />
-    <View style={styles.textContainer}>
-      <Text style={styles.titleText}>
-        Start your free{'\n'}trial now
-      </Text>
-      <Text style={styles.subtitleText}>
-        Get 3 days of full access. No credit card required. Unlock your full potential.
-      </Text>
-    </View>
-    <View style={styles.bottomSpacer} />
+    <View style={[styles.bottomSpacer, customStyles.bottomSpacer]} />
   </View>
 );
 
@@ -94,9 +56,36 @@ export default function OnboardingScreen({ onComplete }) {
         scrollEventThrottle={16}
         style={{ flex: 1 }}
       >
-        <Screen1 width={width} />
-        <Screen2 width={width} />
-        <Screen3 width={width} />
+        <OnboardingPage
+          width={width}
+          imageSource={require("../assets/images/info1.png")}
+          title={"Turn your boring lectures into fun activities"}
+          subtitle={"Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click."}
+          customStyles={{
+            imageStyle: { flex: 3 },
+            textContainer: { flex: 1.8, paddingTop: '0%' }
+          }}
+        />
+        <OnboardingPage
+          width={width}
+          imageSource={require("../assets/images/info2.png")}
+          title={"Study smarter,\not harder"}
+          subtitle={"Our intelligent system helps you focus on what truly matters, saving you hours of manual work."}
+          customStyles={{
+            imageStyle: { flex: 2 },
+            textContainer: { flex: 2, paddingTop: '8%' }
+          }}
+        />
+        <OnboardingPage
+          width={width}
+          imageSource={require("../assets/images/info3.png")}
+          title={"Start your free\ntrial now"}
+          subtitle={"Get 3 days of full access. No credit card required. Unlock your full potential."}
+          customStyles={{
+            imageStyle: { flex: 1.8 },
+            textContainer: { flex: 2.2, paddingTop: '10%' }
+          }}
+        />
       </ScrollView>
 
       <View style={styles.bottomContainer}>
@@ -152,25 +141,16 @@ const styles = StyleSheet.create({
   topSpacer: {
     flex: 0.5,
   },
-  imageStyle1: {
+  imageStyle: {
     width: "100%",
-    flex: 3.2,
-    resizeMode: "contain",
-  },
-    imageStyle2: {
-    width: "100%",
-    flex: 3.2,
-    resizeMode: "contain",
-  },
-    imageStyle3: {
-    width: "100%",
-    flex: 3.2,
+    flex: 2,
     resizeMode: "contain",
   },
   textContainer: {
     flex: 2,
     alignItems: "center",
     justifyContent: 'flex-start',
+    paddingTop: '5%',
   },
   bottomSpacer: {
     flex: 1,

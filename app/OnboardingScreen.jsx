@@ -80,12 +80,12 @@ export default function OnboardingScreen({ onComplete }) {
         />
         <OnboardingPage
           width={width}
-          backgroundColor={"#030711ff"} // 
+          backgroundColor={"#030816ff"} // 
           imageSource={require("../assets/images/info3.png")}
           title={"Start your free\ntrial now"}
           subtitle={"Get full access. No credit card required.\n Unlock your full potential."}
           customStyles={{
-            imageStyle: { flex: 3.2 },
+            imageStyle: { flex: 3.2,width:"100%" },
             textContainer: { flex: 2 }
           }}
         />

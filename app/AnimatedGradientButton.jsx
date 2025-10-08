@@ -4,7 +4,14 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
+const AnimatedGradientButton = ({ 
+  text, 
+  onPress, 
+  buttonWidth = 240, 
+  buttonHeight,
+  fontSize,
+  borderRadius // الخاصية الجديدة للتحكم في حواف الزر
+}) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -24,7 +31,6 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
     ).start();
   }, [animatedValue]);
 
-
   const startX = animatedValue.interpolate({
     inputRange: [0, 1],
     outputRange: [-0.5, 1.5],
@@ -35,19 +41,21 @@ const AnimatedGradientButton = ({ text, onPress, buttonWidth = 240 }) => {
     outputRange: [0.5, 2.5],
   });
 
+  const finalHeight = buttonHeight || buttonWidth * 0.22;
+  const finalFontSize = fontSize || buttonWidth * 0.08;
+  // إذا لم يتم توفير borderRadius، سيتم حسابه ليكون دائرياً تماماً
+  const finalBorderRadius = borderRadius !== undefined ? borderRadius : finalHeight / 2;
 
   const dynamicStyles = {
     button: {
-      width: buttonWidth-97,
-      height: buttonWidth * 0.22,
-      borderRadius: buttonWidth * 0.2,
+      width: buttonWidth,
+      height: finalHeight,
+      borderRadius: finalBorderRadius,
     },
     text: {
-      fontSize: buttonWidth * 0.08,
+      fontSize: finalFontSize,
     }
   };
-
-
 
   return (
     <View style={styles.container}>
@@ -80,5 +88,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
-export default AnimatedGradientButton;

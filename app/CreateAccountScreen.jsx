@@ -152,6 +152,7 @@ export default function CreateAccountScreen({ navigation }) {
                                 text="Create Account"
                                 onPress={handleCreateAccount}
                                 buttonWidth={'100%'}
+                                buttonHeight={50}
                             />
                             <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
                                 <Text style={styles.loginText}>

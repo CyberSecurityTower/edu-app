@@ -154,6 +154,7 @@ export default function CreateAccountScreen({ navigation }) {
                                 buttonWidth={200}
                                 buttonHeight={50}
                                 borderRadius={10}
+                                fontSize={20}
                             />
                             <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
                                 <Text style={styles.loginText}>

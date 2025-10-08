@@ -2,8 +2,8 @@ import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, use
 import { useRef, useState } from "react";
 import AnimatedGradientButton from "./AnimatedGradientButton";
 
-const OnboardingPage = ({ width, imageSource, title, subtitle, customStyles = {} }) => (
-  <View style={[styles.page, { width }]}>
+const OnboardingPage = ({ width, imageSource, title, subtitle, customStyles = {}, backgroundColor }) => (
+  <View style={[styles.page, { width, backgroundColor }]}>
     <View style={[styles.topSpacer, customStyles.topSpacer]} />
     <Image
       source={imageSource}
@@ -58,33 +58,35 @@ export default function OnboardingScreen({ onComplete }) {
       >
         <OnboardingPage
           width={width}
+          backgroundColor={"#0C0F27"}
           imageSource={require("../assets/images/info1.png")}
           title={"Turn your boring lectures into fun activities"}
           subtitle={"Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click."}
           customStyles={{
-            imageStyle: { flex: 3 },
-            textContainer: { flex: 1.8 }
+            imageStyle: { flex: 2.2 },
+            textContainer: { flex: 1.8, paddingTop: '2%' }
           }}
         />
         <OnboardingPage
           width={width}
+          backgroundColor={"#0F151F"}
           imageSource={require("../assets/images/info2.png")}
           title={"Study smarter,\not harder"}
           subtitle={"Our intelligent system helps you focus on what truly matters, saving you hours of manual work."}
           customStyles={{
-            imageStyle: { flex: 3 },
-            textContainer: { flex: 1.8 }
+            imageStyle: { flex: 2 },
+            textContainer: { flex: 2, paddingTop: '8%' }
           }}
         />
         <OnboardingPage
           width={width}
+          backgroundColor={"#030711ff"} // 
           imageSource={require("../assets/images/info3.png")}
           title={"Start your free\ntrial now"}
           subtitle={"Get 3 days of full access. No credit card required. Unlock your full potential."}
           customStyles={{
-            imageStyle: { flex: 3 },
-            textContainer: { flex: 2, paddingTop: '10%' },
-            safeArea:{backgroundColor:"white"}
+            imageStyle: { flex: 2 },
+            textContainer: { flex: 2.2, paddingTop: '10%' }
           }}
         />
       </ScrollView>
@@ -132,7 +134,7 @@ export default function OnboardingScreen({ onComplete }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0C0F27",
+    
   },
   page: {
     flex: 1,

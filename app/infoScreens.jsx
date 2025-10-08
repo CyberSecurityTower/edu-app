@@ -8,6 +8,8 @@ import AnimatedGradientButton from "./AnimatedGradientButton";
 
 const Screen1 = ({ width }) => (
   <View style={[styles.page, { width }]}>
+    {/* تم استخدام Flexbox لتوزيع المساحة بشكل مثالي */}
+    <View style={styles.topSpacer} />
     <Image
       source={require("../assets/images/info1.png")}
       style={styles.imageStyle}
@@ -20,11 +22,13 @@ const Screen1 = ({ width }) => (
         Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click.
       </Text>
     </View>
+    <View style={styles.bottomSpacer} />
   </View>
 );
 
 const Screen2 = ({ width }) => (
   <View style={[styles.page, { width }]}>
+    <View style={styles.topSpacer} />
     <Image
       source={require("../assets/images/info2.png")}
       style={styles.imageStyle}
@@ -37,11 +41,13 @@ const Screen2 = ({ width }) => (
         Our intelligent system helps you focus on what truly matters, saving you hours of manual work.
       </Text>
     </View>
+    <View style={styles.bottomSpacer} />
   </View>
 );
 
 const Screen3 = ({ width }) => (
   <View style={[styles.page, { width }]}>
+    <View style={styles.topSpacer} />
     <Image
       source={require("../assets/images/info1.png")} // تأكد من إضافة صورة ثالثة هنا
       style={styles.imageStyle}
@@ -54,6 +60,7 @@ const Screen3 = ({ width }) => (
         Get 3 days of full access. No credit card required. Unlock your full potential.
       </Text>
     </View>
+    <View style={styles.bottomSpacer} />
   </View>
 );
 
@@ -154,23 +161,22 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     paddingHorizontal: 20,
-    justifyContent: 'center', 
     alignItems: 'center',
   },
+  // تم استخدام هذه العناصر للتحكم الدقيق في التموضع العمودي
+  topSpacer: {
+    flex: 0.5, // مساحة فارغة في الأعلى
+  },
   imageStyle: {
-    // الصورة تأخذ عرض الحاوية بالكامل
     width: "100%",
-    // Flex يضمن أن الصورة تأخذ المساحة المتاحة وتتكيف مع حجم الشاشة
-    flex: 0.4, 
+    flex: 2, // الصورة تأخذ الحصة الأكبر من المساحة
     resizeMode: "contain",
   },
   textContainer: {
-    // حاوية النص تأخذ المساحة المتبقية
-    flex: 0.4,
+    flex: 2, // حاوية النص تأخذ حصة مساوية للصورة
     alignItems: "center",
-    justifyContent: 'center',
-    top:10
-
+    justifyContent: 'flex-start', // بدء النص من الأعلى
+    paddingTop: '5%',
   },
   titleText: {
     color: "white",

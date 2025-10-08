@@ -242,6 +242,7 @@ const styles = StyleSheet.create({
     },
     nameInput: {
         width: '100%',
+        marginBottom:20
     },
     input: {
         backgroundColor: '#1E293B',
@@ -253,6 +254,7 @@ const styles = StyleSheet.create({
         marginBottom: 4, // Reduced margin to make space for error text
         borderWidth: 1,
         borderColor: '#334155',
+        marginBottom:20
     },
     passwordContainer: {
         flexDirection: 'row',
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#334155',
-        marginBottom: 4, // Reduced margin
+        marginBottom:20
     },
     passwordInput: {
         flex: 1,

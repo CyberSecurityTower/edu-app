@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated } from 'react-native';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 
@@ -9,13 +9,35 @@ export default function CreateAccountScreen({ navigation }) {
     const [password, setPassword] = useState('');
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
+    const [termsError, setTermsError] = useState(false);
+
+    const shakeAnimation = useRef(new Animated.Value(0)).current;
+
+    const triggerShake = () => {
+        setTermsError(true);
+        shakeAnimation.setValue(0);
+        Animated.sequence([
+            Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true })
+        ]).start(() => {
+            setTimeout(() => setTermsError(false), 2000);
+        });
+    };
 
     const handleCreateAccount = () => {
         if (!agreedToTerms) {
-            alert('Please agree to the Terms of Service and Privacy Policy.');
+            triggerShake();
             return;
         }
         alert('Account creation logic goes here!');
+    };
+
+    const animatedStyle = {
+        transform: [{
+            translateX: shakeAnimation
+        }]
     };
 
     return (
@@ -65,23 +87,23 @@ export default function CreateAccountScreen({ navigation }) {
                                     value={password}
                                     onChangeText={setPassword}
                                 />
-                                <Pressable style={{paddingRight:10}} onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
                                     <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
                                 </Pressable>
                             </View>
                         </View>
 
                         <View style={styles.footerContainer}>
-                             <View style={styles.termsContainer}>
+                             <Animated.View style={[styles.termsContainer, animatedStyle]}>
                                 <Pressable style={styles.checkbox} onPress={() => setAgreedToTerms(!agreedToTerms)}>
                                     {agreedToTerms && <View style={styles.checkboxChecked} />}
                                 </Pressable>
-                                <Text style={styles.termsText}>
+                                <Text style={[styles.termsText, termsError && styles.termsErrorText]}>
                                     I agree to the <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>.
                                 </Text>
-                            </View>
+                            </Animated.View>
                             <AnimatedGradientButton
-                                text="Create My Account"
+                                text="Create My Account & Start Trial"
                                 onPress={handleCreateAccount}
                                 buttonWidth={'100%'}
                             />
@@ -119,8 +141,8 @@ const styles = StyleSheet.create({
         marginBottom: 40,
     },
     logo: {
-        width: 180,
-        height: 180,
+        width: 80,
+        height: 80,
         resizeMode: 'contain',
         marginBottom: 20,
     },
@@ -192,8 +214,11 @@ const styles = StyleSheet.create({
     },
     termsText: {
         color: '#a7adb8ff',
-        fontSize: 14, 
+        fontSize: 14,
         flex: 1,
+    },
+    termsErrorText: {
+        color: '#EF4444', // Red color for error
     },
     linkText: {
         color: '#10B981',

@@ -1,7 +1,7 @@
-import React, 'useState'
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image } from 'react-native'
-import AnimatedGradientButton from './AnimatedGradientButton'
-import { Feather } from '@expo/vector-icons'
+import { Feather } from '@expo/vector-icons';
+import { useState } from 'react';
+import { Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import AnimatedGradientButton from './AnimatedGradientButton';
 
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('')

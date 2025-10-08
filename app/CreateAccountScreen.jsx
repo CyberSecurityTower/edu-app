@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import AnimatedGradientButton from './AnimatedGradientButton'; 
-// ستحتاج إلى تثبيت مكتبة الأيقونات هذه: expo install @expo/vector-icons
-import { Feather } from '@expo/vector-icons'; 
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+import AnimatedGradientButton from './AnimatedGradientButton';
+import { Feather } from '@expo/vector-icons';
 
 export default function CreateAccountScreen({ navigation }) {
     const [fullName, setFullName] = useState('');
@@ -12,80 +11,82 @@ export default function CreateAccountScreen({ navigation }) {
     const [agreedToTerms, setAgreedToTerms] = useState(false);
 
     const handleCreateAccount = () => {
-        // هنا سيتم وضع منطق إنشاء الحساب مع Firebase لاحقاً
-        // حالياً، سنقوم فقط بالتحقق من أن الشروط موافق عليها
         if (!agreedToTerms) {
             alert('Please agree to the Terms of Service and Privacy Policy.');
             return;
         }
         alert('Account creation logic goes here!');
-        // لاحقاً، بعد النجاح: navigation.navigate('SetupProfile');
     };
 
     return (
         <SafeAreaView style={styles.safeArea}>
+            <StatusBar barStyle="light-content" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.container}
             >
-                <ScrollView contentContainerStyle={styles.scrollViewContent}>
-                    <View style={styles.headerContainer}>
-                        <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Let's get you started on your learning journey!</Text>
-                    </View>
+                <ScrollView
+                    contentContainerStyle={styles.scrollViewContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.contentWrapper}>
+                        <View style={styles.headerContainer}>
+                            <Text style={styles.title}>Create Account</Text>
+                            <Text style={styles.subtitle}>Let's get you started on your learning journey!</Text>
+                        </View>
 
-                    <View style={styles.formContainer}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Full Name"
-                            placeholderTextColor="#8A94A4"
-                            value={fullName}
-                            onChangeText={setFullName}
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Email Address"
-                            placeholderTextColor="#8A94A4"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            value={email}
-                            onChangeText={setEmail}
-                        />
-                        <View style={styles.passwordContainer}>
+                        <View style={styles.formContainer}>
                             <TextInput
-                                style={styles.passwordInput}
-                                placeholder="Password"
+                                style={styles.input}
+                                placeholder="Full Name"
                                 placeholderTextColor="#8A94A4"
-                                secureTextEntry={!isPasswordVisible}
-                                value={password}
-                                onChangeText={setPassword}
+                                value={fullName}
+                                onChangeText={setFullName}
                             />
-                            <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                                <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
-                            </Pressable>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Email Address"
+                                placeholderTextColor="#8A94A4"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                value={email}
+                                onChangeText={setEmail}
+                            />
+                            <View style={styles.passwordContainer}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder="Password"
+                                    placeholderTextColor="#8A94A4"
+                                    secureTextEntry={!isPasswordVisible}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                />
+                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                                    <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
+                                </Pressable>
+                            </View>
                         </View>
 
-                        <View style={styles.termsContainer}>
-                            <Pressable style={styles.checkbox} onPress={() => setAgreedToTerms(!agreedToTerms)}>
-                                {agreedToTerms && <View style={styles.checkboxChecked} />}
+                        <View style={styles.footerContainer}>
+                             <View style={styles.termsContainer}>
+                                <Pressable style={styles.checkbox} onPress={() => setAgreedToTerms(!agreedToTerms)}>
+                                    {agreedToTerms && <View style={styles.checkboxChecked} />}
+                                </Pressable>
+                                <Text style={styles.termsText}>
+                                    I agree to the <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>.
+                                </Text>
+                            </View>
+                            <AnimatedGradientButton
+                                text="Create Account"
+                                onPress={handleCreateAccount}
+                                buttonWidth={'100%'}
+                            />
+                            <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
+                                <Text style={styles.loginText}>
+                                    Already have an account? <Text style={styles.linkText}>Log In</Text>
+                                </Text>
                             </Pressable>
-                            <Text style={styles.termsText}>
-                                I agree to the <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>.
-                            </Text>
                         </View>
-                    </View>
-
-                    <View style={styles.buttonContainer}>
-                        <AnimatedGradientButton
-                            text="Create Account"
-                            onPress={handleCreateAccount}
-                            buttonWidth={'100%'}
-                        />
-                        <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
-                            <Text style={styles.loginText}>
-                                Already have an account? <Text style={styles.linkText}>Log In</Text>
-                            </Text>
-                        </Pressable>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -103,13 +104,15 @@ const styles = StyleSheet.create({
     },
     scrollViewContent: {
         flexGrow: 1,
-        justifyContent: 'space-between',
+        justifyContent: 'center', // **التغيير الرئيسي الأول: التمركز العمودي**
+    },
+    contentWrapper: {
         paddingHorizontal: 20,
-        paddingVertical: '5%',
+        paddingVertical: 20,
     },
     headerContainer: {
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: 40, // زيادة المسافة العلوية
     },
     title: {
         color: 'white',
@@ -123,7 +126,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     formContainer: {
-        flex: 1,
+        marginBottom: 20, // **التغيير الرئيسي الثاني: استخدام المسافات بدلاً من flex**
     },
     input: {
         backgroundColor: '#1E293B',
@@ -143,7 +146,6 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#334155',
-        marginBottom: 20,
     },
     passwordInput: {
         flex: 1,
@@ -152,10 +154,14 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         fontSize: 16,
     },
+    footerContainer: { // **التغيير الرئيسي الثالث: تجميع العناصر السفلية**
+        alignItems: 'center',
+    },
     termsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 30,
+        width: '100%',
     },
     checkbox: {
         width: 22,
@@ -175,7 +181,7 @@ const styles = StyleSheet.create({
     },
     termsText: {
         color: '#a7adb8ff',
-        fontSize: 14,
+        fontSize: 13,
         flex: 1,
     },
     linkText: {
@@ -183,11 +189,8 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         textDecorationLine: 'underline',
     },
-    buttonContainer: {
-        alignItems: 'center',
-    },
     loginLink: {
-        marginTop: 20,
+        marginTop: 25,
     },
     loginText: {
         color: '#a7adb8ff',

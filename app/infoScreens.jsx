@@ -1,64 +1,61 @@
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRef, useState } from "react";
 import AnimatedGradientButton from "./AnimatedGradientButton"; 
+
+// =======================================================
+// 1. تعريف محتوى كل شاشة كمكونات داخلية نظيفة
+// =======================================================
+
 const Screen1 = ({ width }) => (
   <View style={[styles.page, { width }]}>
-    <View style={styles.upperContainer}>
-      <Image
-        source={require("../assets/images/info1.png")}
-        style={styles.imageStyle}
-      />
-      <View style={styles.textContainer}>
-        <Text style={styles.titleText}>
-          Turn your boring lectures into fun activities
-        </Text>
-        <Text style={styles.subtitleText}>
-          Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click.
-        </Text>
-      </View>
+    <Image
+      source={require("../assets/images/info1.png")}
+      style={styles.imageStyle}
+    />
+    <View style={styles.textContainer}>
+      <Text style={styles.titleText}>
+        Turn your boring lectures into fun activities
+      </Text>
+      <Text style={styles.subtitleText}>
+        Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click.
+      </Text>
     </View>
   </View>
 );
 
 const Screen2 = ({ width }) => (
-  <View style={[styles.page, { width },{backgroundColor:"#0F151F"}]}>
-    <View style={styles.upperContainer}>
-      <Image
-        source={require("../assets/images/info2.png")}
-        style={styles.imageStyle}
-      />
-      <View style={styles.textContainer}>
-        <Text style={styles.titleText}>
-          Study smarter,{'\n'}not harder
-        </Text>
-        <Text style={styles.subtitleText}>
-          Our intelligent system helps you focus on what truly matters, saving you hours of manual work.
-        </Text>
-      </View>
+  <View style={[styles.page, { width }]}>
+    <Image
+      source={require("../assets/images/info2.png")}
+      style={styles.imageStyle}
+    />
+    <View style={styles.textContainer}>
+      <Text style={styles.titleText}>
+        Study smarter,{'\n'}not harder
+      </Text>
+      <Text style={styles.subtitleText}>
+        Our intelligent system helps you focus on what truly matters, saving you hours of manual work.
+      </Text>
     </View>
   </View>
 );
 
-// قمت بتصميم الشاشة الثالثة بناءً على نفس النمط
 const Screen3 = ({ width }) => (
   <View style={[styles.page, { width }]}>
-    <View style={styles.upperContainer}>
-      <Image
-        source={require("../assets/images/info1.png")} // ستحتاج لإضافة صورة ثالثة
-        style={styles.imageStyle}
-      />
-      <View style={styles.textContainer}>
-        <Text style={styles.titleText}>
-          Start your free{'\n'}trial now
-        </Text>
-        <Text style={styles.subtitleText}>
-          Get 3 days of full access. No credit card required. Unlock your full potential.
-        </Text>
-      </View>
+    <Image
+      source={require("../assets/images/info1.png")} // تأكد من إضافة صورة ثالثة هنا
+      style={styles.imageStyle}
+    />
+    <View style={styles.textContainer}>
+      <Text style={styles.titleText}>
+        Start your free{'\n'}trial now
+      </Text>
+      <Text style={styles.subtitleText}>
+        Get 3 days of full access. No credit card required. Unlock your full potential.
+      </Text>
     </View>
   </View>
 );
-
 
 // =======================================================
 // 2. المكون الرئيسي الذي يجمع كل شيء
@@ -78,7 +75,6 @@ export default function OnboardingScreen({ onComplete }) {
     if (activeIndex < 2) {
       scrollViewRef.current?.scrollTo({ x: width * (activeIndex + 1), animated: true });
     } else {
-      // هذه هي الدالة التي ستنتقل بالمستخدم إلى شاشة إنشاء الحساب
       // onComplete(); 
       alert("Navigate to Create Account Screen");
     }
@@ -106,9 +102,6 @@ export default function OnboardingScreen({ onComplete }) {
         <Screen3 width={width} />
       </ScrollView>
 
-      {/* ======================================================= */}
-      {/* 3. منطقة الأزرار والمؤشرات أصبحت الآن ديناميكية */}
-      {/* ======================================================= */}
       <View style={styles.bottomContainer}>
         <View style={styles.indicatorContainer}>
           <View style={[styles.indicator, activeIndex === 0 && styles.activeIndicator]} />
@@ -150,7 +143,7 @@ export default function OnboardingScreen({ onComplete }) {
 }
 
 // =======================================================
-// 4. الأنماط الموحدة لجميع الشاشات
+// 3. الأنماط الموحدة والمُعاد هيكلتها لـ Flexbox
 // =======================================================
 
 const styles = StyleSheet.create({
@@ -161,36 +154,36 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     paddingHorizontal: 20,
-  },
-  upperContainer: {
-    flex: 3,
+    justifyContent: 'center', 
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: '5%',
   },
   imageStyle: {
-    width: "101%",
-    height: "35%",
+    // الصورة تأخذ عرض الحاوية بالكامل
+    width: "100%",
+    // Flex يضمن أن الصورة تأخذ المساحة المتاحة وتتكيف مع حجم الشاشة
+    flex: 0.4, 
     resizeMode: "contain",
-    marginTop:"-20%"
   },
   textContainer: {
+    // حاوية النص تأخذ المساحة المتبقية
+    flex: 0.4,
     alignItems: "center",
+    justifyContent: 'center',
+    paddingTop: 20, // لإعطاء مسافة بين الصورة والنص
   },
   titleText: {
     color: "white",
     textAlign: "center",
     fontWeight: "bold",
-    fontSize: 28,
+    fontSize: 30,
     paddingBottom: 20,
-    marginTop:"10%"
   },
   subtitleText: {
     color: "#a7adb8ff",
     textAlign: "center",
     fontSize: 16,
     lineHeight: 24,
-    maxWidth: '90%',
+    maxWidth: '95%',
   },
   bottomContainer: {
     position: 'absolute',

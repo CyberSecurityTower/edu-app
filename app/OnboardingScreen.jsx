@@ -115,6 +115,7 @@ export default function OnboardingScreen({ onComplete }) {
               text="Next"
               onPress={handleNext}
               buttonWidth={width * 0.5}
+              buttonHeight={55}
             />
           </View>
         )}

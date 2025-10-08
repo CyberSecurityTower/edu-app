@@ -10,7 +10,7 @@ const AnimatedGradientButton = ({
   buttonWidth = 240, 
   buttonHeight,
   fontSize,
-  borderRadius // الخاصية الجديدة للتحكم في حواف الزر
+  borderRadius
 }) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
 
@@ -43,7 +43,6 @@ const AnimatedGradientButton = ({
 
   const finalHeight = buttonHeight || buttonWidth * 0.22;
   const finalFontSize = fontSize || buttonWidth * 0.08;
-  // إذا لم يتم توفير borderRadius، سيتم حسابه ليكون دائرياً تماماً
   const finalBorderRadius = borderRadius !== undefined ? borderRadius : finalHeight / 2;
 
   const dynamicStyles = {
@@ -88,3 +87,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+export default AnimatedGradientButton;

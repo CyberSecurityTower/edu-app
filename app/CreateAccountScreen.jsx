@@ -151,8 +151,9 @@ export default function CreateAccountScreen({ navigation }) {
                             <AnimatedGradientButton
                                 text="Create Account"
                                 onPress={handleCreateAccount}
-                                buttonWidth={'100%'}
+                                buttonWidth={200}
                                 buttonHeight={50}
+                                borderRadius={10}
                             />
                             <Pressable style={styles.loginLink} onPress={() => { /* Navigate to Login Screen */ }}>
                                 <Text style={styles.loginText}>

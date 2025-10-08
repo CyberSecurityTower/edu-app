@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-// أضفنا Image هنا
 import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image } from 'react-native';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
@@ -32,16 +31,10 @@ export default function CreateAccountScreen({ navigation }) {
                 >
                     <View style={styles.contentWrapper}>
                         <View style={styles.headerContainer}>
-                            {/* ======================================================= */}
-                            {/* 1. الإضافة الجديدة: الشعار */}
-                            {/* ======================================================= */}
                             <Image
                                 source={require('../assets/images/logo_accountCreating.png')}
                                 style={styles.logo}
                             />
-                            {/* ======================================================= */}
-                            {/* 2. التحسين النفسي: تغيير النصوص */}
-                            {/* ======================================================= */}
                             <Text style={styles.title}>Join the Future of Learning</Text>
                             <Text style={styles.subtitle}>Create your account to unlock your potential.</Text>
                         </View>
@@ -72,7 +65,7 @@ export default function CreateAccountScreen({ navigation }) {
                                     value={password}
                                     onChangeText={setPassword}
                                 />
-                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                                <Pressable style={{paddingRight:10}} onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
                                     <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
                                 </Pressable>
                             </View>
@@ -126,8 +119,8 @@ const styles = StyleSheet.create({
         marginBottom: 40,
     },
     logo: {
-        width: 80,
-        height: 80,
+        width: 180,
+        height: 180,
         resizeMode: 'contain',
         marginBottom: 20,
     },

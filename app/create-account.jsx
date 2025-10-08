@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated } from 'react-native';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
-
+import {Link} from 'expo-router'
 export default function CreateAccountScreen({ navigation }) {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -136,11 +136,13 @@ export default function CreateAccountScreen({ navigation }) {
                                 borderRadius={10}
                                 fontSize={20}
                             />
-                            <Pressable style={styles.loginLink} onPress={() => navigation.navigate('Login')}>
+                    <Link href="/login" asChild>
+                            <Pressable style={styles.loginLink}>
                                 <Text style={styles.loginText}>
                                     Already a member? <Text style={styles.linkText}>Log In</Text>
                                 </Text>
                             </Pressable>
+                            </Link>
                         </View>
                     </View>
                 </ScrollView>

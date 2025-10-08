@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import AnimatedGradientButton from './AnimatedGradientButton';
-
+import { Link } from 'expo-router';
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -75,11 +75,13 @@ export default function LoginScreen({ navigation }) {
                                 borderRadius={10}
                                 fontSize={20}
                             />
-                            <Pressable style={styles.signupLink} onPress={() => navigation.navigate('CreateAccount')}>
-                                <Text style={styles.signupText}>
-                                    Don't have an account? <Text style={styles.linkText}>Create one</Text>
-                                </Text>
-                            </Pressable>
+                        <Link href="/create-account" asChild>
+                                    <Pressable style={styles.signupLink}>
+                                        <Text style={styles.signupText}>
+                                            Don't have an account? <Text style={styles.linkText}>Create one</Text>
+                                        </Text>
+                                    </Pressable>
+                                </Link>
                         </View>
                     </View>
                 </ScrollView>

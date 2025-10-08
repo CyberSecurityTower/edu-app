@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
-import { SafeAreaView, Text, StyleSheet } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import OnboardingScreen from './OnboardingScreen.jsx';
-import CreateAccount from "./CreateAccountScreen.jsx";
-const PlaceholderScreen = () => (
-
-    <CreateAccount/>
-  
-);
+import AuthNavigator from './navigation/AuthNavigator.jsx';
 
 export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(true);
@@ -15,5 +10,9 @@ export default function App() {
     return <OnboardingScreen onComplete={() => setShowOnboarding(false)} />;
   }
 
-  return <PlaceholderScreen />;
+  return (
+    <NavigationContainer>
+      <AuthNavigator />
+    </NavigationContainer>
+  );
 }

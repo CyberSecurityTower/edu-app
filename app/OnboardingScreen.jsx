@@ -63,7 +63,7 @@ export default function OnboardingScreen({ onComplete }) {
           title={"Turn your boring lectures into fun activities"}
           subtitle={"Summarize lessons, create quizzes, access to digital library, and generate flashcards with a single click."}
           customStyles={{
-            imageStyle: { flex: 2.5 },
+            imageStyle: { flex: 3 },
             textContainer: { flex: 1.8, paddingTop: '2%' }
           }}
         />
@@ -75,7 +75,7 @@ export default function OnboardingScreen({ onComplete }) {
           subtitle={"Our intelligent system helps you focus on what truly matters, saving you hours of manual work."}
           customStyles={{
             imageStyle: { flex: 3.3 },
-            textContainer: { flex: 2.5, paddingTop: '8%' }
+            textContainer: { flex: 2.2 }
           }}
         />
         <OnboardingPage

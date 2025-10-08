@@ -6,10 +6,12 @@ import LoginScreen from '../LoginScreen';
 
 const Stack = createNativeStackNavigator();
 
+// Notice: There is NO <NavigationContainer> in this file.
+// It only exports the navigator logic.
 const AuthNavigator = () => {
   return (
     <Stack.Navigator 
-      initialRouteName="CreateAccount" // <--- The NEW starting point
+      initialRouteName="CreateAccount"
       screenOptions={{ headerShown: false }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />

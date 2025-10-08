@@ -1,5 +1,5 @@
+import React, { useRef, useState } from "react";
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useRef, useState } from "react";
 import AnimatedGradientButton from "./AnimatedGradientButton";
 
 const OnboardingPage = ({ width, imageSource, title, subtitle, customStyles = {}, backgroundColor }) => (
@@ -80,7 +80,7 @@ export default function OnboardingScreen({ onComplete }) {
         />
         <OnboardingPage
           width={width}
-          backgroundColor={"#030816ff"} // 
+          backgroundColor={"#030816ff"}
           imageSource={require("../assets/images/info3.png")}
           title={"Start your free\ntrial now"}
           subtitle={"Get full access. No credit card required.\n Unlock your full potential."}
@@ -135,7 +135,6 @@ export default function OnboardingScreen({ onComplete }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    
   },
   page: {
     flex: 1,

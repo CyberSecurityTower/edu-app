@@ -1,9 +1,10 @@
-import { Feather } from '@expo/vector-icons';
+import React, { useState, useRef } from 'react';
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated } from 'react-native';
 import { Link } from 'expo-router';
-import { useRef, useState } from 'react';
-import { Animated, Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import AnimatedGradientButton from '../components/AnimatedGradientButton';
-export default function CreateAccountScreen({ navigation }) {
+import { Feather } from '@expo/vector-icons';
+
+export default function CreateAccountScreen() {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
@@ -12,36 +13,64 @@ export default function CreateAccountScreen({ navigation }) {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
-    const [termsError, setTermsError] = useState(false);
+    
+    // NEW: State to hold all validation errors
+    const [errors, setErrors] = useState({});
 
     const shakeAnimation = useRef(new Animated.Value(0)).current;
 
     const triggerShake = () => {
-        setTermsError(true);
         shakeAnimation.setValue(0);
         Animated.sequence([
             Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
             Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
             Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
             Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true })
-        ]).start(() => {
-            setTimeout(() => setTermsError(false), 2000);
-        });
+        ]).start();
     };
 
+    const validateEmail = (email) => {
+        const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+        return re.test(String(email).toLowerCase());
+    };
+
+    // UPGRADED: The complete validation logic is back!
     const handleCreateAccount = () => {
-        if (!agreedToTerms) {
-            triggerShake();
-            return;
+        const newErrors = {};
+
+        if (!firstName) newErrors.firstName = 'First name is required.';
+        if (!lastName) newErrors.lastName = 'Last name is required.';
+        if (!email) {
+            newErrors.email = 'Email is required.';
+        } else if (!validateEmail(email)) {
+            newErrors.email = 'Please enter a valid email address.';
         }
-        // Validation logic...
-        console.log('Validation successful! Ready for Firebase.');
+        if (!password) {
+            newErrors.password = 'Password is required.';
+        } else if (password.length < 6) {
+            newErrors.password = 'Password must be at least 6 characters long.';
+        }
+        if (!confirmPassword) {
+            newErrors.confirmPassword = 'Please confirm your password.';
+        } else if (password !== confirmPassword) {
+            newErrors.confirmPassword = 'Passwords do not match.';
+        }
+        if (!agreedToTerms) {
+            newErrors.terms = 'You must agree to the terms.';
+            triggerShake();
+        }
+
+        setErrors(newErrors);
+
+        // If there are no errors, proceed
+        if (Object.keys(newErrors).length === 0) {
+            console.log('Validation successful! Ready for Firebase.');
+            // Here we will add Firebase logic
+        }
     };
 
     const animatedStyle = {
-        transform: [{
-            translateX: shakeAnimation
-        }]
+        transform: [{ translateX: shakeAnimation }]
     };
 
     return (
@@ -67,23 +96,29 @@ export default function CreateAccountScreen({ navigation }) {
 
                         <View style={styles.formContainer}>
                             <View style={styles.nameContainer}>
-                                <TextInput
-                                    style={[styles.input, styles.nameInput]}
-                                    placeholder="First Name"
-                                    placeholderTextColor="#8A94A4"
-                                    value={firstName}
-                                    onChangeText={setFirstName}
-                                />
-                                <TextInput
-                                    style={[styles.input, styles.nameInput]}
-                                    placeholder="Last Name"
-                                    placeholderTextColor="#8A94A4"
-                                    value={lastName}
-                                    onChangeText={setLastName}
-                                />
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[styles.input, styles.nameInput, errors.firstName && styles.inputError]}
+                                        placeholder="First Name"
+                                        placeholderTextColor="#8A94A4"
+                                        value={firstName}
+                                        onChangeText={setFirstName}
+                                    />
+                                    {errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
+                                </View>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[styles.input, styles.nameInput, errors.lastName && styles.inputError]}
+                                        placeholder="Last Name"
+                                        placeholderTextColor="#8A94A4"
+                                        value={lastName}
+                                        onChangeText={setLastName}
+                                    />
+                                    {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
+                                </View>
                             </View>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, errors.email && styles.inputError]}
                                 placeholder="Email Address"
                                 placeholderTextColor="#8A94A4"
                                 keyboardType="email-address"
@@ -91,7 +126,9 @@ export default function CreateAccountScreen({ navigation }) {
                                 value={email}
                                 onChangeText={setEmail}
                             />
-                            <View style={styles.passwordContainer}>
+                            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+                            
+                            <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
                                 <TextInput
                                     style={styles.passwordInput}
                                     placeholder="Password"
@@ -104,7 +141,9 @@ export default function CreateAccountScreen({ navigation }) {
                                     <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
                                 </Pressable>
                             </View>
-                             <View style={styles.passwordContainer}>
+                            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+
+                             <View style={[styles.passwordContainer, errors.confirmPassword && styles.inputError]}>
                                 <TextInput
                                     style={styles.passwordInput}
                                     placeholder="Confirm Password"
@@ -117,6 +156,7 @@ export default function CreateAccountScreen({ navigation }) {
                                     <Feather name={isConfirmPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
                                 </Pressable>
                             </View>
+                            {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
                         </View>
 
                         <View style={styles.footerContainer}>
@@ -124,7 +164,7 @@ export default function CreateAccountScreen({ navigation }) {
                                 <Pressable style={styles.checkbox} onPress={() => setAgreedToTerms(!agreedToTerms)}>
                                     {agreedToTerms && <View style={styles.checkboxChecked} />}
                                 </Pressable>
-                                <Text style={[styles.termsText, termsError && styles.termsErrorText]}>
+                                <Text style={[styles.termsText, errors.terms && styles.termsErrorText]}>
                                     I agree to the <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>.
                                 </Text>
                             </Animated.View>
@@ -136,12 +176,12 @@ export default function CreateAccountScreen({ navigation }) {
                                 borderRadius={10}
                                 fontSize={20}
                             />
-                    <Link href="/login" asChild>
-                            <Pressable style={styles.loginLink}>
-                                <Text style={styles.loginText}>
-                                    Already a member? <Text style={styles.linkText}>Log In</Text>
-                                </Text>
-                            </Pressable>
+                            <Link href="/login" asChild>
+                                <Pressable style={styles.loginLink}>
+                                    <Text style={styles.loginText}>
+                                        Already a member? <Text style={styles.linkText}>Log In</Text>
+                                    </Text>
+                                </Pressable>
                             </Link>
                         </View>
                     </View>
@@ -152,6 +192,7 @@ export default function CreateAccountScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+    // ... (all previous styles are the same)
     safeArea: {
         flex: 1,
         backgroundColor: '#0C0F27',
@@ -196,8 +237,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
     },
-    nameInput: {
+    inputWrapper: {
         width: '48%',
+    },
+    nameInput: {
+        width: '100%',
     },
     input: {
         backgroundColor: '#1E293B',
@@ -206,7 +250,7 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderRadius: 12,
         fontSize: 16,
-        marginBottom: 18,
+        marginBottom: 4, // Reduced margin to make space for error text
         borderWidth: 1,
         borderColor: '#334155',
     },
@@ -217,7 +261,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#334155',
-        marginBottom: 18,
+        marginBottom: 4, // Reduced margin
     },
     passwordInput: {
         flex: 1,
@@ -257,7 +301,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     termsErrorText: {
-        color: '#EF4444',
+        color: '#EF4444', // Red for error
     },
     linkText: {
         color: '#10B981',
@@ -270,5 +314,15 @@ const styles = StyleSheet.create({
     loginText: {
         color: '#a7adb8ff',
         fontSize: 15,
+    },
+    // NEW STYLES for error handling
+    inputError: {
+        borderColor: '#EF4444', // Red border for inputs with errors
+    },
+    errorText: {
+        color: '#EF4444',
+        fontSize: 12,
+        marginBottom: 12, // Space after the error message
+        marginLeft: 4,
     },
 });

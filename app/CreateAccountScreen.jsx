@@ -6,9 +6,9 @@ export default function CreateAccount(){
     return(
         <>
         
-        <ScrollView>
-            <View style={{width:"100%",height:"100%",height:120,justifyContent:"center"}}>
-                <Text style={{color:"white",fontSize:22}}>hiiii</Text>
+        <ScrollView style={{backgroundColor:}}>
+            <View>
+
             </View>
         </ScrollView>
         

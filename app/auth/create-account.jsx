@@ -117,7 +117,7 @@ export default function CreateAccountScreen() {
                     <View style={styles.contentWrapper}>
                         <View style={styles.headerContainer}>
                             <Image
-                                source={require('../assets/images/logo_accountCreating.png')}
+                                source={require('../../assets/images/logo_accountCreating.png')}
                                 style={styles.logo}
                             />
                             <Text style={styles.title}>Join the Future of Learning</Text>

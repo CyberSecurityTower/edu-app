@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import AnimatedGradientButton from "./AnimatedGradientButton";
-
 const OnboardingPage = ({ width, imageSource, title, subtitle, customStyles = {}, backgroundColor }) => (
   <View style={[styles.page, { width, backgroundColor }]}>
     <View style={[styles.topSpacer, customStyles.topSpacer]} />
@@ -89,6 +88,7 @@ export default function OnboardingScreen({ onComplete }) {
             textContainer: { flex: 2 }
           }}
         />
+        
       </ScrollView>
 
       <View style={styles.bottomContainer}>

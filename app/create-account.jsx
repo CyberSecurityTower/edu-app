@@ -79,33 +79,129 @@ export default function CreateAccountScreen() {
     };
 
     // ... (rest of the component is mostly the same)
-    return (
+  return (
         <SafeAreaView style={styles.safeArea}>
-            {/* ... StatusBar, KeyboardAvoidingView, ScrollView ... */}
-            <View style={styles.formContainer}>
-                {/* ... All TextInput fields ... */}
-            </View>
+            <StatusBar barStyle="light-content" />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.container}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollViewContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.contentWrapper}>
+                        <View style={styles.headerContainer}>
+                            <Image
+                                source={require('../assets/images/logo_accountCreating.png')}
+                                style={styles.logo}
+                            />
+                            <Text style={styles.title}>Join the Future of Learning</Text>
+                            <Text style={styles.subtitle}>Create your account to unlock your potential.</Text>
+                        </View>
 
-            <View style={styles.footerContainer}>
-                {errors.general && <Text style={styles.errorText}>{errors.general}</Text>}
-                
-                {/* ... Terms and Conditions ... */}
+                        <View style={styles.formContainer}>
+                            <View style={styles.nameContainer}>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[styles.input, styles.nameInput, errors.firstName && styles.inputError]}
+                                        placeholder="First Name"
+                                        placeholderTextColor="#8A94A4"
+                                        value={firstName}
+                                        onChangeText={(text) => { setFirstName(text); setErrors({...errors, firstName: null}) }}
+                                    />
+                                    {errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
+                                </View>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[styles.input, styles.nameInput, errors.lastName && styles.inputError]}
+                                        placeholder="Last Name"
+                                        placeholderTextColor="#8A94A4"
+                                        value={lastName}
+                                        onChangeText={(text) => { setLastName(text); setErrors({...errors, lastName: null}) }}
+                                    />
+                                    {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
+                                </View>
+                            </View>
+                            <TextInput
+                                style={[styles.input, errors.email && styles.inputError]}
+                                placeholder="Email Address"
+                                placeholderTextColor="#8A94A4"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                value={email}
+                                onChangeText={(text) => { setEmail(text); setErrors({...errors, email: null, general: null}) }}
+                            />
+                            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+                            
+                            <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder="Password"
+                                    placeholderTextColor="#8A94A4"
+                                    secureTextEntry={!isPasswordVisible}
+                                    value={password}
+                                    onChangeText={(text) => { setPassword(text); setErrors({...errors, password: null}) }}
+                                />
+                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                                    <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
+                                </Pressable>
+                            </View>
+                            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
-                {isLoading ? (
-                    <ActivityIndicator size="large" color="#10B981" />
-                ) : (
-                    <AnimatedGradientButton
-                        text="Create Account"
-                        onPress={handleCreateAccount}
-                        // ... other props
-                    />
-                )}
-                
-                {/* ... Login Link ... */}
-            </View>
+                             <View style={[styles.passwordContainer, errors.confirmPassword && styles.inputError]}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder="Confirm Password"
+                                    placeholderTextColor="#8A94A4"
+                                    secureTextEntry={!isConfirmPasswordVisible}
+                                    value={confirmPassword}
+                                    onChangeText={(text) => { setConfirmPassword(text); setErrors({...errors, confirmPassword: null}) }}
+                                />
+                                <Pressable onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}>
+                                    <Feather name={isConfirmPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
+                                </Pressable>
+                            </View>
+                            {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+                        </View>
+
+                        <View style={styles.footerContainer}>
+                            {errors.general && <Text style={[styles.errorText, {textAlign: 'center', marginBottom: 15}]}>{errors.general}</Text>}
+                            <Animated.View style={[styles.termsContainer, animatedStyle]}>
+                                <Pressable style={styles.checkbox} onPress={() => { setAgreedToTerms(!agreedToTerms); setErrors({...errors, terms: null}) }}>
+                                    {agreedToTerms && <View style={styles.checkboxChecked} />}
+                                </Pressable>
+                                <Text style={[styles.termsText, errors.terms && styles.termsErrorText]}>
+                                    I agree to the <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>.
+                                </Text>
+                            </Animated.View>
+                            
+                            {isLoading ? (
+                                <ActivityIndicator size="large" color="#10B981" style={{height: 50}} />
+                            ) : (
+                                <AnimatedGradientButton
+                                    text="Create Account"
+                                    onPress={handleCreateAccount}
+                                    buttonWidth={200}
+                                    buttonHeight={50}
+                                    borderRadius={10}
+                                    fontSize={20}
+                                />
+                            )}
+
+                            <Link href="/login" asChild>
+                                <Pressable style={styles.loginLink}>
+                                    <Text style={styles.loginText}>
+                                        Already a member? <Text style={styles.linkText}>Log In</Text>
+                                    </Text>
+                                </Pressable>
+                            </Link>
+                        </View>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
-    );
-}
+    )}
 
 
 const styles = StyleSheet.create({

@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
-  import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-  
-  import { Feather } from '@expo/vector-icons';
-
-// NEW: Import Firebase services and the sign-in function
+import AnimatedGradientButton from '../../components/AnimatedGradientButton';
+import { Feather } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
@@ -13,31 +10,20 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    
-    // NEW: State for loading and errors
     const [isLoading, setIsLoading] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [error, setError] = useState('');
 
-    // UPGRADED: The handleLogin function now talks to Firebase
     const handleLogin = async () => {
-        const newErrors = {};
-        if (!email) newErrors.general = 'Please enter both email and password.';
-        if (!password) newErrors.general = 'Please enter both email and password.';
-        
-        setErrors(newErrors);
-        if (Object.keys(newErrors).length > 0) return;
-
+        if (!email || !password) {
+            setError('Please enter both email and password.');
+            return;
+        }
         setIsLoading(true);
+        setError('');
         try {
-            // The magic happens here!
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            console.log('LOGIN SUCCESSFUL! User UID:', userCredential.user.uid);
-            // In the future, we will navigate to the main app screen from here
-
+            await signInWithEmailAndPassword(auth, email.trim(), password);
         } catch (error) {
-            console.error("Login Error:", error.code);
-            // Provide a user-friendly error message
-            setErrors({ general: 'Invalid email or password. Please try again.' });
+            setError('Invalid email or password. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -46,74 +32,27 @@ export default function LoginScreen() {
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" />
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={styles.container}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.scrollViewContent}
-                    keyboardShouldPersistTaps="handled"
-                >
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+                <ScrollView contentContainerStyle={styles.scrollViewContent} keyboardShouldPersistTaps="handled">
                     <View style={styles.contentWrapper}>
                         <View style={styles.headerContainer}>
-                            <Image
-                                source={require('../../assets/images/logo_accountCreating.png')}
-                                style={styles.logo}
-                            />
+                            <Image source={require('../../assets/images/logo_accountCreating.png')} style={styles.logo} />
                             <Text style={styles.title}>Welcome Back!</Text>
                             <Text style={styles.subtitle}>Log in to continue your learning journey.</Text>
                         </View>
-
                         <View style={styles.formContainer}>
-                            <TextInput
-                                style={[styles.input, errors.general && styles.inputError]}
-                                placeholder="Email Address"
-                                placeholderTextColor="#8A94A4"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                value={email}
-                                onChangeText={(text) => { setEmail(text); setErrors({}) }}
-                            />
-                            <View style={[styles.passwordContainer, errors.general && styles.inputError]}>
-                                <TextInput
-                                    style={styles.passwordInput}
-                                    placeholder="Password"
-                                    placeholderTextColor="#8A94A4"
-                                    secureTextEntry={!isPasswordVisible}
-                                    value={password}
-                                    onChangeText={(text) => { setPassword(text); setErrors({}) }}
-                                />
-                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                                    <Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" />
-                                </Pressable>
+                            <TextInput style={[styles.input, !!error && styles.inputError]} placeholder="Email Address" placeholderTextColor="#8A94A4" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={(text) => { setEmail(text); setError(''); }} autoCorrect={false} />
+                            <View style={[styles.passwordContainer, !!error && styles.inputError]}>
+                                <TextInput style={styles.passwordInput} placeholder="Password" placeholderTextColor="#8A94A4" secureTextEntry={!isPasswordVisible} value={password} onChangeText={(text) => { setPassword(text); setError(''); }} />
+                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}><Feather name={isPasswordVisible ? "eye-off" : "eye"} size={22} color="#8A94A4" /></Pressable>
                             </View>
-                             <Pressable style={styles.forgotPasswordLink}>
-                                <Text style={styles.linkText}>Forgot Password?</Text>
-                            </Pressable>
+                            <Pressable style={styles.forgotPasswordLink}><Text style={styles.linkText}>Forgot Password?</Text></Pressable>
                         </View>
-
                         <View style={styles.footerContainer}>
-                            {errors.general && <Text style={[styles.errorText, {textAlign: 'center', marginBottom: 15}]}>{errors.general}</Text>}
-                            
-                            {isLoading ? (
-                                <ActivityIndicator size="large" color="#10B981" style={{height: 50}} />
-                            ) : (
-                                <AnimatedGradientButton
-                                    text="Log In"
-                                    onPress={handleLogin}
-                                    buttonWidth={200}
-                                    buttonHeight={50}
-                                    borderRadius={10}
-                                    fontSize={20}
-                                />
-                            )}
-
+                            {error && <Text style={styles.errorText}>{error}</Text>}
+                            {isLoading ? (<ActivityIndicator size="large" color="#10B981" style={{ height: 50 }} />) : (<AnimatedGradientButton text="Log In" onPress={handleLogin} buttonWidth={200} buttonHeight={50} borderRadius={10} fontSize={20} />)}
                             <Link href="/create-account" asChild>
-                                <Pressable style={styles.signupLink}>
-                                    <Text style={styles.signupText}>
-                                        Don't have an account? <Text style={styles.linkText}>Create one</Text>
-                                    </Text>
-                                </Pressable>
+                                <Pressable style={styles.signupLink}><Text style={styles.signupText}>Don't have an account? <Text style={styles.linkText}>Create one</Text></Text></Pressable>
                             </Link>
                         </View>
                     </View>
@@ -142,5 +81,5 @@ const styles = StyleSheet.create({
     signupLink: { marginTop: 25 },
     signupText: { color: '#a7adb8ff', fontSize: 15 },
     inputError: { borderColor: '#EF4444' },
-    errorText: { color: '#EF4444', fontSize: 12, marginLeft: 4 },
+    errorText: { color: '#EF4444', fontSize: 14, textAlign: 'center', marginBottom: 15 },
 });

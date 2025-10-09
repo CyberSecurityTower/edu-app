@@ -17,18 +17,13 @@ function InitialLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return; // Wait until auth state is known
+    if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    // UPGRADED LOGIC: This is much simpler and more robust
     if (user && inAuthGroup) {
-      // If the user is signed in and somehow lands on a login/create screen,
-      // redirect them to the main app area.
       router.replace('/');
     } else if (!user && !inAuthGroup) {
-      // If the user is NOT signed in and is NOT in the auth group (e.g., they are on a protected screen),
-      // redirect them to the login screen.
       router.replace('/login');
     }
   }, [user, loading, segments]);
@@ -43,8 +38,8 @@ function InitialLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(home)" />
+      <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
+      <Stack.Screen name="(home)" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }

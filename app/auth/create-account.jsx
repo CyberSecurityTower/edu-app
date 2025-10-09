@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
-import AnimatedGradientButton from '../components/AnimatedGradientButton';
+import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 
 // Import Firebase services and functions
-import { auth, db } from '../firebase';
+import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 

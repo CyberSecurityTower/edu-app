@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-
+import { View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 export default function CreateAccountScreen() {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -148,8 +148,8 @@ const styles = StyleSheet.create({
     nameContainer: { flexDirection: 'row', justifyContent: 'space-between' },
     inputWrapper: { width: '48%' },
     nameInput: { width: '100%' },
-    input: { backgroundColor: '#1E293B', color: 'white', paddingHorizontal: 15, paddingVertical: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#334155' },
-    passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155' },
+    input: { backgroundColor: '#1E293B', color: 'white', paddingHorizontal: 15, paddingVertical: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#334155' ,marginBottom:10},
+    passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155' ,marginBottom:10},
     passwordInput: { flex: 1, color: 'white', paddingHorizontal: 15, paddingVertical: 16, fontSize: 16 },
     footerContainer: { alignItems: 'center' },
     termsContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 25, width: '100%' },

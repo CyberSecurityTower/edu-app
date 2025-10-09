@@ -36,6 +36,9 @@ function InitialLayout() {
     );
   }
 
+  // CORRECTED: The Stack component now acts as a simple wrapper.
+  // It will automatically discover all the routes (files) inside the app directory.
+  // We removed the explicit <Stack.Screen> for the groups.
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" options={{ animation: 'none' }} />

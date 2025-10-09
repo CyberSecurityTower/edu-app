@@ -77,7 +77,9 @@ export default function CreateAccountScreen() {
             setIsLoading(false); // Stop loading, whether success or failure
         }
     };
-
+   const animatedStyle = {
+        transform: [{ translateX: shakeAnimation }]
+    };
     // ... (rest of the component is mostly the same)
   return (
         <SafeAreaView style={styles.safeArea}>

@@ -17,35 +17,34 @@ function InitialLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading) return; // Wait until auth state is known
 
-    // Check if the user is in any of the app's main groups
-    const inApp = segments[0] === '(auth)' || segments[0] === '(home)';
+    const inAuthGroup = segments[0] === '(auth)';
 
-    if (user && !inApp) {
-      // User is signed in but not in the home group, redirect to home.
-      router.replace('/'); 
-    } else if (!user && !inApp) {
-      // User is not signed in and not in the auth group, redirect to login.
+    // UPGRADED LOGIC: This is much simpler and more robust
+    if (user && inAuthGroup) {
+      // If the user is signed in and somehow lands on a login/create screen,
+      // redirect them to the main app area.
+      router.replace('/');
+    } else if (!user && !inAuthGroup) {
+      // If the user is NOT signed in and is NOT in the auth group (e.g., they are on a protected screen),
+      // redirect them to the login screen.
       router.replace('/login');
     }
   }, [user, loading, segments]);
 
-  // The layout is loading the auth state, show a loading indicator.
-  // This replaces the need for app/index.jsx
   if (loading) {
     return (
-        <View style={styles.loadingContainer}>
-            {/* UPGRADED: Added a transform style to make the indicator bigger */}
-            <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
+      </View>
     );
   }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={{ gestureEnabled: false }} />
-      <Stack.Screen name="(home)" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(home)" />
     </Stack>
   );
 }

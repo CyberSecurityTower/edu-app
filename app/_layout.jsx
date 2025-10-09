@@ -4,6 +4,7 @@ import OnboardingScreen from '../components/OnboardingScreen';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AuthContext = createContext(null);
 
@@ -36,9 +37,6 @@ function InitialLayout() {
     );
   }
 
-  // CORRECTED: The Stack component now acts as a simple wrapper.
-  // It will automatically discover all the routes (files) inside the app directory.
-  // We removed the explicit <Stack.Screen> for the groups.
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
@@ -67,10 +65,48 @@ function AuthProvider({ children }) {
 }
 
 export default function RootLayout() {
-    const [showOnboarding, setShowOnboarding] = useState(true);
+    const [isOnboardingLoading, setIsOnboardingLoading] = useState(true);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+
+    useEffect(() => {
+      const checkOnboardingStatus = async () => {
+        try {
+          const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
+          if (hasCompleted !== null) {
+            setShowOnboarding(false);
+          } else {
+            setShowOnboarding(true);
+          }
+        } catch (error) {
+          setShowOnboarding(true); // Default to showing onboarding if there's an error
+        } finally {
+          setIsOnboardingLoading(false);
+        }
+      };
+
+      checkOnboardingStatus();
+    }, []);
+
+    const handleOnboardingComplete = async () => {
+        try {
+            await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
+            setShowOnboarding(false);
+        } catch (error) {
+            // Even if saving fails, hide it for the current session
+            setShowOnboarding(false);
+        }
+    };
+
+    if (isOnboardingLoading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
+            </View>
+        );
+    }
 
     if (showOnboarding) {
-        return <OnboardingScreen onComplete={() => setShowOnboarding(false)} />;
+        return <OnboardingScreen onComplete={handleOnboardingComplete} />;
     }
 
     return (

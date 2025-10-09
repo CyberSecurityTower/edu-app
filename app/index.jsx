@@ -1,5 +1,9 @@
-import { Redirect } from 'expo-router';
- export default function Index() {
-      // Redirects the user from the root route "/" to "/create-account"
-      return <Redirect href="/create-account" />;
-    }
+import { ActivityIndicator, View } from 'react-native';
+
+export default function StartPage() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', backgroundColor: '#0C0F27' }}>
+      <ActivityIndicator size="large" color="#10B981" />
+    </View>
+  );
+}

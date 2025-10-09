@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
-import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-import { Feather } from '@expo/vector-icons';
+  import AnimatedGradientButton from '../../components/AnimatedGradientButton';
+  
+  import { Feather } from '@expo/vector-icons';
 
 // NEW: Import Firebase services and the sign-in function
 import { auth } from '../../firebase';
@@ -56,7 +57,7 @@ export default function LoginScreen() {
                     <View style={styles.contentWrapper}>
                         <View style={styles.headerContainer}>
                             <Image
-                                source={require('../assets/images/logo_accountCreating.png')}
+                                source={require('../../assets/images/logo_accountCreating.png')}
                                 style={styles.logo}
                             />
                             <Text style={styles.title}>Welcome Back!</Text>

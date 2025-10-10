@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "904016539663",
+    "project_id": "my-edu-ai",
+    "storage_bucket": "my-edu-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:904016539663:android:e30979c1763f9ddd2ab37a",
+        "android_client_info": {
+          "package_name": "com.islamzn.eduapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "904016539663-ufph663812iaq89bp9eg2q297hd7v6kq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBEFeLBpyVl7jelUOdcNrs0wNeohjGFgNM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "904016539663-ufph663812iaq89bp9eg2q297hd7v6kq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "904016539663-6nd311pdv4frl2qh96tf37b28fql8ome.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.islamziani.eduapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -21,7 +21,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0C0F27"
       },
-      "package": "com.islamzn.eduapp"
+      "package": "com.islamzn.eduapp",
+       "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

@@ -1,24 +1,26 @@
 import React, { useState, useRef } from 'react';
 import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import * as Device from 'expo-device'; // Import expo-device
+import * as Device from 'expo-device';
+import { useAppState } from '../_layout';
 
 export default function CreateAccountScreen() {
-    const [firstName, setFirstName]    = useState('');
-    const [lastName, setLastName]      = useState('');
-    const [email, setEmail]            = useState('');
-    const [password, setPassword]      = useState('');
+    const { setUser } = useAppState();
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
-    const [errors, setErrors]          = useState({});
-    const [isLoading, setIsLoading]    = useState(false);
+    const [errors, setErrors] = useState({});
+    const [isLoading, setIsLoading] = useState(false);
     const shakeAnimation = useRef(new Animated.Value(0)).current;
 
     const triggerShake = () => {
@@ -71,19 +73,24 @@ export default function CreateAccountScreen() {
             const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
             const user = userCredential.user;
 
-            await setDoc(doc(db, "users", user.uid), {
+            const newUserProfile = {
+                uid: user.uid,
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
                 email: email.trim().toLowerCase(),
                 createdAt: new Date(),
                 profileStatus: "pending_setup",
                 selectedPathId: null,
-            });
+            };
+
+            await setDoc(doc(db, "users", user.uid), newUserProfile);
 
             await setDoc(trialRef, {
                 activatedAt: new Date(),
-                userIds: [user.uid], // Store as an array to track multiple attempts
+                userIds: [user.uid],
             });
+
+            setUser(newUserProfile);
 
         } catch (error) {
             if (error.code === 'auth/email-already-in-use') {

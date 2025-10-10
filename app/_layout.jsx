@@ -5,12 +5,14 @@ import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getUserProfile } from '../services/firestoreService';
 
 console.log("--- SCRIPT START: _layout.jsx is being executed ---");
 
 LogBox.ignoreLogs([
   'WARN  [Layout children]: No route named "(auth)" exists in nested children',
-  'WARN  [Layout children]: No route named "(home)" exists in nested children'
+  'WARN  [Layout children]: No route named "(home)" exists in nested children',
+  'WARN  [Layout children]: No route named "(setup)" exists in nested children'
 ]);
 
 const AppStateContext = createContext(null);
@@ -21,13 +23,13 @@ export function useAppState() {
 
 function RootLayoutNav() {
   console.log("Step 5: RootLayoutNav is rendering.");
-  const { user, hasCompletedOnboarding } = useAppState(); // user now contains the profile
+  const { user, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    // ... (previous log)
-
+    console.log("Step 6: Redirection useEffect is running.", { user: !!user, hasCompletedOnboarding, segments });
+    
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
 
@@ -51,14 +53,14 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(home)" />
-      <Stack.Screen name="(setup)" /> 
+      <Stack.Screen name="(setup)" />
     </Stack>
   );
 }
 
 function AppStateProvider({ children }) {
     console.log("Step 2: AppStateProvider is rendering for the first time.");
-    const [user, setUser] = useState(null); // This will now hold the full profile
+    const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
 
@@ -77,20 +79,31 @@ function AppStateProvider({ children }) {
             setAuthLoading(false);
         });
 
-        // ... (checkOnboardingStatus remains the same)
-        
+        const checkOnboardingStatus = async () => {
+            try {
+                console.log("Checking AsyncStorage for onboarding status...");
+                const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
+                console.log("Value from AsyncStorage:", hasCompleted);
+                setHasCompletedOnboarding(hasCompleted === 'true');
+            } catch (e) {
+                console.error("Error reading from AsyncStorage:", e);
+                setHasCompletedOnboarding(false);
+            }
+        };
+
         checkOnboardingStatus();
+
         return () => {
           console.log("Cleaning up auth listener.");
           unsubscribeAuth();
         };
     }, []);
 
-    console.log("AppStateProvider is about to provide context values:", { user, authLoading, hasCompletedOnboarding });
+    console.log("AppStateProvider is about to provide context values:", { user: !!user, authLoading, hasCompletedOnboarding });
     return (
         <AppStateContext.Provider value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser }}>
             {children}
-        </AppStateContext.Provider>
+        </AppStateContext.Provider> // <--- THE FIX IS HERE
     );
 }
 

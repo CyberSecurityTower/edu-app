@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { auth } from '../../firebase';
-import { useAuth } from '../_layout'; // Import the useAuth hook
+import { useAppState } from '../_layout'; // CORRECTED: Import the new hook
 
 const HomeScreen = () => {
-  const { user } = useAuth(); // Access user data
+  const { user } = useAppState(); // CORRECTED: Call the new hook
 
   return (
     <View style={styles.container}>

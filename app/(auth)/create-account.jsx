@@ -55,12 +55,17 @@ export default function CreateAccountScreen() {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
             const user = userCredential.user;
-            await setDoc(doc(db, "users", user.uid), {
-                firstName: firstName.trim(),
-                lastName: lastName.trim(),
-                email: email.trim().toLowerCase(),
-                createdAt: new Date(),
-            });
+                await setDoc(doc(db, "users", user.uid), {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim().toLowerCase(),
+        createdAt: new Date(),
+        // NEW FIELDS:
+        profileStatus: "pending", // "pending" or "completed"
+        selectedPathId: null,     // Will be filled after profile setup
+        appLanguage: "en",        // Default language
+        learningLanguage: "en",   // Default language
+    });
         } catch (error) {
             if (error.code === 'auth/email-already-in-use') {
                 setErrors({ email: 'This email address is already in use.' });

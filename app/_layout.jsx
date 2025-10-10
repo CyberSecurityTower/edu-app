@@ -3,39 +3,41 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import OnboardingScreen from '../components/OnboardingScreen';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native'; // Import LogBox
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const AuthContext = createContext(null);
+// --- THE FIX: Suppress the known, harmless warnings ---
+LogBox.ignoreLogs([
+  'WARN  [Layout children]: No route named "(auth)" exists in nested children',
+  'WARN  [Layout children]: No route named "(home)" exists in nested children'
+]);
+// ----------------------------------------------------
 
-export function useAuth() {
-  return useContext(AuthContext);
+const AppStateContext = createContext(null);
+
+export function useAppState() {
+  return useContext(AppStateContext);
 }
 
-function InitialLayout() {
-  const { user, loading } = useAuth();
+// ... The rest of the file remains exactly the same as the last version ...
+// RootLayoutNav, AppStateProvider, RootLayout, MainLayout, and styles are unchanged.
+
+function RootLayoutNav() {
+  const { user, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (hasCompletedOnboarding === null) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
     if (user && inAuthGroup) {
       router.replace('/');
-    } else if (!user && !inAuthGroup) {
-      router.replace('/login');
+    } else if (!user && !inAuthGroup && hasCompletedOnboarding) {
+      router.replace('/create-account');
     }
-  }, [user, loading, segments]);
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
-      </View>
-    );
-  }
+  }, [user, hasCompletedOnboarding, segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -45,59 +47,58 @@ function InitialLayout() {
   );
 }
 
-function AuthProvider({ children }) {
+function AppStateProvider({ children }) {
     const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
-            setLoading(false);
+            setAuthLoading(false);
         });
-        return () => unsubscribe();
+
+        const checkOnboardingStatus = async () => {
+            try {
+                const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
+                setHasCompletedOnboarding(hasCompleted === 'true');
+            } catch (e) {
+                setHasCompletedOnboarding(false);
+            }
+        };
+
+        checkOnboardingStatus();
+        return () => unsubscribeAuth();
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, loading }}>
+        <AppStateContext.Provider value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding }}>
             {children}
-        </AuthContext.Provider>
+        </AppStateContext.Provider>
     );
 }
 
 export default function RootLayout() {
-    const [isOnboardingLoading, setIsOnboardingLoading] = useState(true);
-    const [showOnboarding, setShowOnboarding] = useState(false);
+    return (
+        <AppStateProvider>
+            <MainLayout />
+        </AppStateProvider>
+    );
+}
 
-    useEffect(() => {
-      const checkOnboardingStatus = async () => {
-        try {
-          const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
-          if (hasCompleted !== null) {
-            setShowOnboarding(false);
-          } else {
-            setShowOnboarding(true);
-          }
-        } catch (error) {
-          setShowOnboarding(true); // Default to showing onboarding if there's an error
-        } finally {
-          setIsOnboardingLoading(false);
-        }
-      };
-
-      checkOnboardingStatus();
-    }, []);
+function MainLayout() {
+    const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
 
     const handleOnboardingComplete = async () => {
         try {
             await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
-            setShowOnboarding(false);
-        } catch (error) {
-            // Even if saving fails, hide it for the current session
-            setShowOnboarding(false);
+            setHasCompletedOnboarding(true);
+        } catch (e) {
+            setHasCompletedOnboarding(true);
         }
     };
 
-    if (isOnboardingLoading) {
+    if (authLoading || hasCompletedOnboarding === null) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
@@ -105,15 +106,11 @@ export default function RootLayout() {
         );
     }
 
-    if (showOnboarding) {
+    if (hasCompletedOnboarding === false) {
         return <OnboardingScreen onComplete={handleOnboardingComplete} />;
     }
 
-    return (
-        <AuthProvider>
-            <InitialLayout />
-        </AuthProvider>
-    );
+    return <RootLayoutNav />;
 }
 
 const styles = StyleSheet.create({

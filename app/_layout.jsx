@@ -6,7 +6,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Suppress known, harmless warnings
+console.log("--- SCRIPT START: _layout.jsx is being executed ---");
+
 LogBox.ignoreLogs([
   'WARN  [Layout children]: No route named "(auth)" exists in nested children',
   'WARN  [Layout children]: No route named "(home)" exists in nested children'
@@ -19,20 +20,28 @@ export function useAppState() {
 }
 
 function RootLayoutNav() {
+  console.log("Step 5: RootLayoutNav is rendering.");
   const { user, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (hasCompletedOnboarding === null) return;
+    console.log("Step 6: Redirection useEffect is running.", { user: !!user, hasCompletedOnboarding, segments });
+    if (hasCompletedOnboarding === null) {
+      console.log("Redirection paused: Onboarding status is still unknown.");
+      return;
+    }
 
     const inAuthGroup = segments[0] === '(auth)';
 
     if (user && inAuthGroup) {
+      console.log("Decision: User is logged in and in auth group. Redirecting to '/'");
       router.replace('/');
     } else if (!user && !inAuthGroup && hasCompletedOnboarding) {
-      // Default to create-account for new users after onboarding
+      console.log("Decision: User is logged out and outside auth group. Redirecting to '/create-account'");
       router.replace('/create-account');
+    } else {
+      console.log("Decision: No redirection needed at this time.");
     }
   }, [user, hasCompletedOnboarding, segments]);
 
@@ -45,29 +54,40 @@ function RootLayoutNav() {
 }
 
 function AppStateProvider({ children }) {
+    console.log("Step 2: AppStateProvider is rendering for the first time.");
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
 
     useEffect(() => {
+        console.log("Step 3: AppStateProvider useEffect is running to set up listeners.");
+        
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+            console.log("Firebase Auth State Changed! User:", currentUser ? currentUser.uid : null);
             setUser(currentUser);
             setAuthLoading(false);
         });
 
         const checkOnboardingStatus = async () => {
             try {
+                console.log("Checking AsyncStorage for onboarding status...");
                 const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
+                console.log("Value from AsyncStorage:", hasCompleted);
                 setHasCompletedOnboarding(hasCompleted === 'true');
             } catch (e) {
+                console.error("Error reading from AsyncStorage:", e);
                 setHasCompletedOnboarding(false);
             }
         };
 
         checkOnboardingStatus();
-        return () => unsubscribeAuth();
+        return () => {
+          console.log("Cleaning up auth listener.");
+          unsubscribeAuth();
+        };
     }, []);
 
+    console.log("AppStateProvider is about to provide context values:", { user: !!user, authLoading, hasCompletedOnboarding });
     return (
         <AppStateContext.Provider value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding }}>
             {children}
@@ -76,6 +96,7 @@ function AppStateProvider({ children }) {
 }
 
 export default function RootLayout() {
+    console.log("Step 1: RootLayout is rendering.");
     return (
         <AppStateProvider>
             <MainLayout />
@@ -83,20 +104,24 @@ export default function RootLayout() {
     );
 }
 
-// THIS IS THE CORRECTED FUNCTION
 function MainLayout() {
     const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
+    console.log("Step 4: MainLayout is rendering with state:", { authLoading, hasCompletedOnboarding });
 
     const handleOnboardingComplete = async () => {
         try {
+            console.log("Onboarding complete! Saving to AsyncStorage...");
             await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
             setHasCompletedOnboarding(true);
+            console.log("Saved successfully.");
         } catch (e) {
+            console.error("Error saving to AsyncStorage:", e);
             setHasCompletedOnboarding(true);
         }
     };
 
     if (authLoading || hasCompletedOnboarding === null) {
+        console.log("Decision: Showing loading screen.");
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
@@ -104,11 +129,12 @@ function MainLayout() {
         );
     }
 
-    // THE FIX IS HERE: We re-added the check for onboarding
     if (hasCompletedOnboarding === false) {
+        console.log("Decision: Showing OnboardingScreen.");
         return <OnboardingScreen onComplete={handleOnboardingComplete} />;
     }
 
+    console.log("Decision: Showing RootLayoutNav (the main app).");
     return <RootLayoutNav />;
 }
 

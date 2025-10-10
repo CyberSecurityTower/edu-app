@@ -1,4 +1,4 @@
-import React, 'react';
+import React from 'react'; // <--- THE FIX IS HERE
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

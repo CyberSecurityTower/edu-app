@@ -1,5 +1,6 @@
 // services/firestoreService.js
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Add collection and getDocs
+
+import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore'; // تأكد من استيراد updateDoc
 import { db } from '../firebase';
 
 export const getUserProfile = async (uid) => {
@@ -19,5 +20,16 @@ export const getEducationalPaths = async () => {
   } catch (error) {
     console.error("Error fetching educational paths:", error);
     return []; // Return an empty array on error
+  }
+};
+export const updateUserProfile = async (uid, data) => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, data);
+    console.log(`User profile ${uid} updated successfully.`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    return { success: false, error: error.message };
   }
 };

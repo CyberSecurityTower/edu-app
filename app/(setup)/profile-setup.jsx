@@ -4,13 +4,14 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DropDownPicker from 'react-native-dropdown-picker';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-
+import { useRouter } from 'expo-router';
 import { getEducationalPaths, updateUserProfile } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
 const ProfileSetupScreen = () => {
+  
+  const router = useRouter(); // 2. Initialize the router
   const { user, setUser } = useAppState(); // Get user and setUser from context
-
   const [paths, setPaths] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);

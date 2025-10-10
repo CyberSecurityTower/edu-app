@@ -21,6 +21,7 @@ export function useAppState() {
   return useContext(AppStateContext);
 }
 
+
 function RootLayoutNav() {
   console.log("Step 5: RootLayoutNav is rendering.");
   const { user, hasCompletedOnboarding } = useAppState();
@@ -28,25 +29,56 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log("Step 6: Redirection useEffect is running.", { user: !!user, hasCompletedOnboarding, segments });
+    console.log("Step 6: Redirection useEffect running with state:", { 
+      userExists: !!user, 
+      profileStatus: user?.profileStatus,
+      onboardingComplete: hasCompletedOnboarding,
+      segments 
+    });
+
+    // Guard 1: Wait until onboarding status is known.
+    if (hasCompletedOnboarding === null) {
+      console.log("Decision: Paused. Waiting for onboarding status.");
+      return;
+    }
     
+    // Guard 2: If onboarding is not complete, do nothing. MainLayout will show the OnboardingScreen.
+    if (!hasCompletedOnboarding) {
+        console.log("Decision: Paused. Onboarding is in progress.");
+        return;
+    }
+
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
 
+    // --- LOGIC FOR LOGGED-IN USERS ---
     if (user) {
+      // Case 1: User needs to complete their profile.
       if (user.profileStatus === 'pending_setup' && !inSetupGroup) {
-        console.log("Decision: User profile setup is pending. Redirecting to '/profile-setup'");
+        console.log("Decision: User needs setup. Redirecting to /profile-setup");
         router.replace('/profile-setup');
-      } else if (user.profileStatus === 'completed' && (inAuthGroup || inSetupGroup)) {
-        console.log("Decision: User is logged in and setup is complete. Redirecting to home '/'");
-        router.replace('/');
+        return; // Stop further checks
       }
-    } else if (!user && !inAuthGroup && hasCompletedOnboarding) {
-      console.log("Decision: User is logged out. Redirecting to '/create-account'");
-      router.replace('/create-account');
-    } else {
-      console.log("Decision: No redirection needed at this time.");
+      
+      // Case 2: User has completed setup and is on a setup or auth page.
+      if (user.profileStatus === 'completed' && (inSetupGroup || inAuthGroup)) {
+        console.log("Decision: User is fully set up. Redirecting to home /");
+        router.replace('/');
+        return; // Stop further checks
+      }
+    } 
+    // --- LOGIC FOR LOGGED-OUT USERS ---
+    else {
+      // Case 3: User is logged out but is not on an auth page.
+      if (!inAuthGroup) {
+        console.log("Decision: User is logged out. Redirecting to /create-account");
+        router.replace('/create-account');
+        return; // Stop further checks
+      }
     }
+    
+    console.log("Decision: No redirection needed. User is in the correct location.");
+
   }, [user, hasCompletedOnboarding, segments]);
 
   return (
@@ -57,6 +89,7 @@ function RootLayoutNav() {
     </Stack>
   );
 }
+
 
 function AppStateProvider({ children }) {
     console.log("Step 2: AppStateProvider is rendering for the first time.");

@@ -1,19 +1,23 @@
-import { doc, getDoc } from 'firebase/firestore';
+// services/firestoreService.js
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Add collection and getDocs
 import { db } from '../firebase';
 
 export const getUserProfile = async (uid) => {
-  if (!uid) return null;
+  // ... (this function remains the same)
+};
+
+// NEW FUNCTION
+export const getEducationalPaths = async () => {
   try {
-    const userDocRef = doc(db, 'users', uid);
-    const userDocSnap = await getDoc(userDocRef);
-    if (userDocSnap.exists()) {
-      return { uid, ...userDocSnap.data() };
-    } else {
-      console.warn("No user profile found in Firestore for UID:", uid);
-      return null;
-    }
+    const pathsCollectionRef = collection(db, 'educationalPaths');
+    const querySnapshot = await getDocs(pathsCollectionRef);
+    const paths = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    return paths;
   } catch (error) {
-    console.error("Error fetching user profile:", error);
-    return null;
+    console.error("Error fetching educational paths:", error);
+    return []; // Return an empty array on error
   }
 };

@@ -39,7 +39,8 @@ const ProfileSetupScreen = () => {
     fetchPaths();
   }, []);
 
-  const handleSaveProfile = async () => {
+  
+const handleSaveProfile = async () => {
     if (!selectedValue) {
       alert("Please select your educational path.");
       return;
@@ -52,16 +53,19 @@ const ProfileSetupScreen = () => {
       };
       await updateUserProfile(user.uid, updatedData);
       
-      // IMPORTANT: Update the user state in the context
+      // Update the user state in the context
       setUser(prevUser => ({ ...prevUser, ...updatedData }));
+
+      // 3. Manually navigate to the home screen for a smooth transition
+      router.replace('/'); 
 
     } catch (error) {
       console.error("Error saving profile:", error);
       alert("An error occurred while saving. Please try again.");
-    } finally {
-      setIsSaving(false);
+      setIsSaving(false); // Stop loading only if there's an error
     }
-  };
+    // We don't need setIsSaving(false) on success because we are navigating away.
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>

@@ -77,7 +77,21 @@ function AppStateProvider({ children }) {
         const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 const userProfile = await getUserProfile(currentUser.uid);
-                setUser(userProfile);
+                
+                if (userProfile) {
+                    // Happy path: Profile found in Firestore.
+                    setUser(userProfile);
+                } else {
+                    // CRITICAL FIX: Profile not found, but user is authenticated.
+                    // This happens for users who existed before the profile system,
+                    // or if there's a Firestore write delay.
+                    // We assume they need to go through setup.
+                    setUser({ 
+                        uid: currentUser.uid, 
+                        email: currentUser.email, 
+                        profileStatus: 'pending_setup' // Force 'pending_setup' status
+                    });
+                }
             } else {
                 setUser(null);
             }

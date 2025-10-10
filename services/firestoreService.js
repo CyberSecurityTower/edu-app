@@ -1,6 +1,6 @@
 // services/firestoreService.js
 
-import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore'; // تأكد من استيراد updateDoc
+import { doc, getDoc, collection, getDocs, updateDoc } from 'firebase/firestore'; // Add updateDoc
 import { db } from '../firebase';
 
 export const getUserProfile = async (uid) => {
@@ -22,14 +22,15 @@ export const getEducationalPaths = async () => {
     return []; // Return an empty array on error
   }
 };
+
+// NEW FUNCTION
 export const updateUserProfile = async (uid, data) => {
+  if (!uid) throw new Error("User ID is required to update profile.");
   try {
-    const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, data);
-    console.log(`User profile ${uid} updated successfully.`);
-    return { success: true };
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, data);
   } catch (error) {
     console.error("Error updating user profile:", error);
-    return { success: false, error: error.message };
+    throw error; // Re-throw the error to be caught by the calling function
   }
 };

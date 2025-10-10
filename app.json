@@ -24,24 +24,13 @@
       "package": "com.islamzn.eduapp"
     },
     "web": {
-      "bundler": "metro",
-      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       "@react-native-firebase/app"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
-      "router": {
-        "origin": false
-      },
-      "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID_IF_YOU_HAVE_ONE"
-      },
       "androidClientId": "904016539663-2hl3h9obbbv258i4fkult09fq22pmpfn.apps.googleusercontent.com",
       "iosClientId": "904016539663-6nd311pdv4frl2qh96tf37b28fql8ome.apps.googleusercontent.com"
     }

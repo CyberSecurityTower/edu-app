@@ -1,13 +1,23 @@
-// services/firestoreService.js
-
-import { doc, getDoc, collection, getDocs, updateDoc } from 'firebase/firestore'; // Add updateDoc
-import { db } from '../firebase';
+import { doc, getDoc, collection, getDocs, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase'; // هذا الاستيراد صحيح الآن لأنه ليس دائريًا
 
 export const getUserProfile = async (uid) => {
-  // ... (this function remains the same)
+  if (!uid) return null;
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const userDocSnap = await getDoc(userDocRef);
+    if (userDocSnap.exists()) {
+      return { uid, ...userDocSnap.data() };
+    } else {
+      console.warn("No user profile found in Firestore for UID:", uid);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return null;
+  }
 };
 
-// NEW FUNCTION
 export const getEducationalPaths = async () => {
   try {
     const pathsCollectionRef = collection(db, 'educationalPaths');
@@ -19,11 +29,10 @@ export const getEducationalPaths = async () => {
     return paths;
   } catch (error) {
     console.error("Error fetching educational paths:", error);
-    return []; // Return an empty array on error
+    return [];
   }
 };
 
-// NEW FUNCTION
 export const updateUserProfile = async (uid, data) => {
   if (!uid) throw new Error("User ID is required to update profile.");
   try {
@@ -31,6 +40,6 @@ export const updateUserProfile = async (uid, data) => {
     await updateDoc(userDocRef, data);
   } catch (error) {
     console.error("Error updating user profile:", error);
-    throw error; // Re-throw the error to be caught by the calling function
+    throw error;
   }
 };

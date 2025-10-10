@@ -3,24 +3,20 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import OnboardingScreen from '../components/OnboardingScreen';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native'; // Import LogBox
+import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// --- THE FIX: Suppress the known, harmless warnings ---
+// Suppress known, harmless warnings
 LogBox.ignoreLogs([
   'WARN  [Layout children]: No route named "(auth)" exists in nested children',
   'WARN  [Layout children]: No route named "(home)" exists in nested children'
 ]);
-// ----------------------------------------------------
 
 const AppStateContext = createContext(null);
 
 export function useAppState() {
   return useContext(AppStateContext);
 }
-
-// ... The rest of the file remains exactly the same as the last version ...
-// RootLayoutNav, AppStateProvider, RootLayout, MainLayout, and styles are unchanged.
 
 function RootLayoutNav() {
   const { user, hasCompletedOnboarding } = useAppState();
@@ -35,6 +31,7 @@ function RootLayoutNav() {
     if (user && inAuthGroup) {
       router.replace('/');
     } else if (!user && !inAuthGroup && hasCompletedOnboarding) {
+      // Default to create-account for new users after onboarding
       router.replace('/create-account');
     }
   }, [user, hasCompletedOnboarding, segments]);
@@ -86,6 +83,7 @@ export default function RootLayout() {
     );
 }
 
+// THIS IS THE CORRECTED FUNCTION
 function MainLayout() {
     const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
 
@@ -106,6 +104,7 @@ function MainLayout() {
         );
     }
 
+    // THE FIX IS HERE: We re-added the check for onboarding
     if (hasCompletedOnboarding === false) {
         return <OnboardingScreen onComplete={handleOnboardingComplete} />;
     }

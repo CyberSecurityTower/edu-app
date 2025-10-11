@@ -6,23 +6,29 @@
     import { FontAwesome5 } from '@expo/vector-icons';
     import { LinearGradient } from 'expo-linear-gradient';
 
-    const SubjectCard = ({ item }) => {
-      const progress = item.totalLessons > 0 ? (item.completedLessons / item.totalLessons) * 100 : 0;
-      return (
-        <Pressable style={styles.cardContainer}>
-          <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
-            <View style={styles.iconContainer}>
-              <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
-            </View>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBar, { width: `${progress}%` }]} />
-            </View>
-            <Text style={styles.cardSubtitle}>{`${item.completedLessons}/${item.totalLessons} Lessons`}</Text>
-          </LinearGradient>
-        </Pressable>
-      );
-    };
+
+const SubjectCard = ({ item }) => {
+  // --- ROBUST PROGRESS CALCULATION ---
+  const total = parseInt(item.totalLessons, 10) || 0; // Convert to number, default to 0
+  const completed = parseInt(item.completedLessons, 10) || 0; // Assume 0 if not present
+  const progress = total > 0 ? (completed / total) * 100 : 0;
+  // --- END OF CHANGE ---
+
+  return (
+    <Pressable style={styles.cardContainer}>
+      <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
+        <View style={styles.iconContainer}>
+          <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
+        </View>
+        <Text style={styles.cardTitle}>{item.name}</Text>
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        </View>
+        <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+};
 
     const HomeScreen = () => {
       const { user } = useAppState();

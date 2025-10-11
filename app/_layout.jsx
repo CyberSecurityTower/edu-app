@@ -72,7 +72,13 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" /> {/* CHANGED FROM (home) */}
       <Stack.Screen name="(setup)" />
-    </Stack>
+       <Stack.Screen 
+            name="[subject]" 
+            options={{ 
+              animation: 'slide_from_right', // Optional: for a nice transition
+            }} 
+          />
+        </Stack>
   );
 }
 

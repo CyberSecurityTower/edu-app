@@ -12,6 +12,13 @@ const SubjectCard = ({ item }) => {
   const total = parseInt(item.totalLessons, 10) || 0; // Convert to number, default to 0
   const completed = parseInt(item.completedLessons, 10) || 0; // Assume 0 if not present
   const progress = total > 0 ? (completed / total) * 100 : 0;
+  const handlePress = () => {
+      // The pathname is now just the parameter itself, relative to the root
+      router.push({
+        pathname: `/${item.id}`, // No need for any prefix
+        params: { id: item.id, name: item.name } // Pass the ID as well
+      });
+    };
   // --- END OF CHANGE ---
 
   return (

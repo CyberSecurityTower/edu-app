@@ -42,15 +42,4 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
         }}
       />
-
-      {/* --- THE FIX IS HERE --- */}
-      <Tabs.Screen
-        name="[subject]" // This is our dynamic lessons screen
-        options={{
-          href: null, // This tells the Tabs navigator to hide this screen from the tab bar
-        }}
-      />
-      
-    </Tabs>
-  );
-}
+      </Tabs>)}

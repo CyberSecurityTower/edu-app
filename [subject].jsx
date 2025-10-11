@@ -4,8 +4,8 @@ import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Image }
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useAppState } from '../_layout';
-import { getEducationalPathById } from '../../services/firestoreService';
+import { useAppState } from './app/_layout';
+import { getEducationalPathById } from './services/firestoreService';
 
 // A temporary function to get lesson status. We will replace this later.
 const getLessonStatus = (index) => {

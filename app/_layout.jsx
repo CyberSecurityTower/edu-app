@@ -38,9 +38,9 @@ function RootLayoutNav() {
       return;
     }
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const inSetupGroup = segments[0] === '(setup)';
-    
+  const inAuthGroup = segments[0] === '(auth)';
+  const inSetupGroup = segments[0] === '(setup)';
+            
     // --- THE ONLY LOGIC CHANGE IS HERE ---
     // If user is logged in and setup is complete, they should be in the (tabs) group.
     // The root route '/' now automatically points to the first screen in (tabs).

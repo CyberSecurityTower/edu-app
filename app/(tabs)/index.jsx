@@ -1,4 +1,4 @@
-    import React, a{ useState, useEffect } from 'react';
+    import React, { useState, useEffect } from 'react';
     import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
     import { SafeAreaView } from 'react-native-safe-area-context';
     import { useAppState } from '../_layout';

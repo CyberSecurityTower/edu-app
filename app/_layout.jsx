@@ -7,9 +7,10 @@ import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserProfile } from '../services/firestoreService';
 
+// Updated to include the new (tabs) group
 LogBox.ignoreLogs([
   'WARN  [Layout children]: No route named "(auth)" exists in nested children',
-  'WARN  [Layout children]: No route named "(home)" exists in nested children',
+  'WARN  [Layout children]: No route named "(tabs)" exists in nested children',
   'WARN  [Layout children]: No route named "(setup)" exists in nested children'
 ]);
 
@@ -39,6 +40,11 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
+    
+    // --- THE ONLY LOGIC CHANGE IS HERE ---
+    // If user is logged in and setup is complete, they should be in the (tabs) group.
+    // The root route '/' now automatically points to the first screen in (tabs).
+    const inApp = segments[0] === '(tabs)';
 
     if (user) {
       if (user.profileStatus === 'pending_setup' && !inSetupGroup) {
@@ -46,12 +52,14 @@ function RootLayoutNav() {
         return;
       }
       
-      if (user.profileStatus === 'completed' && (inSetupGroup || inAuthGroup)) {
-        router.replace('/');
+      // If user is fully set up but is on an auth or setup page, redirect them into the app.
+      if (user.profileStatus === 'completed' && !inApp) {
+        router.replace('/'); // Redirecting to '/' will land them on the tabs navigator
         return;
       }
     } 
     else {
+      // If user is logged out, they should be in the (auth) group.
       if (!inAuthGroup) {
         router.replace('/create-account');
         return;
@@ -62,7 +70,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(home)" />
+      <Stack.Screen name="(tabs)" /> {/* CHANGED FROM (home) */}
       <Stack.Screen name="(setup)" />
     </Stack>
   );
@@ -79,17 +87,12 @@ function AppStateProvider({ children }) {
                 const userProfile = await getUserProfile(currentUser.uid);
                 
                 if (userProfile) {
-                    // Happy path: Profile found in Firestore.
                     setUser(userProfile);
                 } else {
-                    // CRITICAL FIX: Profile not found, but user is authenticated.
-                    // This happens for users who existed before the profile system,
-                    // or if there's a Firestore write delay.
-                    // We assume they need to go through setup.
                     setUser({ 
                         uid: currentUser.uid, 
                         email: currentUser.email, 
-                        profileStatus: 'pending_setup' // Force 'pending_setup' status
+                        profileStatus: 'pending_setup'
                     });
                 }
             } else {

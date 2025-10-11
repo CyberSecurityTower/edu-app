@@ -1,6 +1,5 @@
 import { doc, getDoc, collection, getDocs, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase'; // هذا الاستيراد صحيح الآن لأنه ليس دائريًا
-
+import { db } from '../firebase'; // هذا الاستيراد صحيح الآن لأنه ليس دائريًا'
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
   try {
@@ -41,5 +40,21 @@ export const updateUserProfile = async (uid, data) => {
   } catch (error) {
     console.error("Error updating user profile:", error);
     throw error;
+  }
+};
+export const getEducationalPathById = async (pathId) => {
+  if (!pathId) return null;
+  try {
+    const pathDocRef = doc(db, 'educationalPaths', pathId);
+    const pathDocSnap = await getDoc(pathDocRef);
+    if (pathDocSnap.exists()) {
+      return { id: pathDocSnap.id, ...pathDocSnap.data() };
+    } else {
+      console.warn("No educational path found for ID:", pathId);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching educational path by ID:", error);
+    return null;
   }
 };

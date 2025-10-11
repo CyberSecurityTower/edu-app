@@ -48,7 +48,7 @@ const LessonsScreen = () => {
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <FontAwesome5 name="arrow-left" size={24} color="white" />
         </Pressable>
-        <Image source={require('../assets/images/Logo.png')} style={styles.logo} />
+        <Image source={require('../../assets/images/Logo.png')} style={styles.logo} />
       </View>
 
       <View style={styles.subjectInfo}>

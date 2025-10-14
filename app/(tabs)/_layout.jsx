@@ -14,32 +14,10 @@ export default function TabsLayout() {
         },
       }}
     >
-      <Tabs.Screen
-        name="index" // app/(tabs)/index.jsx
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="search" // app/(tabs)/search.jsx
-        options={{
-          title: 'Search',
-          tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="library" // app/(tabs)/library.jsx
-        options={{
-          title: 'Library',
-          tabBarIcon: ({ color }) => <FontAwesome5 name="book" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile" // app/(tabs)/profile.jsx
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
-        }}
-      />
-      </Tabs>)}
+      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} /> }} />
+      <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} /> }} />
+      <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: ({ color }) => <FontAwesome5 name="book" size={24} color={color} /> }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} /> }} />
+    </Tabs>
+  );
+}

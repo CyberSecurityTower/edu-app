@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
@@ -8,7 +8,8 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import * as Device from 'expo-device';
 import { useAppState } from '../_layout';
-
+import * as Application from 'expo-application';
+import { Platform } from 'react-native';
 export default function CreateAccountScreen() {
     const { setUser } = useAppState();
     const [firstName, setFirstName] = useState('');
@@ -37,71 +38,86 @@ export default function CreateAccountScreen() {
         return re.test(String(email).toLowerCase());
     };
 
-    const handleCreateAccount = async () => {
-        const newErrors = {};
-        if (!firstName.trim()) newErrors.firstName = 'First name is required.';
-        if (!lastName.trim()) newErrors.lastName = 'Last name is required.';
-        if (!email.trim()) newErrors.email = 'Email is required.';
-        else if (!validateEmail(email.trim())) newErrors.email = 'Please enter a valid email address.';
-        if (!password) newErrors.password = 'Password is required.';
-        else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters long.';
-        if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
-        if (!agreedToTerms) newErrors.terms = 'You must agree to the terms.';
+    
+const handleCreateAccount = async () => {
+    // ... (validation logic remains the same)
+    const newErrors = {};
+    if (!firstName.trim()) newErrors.firstName = 'First name is required.';
+    if (!lastName.trim()) newErrors.lastName = 'Last name is required.';
+    if (!email.trim()) newErrors.email = 'Email is required.';
+    else if (!validateEmail(email.trim())) newErrors.email = 'Please enter a valid email address.';
+    if (!password) newErrors.password = 'Password is required.';
+    else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters long.';
+    if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+    if (!agreedToTerms) newErrors.terms = 'You must agree to the terms.';
 
-        setErrors(newErrors);
-        if (Object.keys(newErrors).length > 0) {
-            if (newErrors.terms) triggerShake();
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+        if (newErrors.terms) triggerShake();
+        return;
+    }
+
+    setIsLoading(true);
+    try {
+        // --- START: ROBUST DEVICE ID LOGIC (THE FIX) ---
+        let deviceId;
+        if (Platform.OS === 'ios') {
+            // Use the stable "Identifier for Vendor" on iOS
+            deviceId = await Application.getIosIdForVendorAsync();
+        } else {
+            // Use the stable "Android ID" on Android
+            deviceId = Application.androidId;
+        }
+        // --- END: ROBUST DEVICE ID LOGIC ---
+
+        if (!deviceId) {
+            // This error is now much less likely to occur
+            throw new Error("Could not identify the device.");
+        }
+
+        const trialRef = doc(db, "trialActivations", deviceId);
+        const trialSnap = await getDoc(trialRef);
+
+        if (trialSnap.exists()) {
+            setErrors({ general: "The free trial has already been used on this device. Please log in." });
+            setIsLoading(false);
             return;
         }
 
-        setIsLoading(true);
-        try {
-            const deviceId = Device.osInternalBuildId || `${Device.osName}-${Device.osVersion}`;
-            if (!deviceId) {
-                throw new Error("Could not identify the device.");
-            }
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const user = userCredential.user;
 
-            const trialRef = doc(db, "trialActivations", deviceId);
-            const trialSnap = await getDoc(trialRef);
+        const newUserProfile = {
+            uid: user.uid,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: email.trim().toLowerCase(),
+            createdAt: new Date(),
+            profileStatus: "pending_setup",
+            selectedPathId: null,
+        };
 
-            if (trialSnap.exists()) {
-                setErrors({ general: "The free trial has already been used on this device. Please log in." });
-                setIsLoading(false);
-                return;
-            }
+        await setDoc(doc(db, "users", user.uid), newUserProfile);
 
-            const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-            const user = userCredential.user;
+        // We use the new robust deviceId here
+        await setDoc(trialRef, {
+            activatedAt: new Date(),
+            userIds: [user.uid],
+        });
 
-            const newUserProfile = {
-                uid: user.uid,
-                firstName: firstName.trim(),
-                lastName: lastName.trim(),
-                email: email.trim().toLowerCase(),
-                createdAt: new Date(),
-                profileStatus: "pending_setup",
-                selectedPathId: null,
-            };
+        setUser(newUserProfile);
 
-            await setDoc(doc(db, "users", user.uid), newUserProfile);
-
-            await setDoc(trialRef, {
-                activatedAt: new Date(),
-                userIds: [user.uid],
-            });
-
-            setUser(newUserProfile);
-
-        } catch (error) {
-            if (error.code === 'auth/email-already-in-use') {
-                setErrors({ email: 'This email address is already in use.' });
-            } else {
-                setErrors({ general: 'An error occurred. Please try again.' });
-            }
-        } finally {
-            setIsLoading(false);
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            setErrors({ email: 'This email address is already in use.' });
+        } else {
+            console.error("Error during account creation:", error); // Log the actual error for debugging
+            setErrors({ general: 'An error occurred. Please try again.' });
         }
-    };
+    } finally {
+        setIsLoading(false);
+    }
+};
 
     const clearError = (fieldName) => {
         if (errors[fieldName] || errors.general) {

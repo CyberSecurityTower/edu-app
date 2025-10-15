@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore"; 
 import { db } from '../firebase';
 export const getUserProfile = async (uid) => {
   if (!uid) return null;

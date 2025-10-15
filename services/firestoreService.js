@@ -1,5 +1,5 @@
 import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
-import { db } from './firebase'; // <-- المسار يجب أن يكون './firebase'
+import { db } from './firebase';
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
   try {

@@ -105,9 +105,6 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        <View style={styles.headerIcon}>
-            <Image source={require('../../assets/images/Logo.png')} style={styles.logo} />
-        </View>
       </View>
 
       <View style={styles.progressContainer}>
@@ -147,12 +144,11 @@ const styles = StyleSheet.create({
   backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
   
   // -- Header Styles --
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60 },
-  headerIcon: { width: 50, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60,marginTop:10 },
+  headerIcon: { width: 40, justifyContent: 'center', alignItems: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   headerSubtitle: { color: '#9CA3AF', fontSize: 14, marginTop: 2 },
-  logo: { width: 40, height: 40 },
   
   progressContainer: { height: 8, backgroundColor: '#1E293B', borderRadius: 4, marginHorizontal: 20, marginTop: 15 },
   progressBar: { height: '100%', borderRadius: 4 },

@@ -6,7 +6,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { getSubjectDetails, getUserProgressForSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout'; // <-- THE FIX IS HERE
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { updateUserFavoriteSubject } from '../../services/firestoreService'; // Add this import
 // --- LessonItem Component (Memoized for Performance) ---
 const LessonItem = memo(({ item }) => {
   const router = useRouter();

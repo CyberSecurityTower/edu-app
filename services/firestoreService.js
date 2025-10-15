@@ -1,5 +1,6 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, FieldValue, arrayUnion, arrayRemove  } from "firebase/firestore"; 
 import { db } from '../firebase';
+
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
   try {
@@ -148,4 +149,30 @@ export const updateLessonStatus = async (userId, pathId, subjectId, lessonId, st
     [lessonKey]: status
     // Here you would also add logic to recalculate and update subject/path progress
   });
+};
+export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
+  if (!userId || !subjectId) return;
+  const progressRef = doc(db, `userProgress/${userId}`);
+
+  try {
+    // We use a special 'favorites' map to hold arrays of favorite items
+    const favoriteKey = 'favorites.subjects';
+    
+    await updateDoc(progressRef, {
+      [favoriteKey]: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
+    });
+    console.log(`Successfully updated favorites for subject ${subjectId}`);
+  } catch (error) {
+    // This can happen if the user document or 'favorites' map doesn't exist yet. Let's create it.
+    if (error.code === 'not-found') {
+      await setDoc(progressRef, {
+        favorites: {
+          subjects: [subjectId]
+        }
+      }, { merge: true }); // merge:true is crucial to not overwrite other data
+      console.log(`Created favorites and added subject ${subjectId}`);
+    } else {
+      console.error("Error updating favorite subject:", error);
+    }
+  }
 };

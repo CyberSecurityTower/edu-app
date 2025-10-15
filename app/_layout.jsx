@@ -4,7 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
-import { getUserProfile } from '../services/firestoreService';
+import { getUserProfile } from '../services/firestoreService'; 
 import OnboardingScreen from '../components/OnboardingScreen';
 
 LogBox.ignoreLogs(['WARN  [Layout children]']); // Ignore layout warnings
@@ -74,11 +74,20 @@ function AppStateProvider({ children }) {
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      // 2. أضف هذا السجل لنرى متى يتم تشغيل المستمع
+      console.log('Auth state changed. Current user:', currentUser?.uid || 'No user');
+
       if (currentUser) {
+        // 3. أضف سجلات قبل وبعد جلب ملف المستخدم
+        console.log('Fetching user profile for UID:', currentUser.uid);
         const userProfile = await getUserProfile(currentUser.uid);
+        console.log('User profile fetched:', userProfile); // <-- هذا السجل حاسم جداً
+
         if (userProfile) {
           setUser(userProfile);
         } else {
+          // هذا يحدث فقط للمستخدمين الجدد، ولكن من الجيد تسجيله
+          console.log('No profile found, setting up pending user.');
           setUser({
             uid: currentUser.uid,
             email: currentUser.email,

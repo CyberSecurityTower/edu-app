@@ -1,11 +1,11 @@
-import React,{ useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList, Image } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSubjectDetails, getUserProgressForSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
-import { LinearGradient } from 'expo-linear-gradient';
 
 // --- LessonItem Component ---
 // Renders a single lesson row with the correct icon based on its status
@@ -106,7 +106,7 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
         <View style={styles.headerIcon}>
-            <Image source={require('../assets/images/Logo.png')} style={styles.logo} />
+            <Image source={require('../../assets/images/Logo.png')} style={styles.logo} />
         </View>
       </View>
 

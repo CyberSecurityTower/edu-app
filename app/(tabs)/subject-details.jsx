@@ -1,10 +1,10 @@
-import React, { useState, useEffect, memo } from 'react'; // THE ONLY IMPORT FROM 'react'
+import React, { useState, useEffect, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { getSubjectDetails, getUserProgressForSubject } from '../../services/firestoreService';
-import { useAppState } from '../../_layout';
+import { useAppState } from '../_layout'; // <-- THE FIX IS HERE
 import { LinearGradient } from 'expo-linear-gradient';
 
 // --- LessonItem Component (Memoized for Performance) ---
@@ -78,6 +78,10 @@ export default function SubjectDetailsScreen() {
     fetchData();
   }, [user, params.id]);
 
+  const handleFavoritePress = () => {
+    setIsFavorite(!isFavorite);
+  };
+
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
@@ -113,8 +117,14 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        {/* Placeholder for the right icon to maintain balance */}
-        <View style={styles.headerIcon} />
+        <Pressable onPress={handleFavoritePress} style={styles.headerIcon}>
+          <FontAwesome5 
+            name="star" 
+            size={22} 
+            color={isFavorite ? '#FFD700' : '#6B7280'}
+            solid={isFavorite}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.progressContainer}>
@@ -152,10 +162,10 @@ const styles = StyleSheet.create({
   errorText: { color: '#EF4444', fontSize: 20, textAlign: 'center', marginTop: 20, marginBottom: 30 },
   backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
   backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, marginTop:10 },
-  headerIcon: { width: 40, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, backgroundColor: '#0C0F27' },
+  headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+  headerTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' },
   headerSubtitle: { color: '#9CA3AF', fontSize: 14, marginTop: 2 },
   progressContainer: { height: 8, backgroundColor: '#1E293B', borderRadius: 4, marginHorizontal: 20, marginTop: 15 },
   progressBar: { height: '100%', borderRadius: 4 },

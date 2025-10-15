@@ -60,38 +60,39 @@ export default function SubjectDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
-useEffect(() => {
-  const fetchData = async () => {
-    // --- THE FIX IS HERE ---
-    // Step 1: Immediately reset the state and show the loader
-    setIsLoading(true);
-    setSubjectData(null); 
-    setProgressData(null);
-    // ----------------------
+  useEffect(() => {
+    const fetchData = async () => {
+      // --- THE STATE RESET FIX ---
+      // Immediately clear old data and show loader on navigation
+      setIsLoading(true);
+      setSubjectData(null);
+      setProgressData(null);
+      // ---------------------------
 
-    if (!user || !params.id) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Step 2: Fetch the new data as before
-    const [subjectDetails, userProgress] = await Promise.all([
-      getSubjectDetails(user.selectedPathId, params.id),
-      getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
-    ]);
+      if (!user || !params.id) {
+        setIsLoading(false);
+        return;
+      }
+      const [subjectDetails, userProgress] = await Promise.all([
+        getSubjectDetails(user.selectedPathId, params.id),
+        getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
+      ]);
       
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setProgressData(userProgress);
-        // Load initial favorite state from the database
         if (userProgress?.favorites?.subjects?.includes(params.id)) {
           setIsFavorite(true);
+        } else {
+          // Ensure isFavorite is reset if the new subject is not a favorite
+          setIsFavorite(false);
         }
       }
       setIsLoading(false);
     };
+    
     fetchData();
-  }, [user, params.id]);
+  }, [user, params.id]); // Re-runs whenever the user or the subject ID changes
 
   const handleFavoritePress = async () => {
     const newFavoriteState = !isFavorite;

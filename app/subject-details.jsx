@@ -1,6 +1,4 @@
-
-// In app/subject-details.jsx
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,30 +7,58 @@ import { getSubjectDetails, getUserProgressForSubject } from '../services/firest
 import { useAppState } from './_layout';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// (LessonItem component remains the same as before)
+// --- LessonItem Component ---
+// Renders a single lesson row with the correct icon based on its status
 const LessonItem = ({ item }) => {
-    // ... same code as before
+  const getIcon = () => {
+    switch (item.status) {
+      case 'completed':
+        return { name: 'check-circle', color: '#10B981', solid: true };
+      case 'current':
+        return { name: 'play-circle', color: '#3B82F6', solid: true };
+      case 'locked':
+      default:
+        return { name: 'lock', color: '#6B7280', solid: false };
+    }
+  };
+  const icon = getIcon();
+
+  return (
+    <Pressable style={[styles.lessonItem, item.status === 'locked' && styles.lessonItemLocked]}>
+      <View style={{ flex: 1, marginRight: 10 }}>
+        <Text style={styles.lessonTitle}>{item.title}</Text>
+        <Text style={styles.lessonSubtitle}>{item.duration || '15 min'}</Text>
+      </View>
+      <FontAwesome5 name={icon.name} size={24} color={icon.color} solid={icon.solid} />
+    </Pressable>
+  );
 };
 
+// --- Main Screen Component ---
 export default function SubjectDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAppState();
 
-  const [subjectData, setSubjectData] = useState(null); // Static data (title, lessons array)
-  const [progressData, setProgressData] = useState(null); // User-specific data
+  const [subjectData, setSubjectData] = useState(null);
+  const [progressData, setProgressData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user || !params.id) return;
+      if (!user || !params.id) {
+        setIsLoading(false);
+        return;
+      }
 
-      // Fetch static subject structure and user progress IN PARALLEL
       const [subjectDetails, userProgress] = await Promise.all([
         getSubjectDetails(user.selectedPathId, params.id),
-        getUserProgressForSubject(user.uid, user.selectedPathId, params.id)
+        getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
       ]);
 
+      // --- DEBUGGING LOG ---
+      console.log('Fetched Subject Details:', JSON.stringify(subjectDetails, null, 2));
+      
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setProgressData(userProgress);
@@ -42,46 +68,71 @@ export default function SubjectDetailsScreen() {
     fetchData();
   }, [user, params.id]);
 
-  // --- UI LOGIC ---
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
   if (!subjectData) {
-    // ... error handling UI remains the same
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <FontAwesome5 name="exclamation-triangle" size={48} color="#EF4444" />
+        <Text style={styles.errorText}>Could not load subject details.</Text>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
   }
 
-  // MERGE the two data sources for rendering
-  const mergedLessons = subjectData.lessons.map(lesson => ({
-    ...lesson, // { id, title, duration } from educationalPaths
-    status: progressData.lessons[lesson.id] || 'locked', // Get status from userProgress, default to 'locked'
-  }));
+  // --- DATA MERGING (More Robust) ---
+  const mergedLessons = Array.isArray(subjectData.lessons)
+    ? subjectData.lessons.map(lesson => ({
+        ...lesson,
+        status: progressData?.lessons?.[lesson.id] || 'locked',
+      }))
+    : [];
 
-  const progress = progressData.progress || 0;
+  const progress = progressData?.progress || 0;
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* --- IMPROVED HEADER --- */}
       <View style={styles.header}>
-        {/* ... header UI ... */}
-        <Text style={styles.headerTitle}>{subjectData.name}</Text>
-        <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
-        {/* ... */}
+        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
+          <FontAwesome5 name="arrow-left" size={22} color="white" />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
+          <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
+        </View>
+        <View style={styles.headerIcon}>
+            <Image source={require('../assets/images/Logo.png')} style={styles.logo} />
+        </View>
       </View>
 
-      {/* Progress Bar */}
       <View style={styles.progressContainer}>
-        {/* ... progress bar UI ... */}
+        <LinearGradient
+          colors={['#10B981', '#34D399']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.progressBar, { width: `${progress}%` }]}
+        />
       </View>
 
       <Text style={styles.sectionTitle}>Lessons</Text>
 
-      {/* Lessons List now uses the MERGED data */}
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <LessonItem item={item} />}
-        // ... ListEmptyComponent and other props
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <FontAwesome5 name="book-dead" size={60} color="#4B5563" />
+            <Text style={styles.emptyText}>No lessons have been added yet.</Text>
+            <Text style={styles.emptySubtext}>Check back soon!</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -94,18 +145,22 @@ const styles = StyleSheet.create({
   errorText: { color: '#EF4444', fontSize: 20, textAlign: 'center', marginTop: 20, marginBottom: 30 },
   backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
   backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10 },
-  backIcon: { padding: 10 },
-  headerTitle: { color: 'white', fontSize: 28, fontWeight: 'bold' },
+  
+  // -- Header Styles --
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60 },
+  headerIcon: { width: 50, justifyContent: 'center', alignItems: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   headerSubtitle: { color: '#9CA3AF', fontSize: 14, marginTop: 2 },
   logo: { width: 40, height: 40 },
+  
   progressContainer: { height: 8, backgroundColor: '#1E293B', borderRadius: 4, marginHorizontal: 20, marginTop: 15 },
   progressBar: { height: '100%', borderRadius: 4 },
   sectionTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginHorizontal: 20, marginTop: 30, marginBottom: 15 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.8 },
   emptyText: { color: '#D1D5DB', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 20 },
   emptySubtext: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 5 },
-  lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', padding: 20, borderRadius: 12, marginBottom: 10 },
+  lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, marginBottom: 10 },
   lessonItemLocked: { opacity: 0.6 },
   lessonTitle: { color: 'white', fontSize: 16, fontWeight: '600' },
   lessonSubtitle: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },

@@ -3,8 +3,8 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList, Image }
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { getSubjectDetails, getUserProgressForSubject } from '../services/firestoreService';
-import { useAppState } from './_layout';
+import { getSubjectDetails, getUserProgressForSubject } from '../../services/firestoreService';
+import { useAppState } from '../_layout';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // --- LessonItem Component ---
@@ -43,7 +43,7 @@ export default function SubjectDetailsScreen() {
   const [subjectData, setSubjectData] = useState(null);
   const [progressData, setProgressData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-
+  const [isFavorite, setIsFavorite] = useState(false); // State for the favorite icon
   useEffect(() => {
     const fetchData = async () => {
       if (!user || !params.id) {

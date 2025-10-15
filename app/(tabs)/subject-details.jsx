@@ -1,23 +1,32 @@
-import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState, useEffect, memo } from 'react'; // THE ONLY IMPORT FROM 'react'
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { getSubjectDetails, getUserProgressForSubject } from '../../services/firestoreService';
-import { useAppState } from '../_layout';
+import { useAppState } from '../../_layout';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// --- LessonItem Component ---
-// Renders a single lesson row with the correct icon based on its status
+// --- LessonItem Component (Memoized for Performance) ---
 const LessonItem = memo(({ item }) => {
-  const router = useRouter(); // We need router here
-  // ... (getIcon function remains the same)
+  const router = useRouter();
+
+  const getIcon = () => {
+    switch (item.status) {
+      case 'completed':
+        return { name: 'check-circle', color: '#10B981', solid: true };
+      case 'current':
+        return { name: 'play-circle', color: '#3B82F6', solid: true };
+      case 'locked':
+      default:
+        return { name: 'lock', color: '#6B7280', solid: false };
+    }
+  };
+  const icon = getIcon();
 
   const handlePress = () => {
-    // Do not allow opening locked lessons
     if (item.status === 'locked') {
       console.log('This lesson is locked.');
-      // Optionally, show a message to the user
       return;
     }
     
@@ -30,7 +39,11 @@ const LessonItem = memo(({ item }) => {
 
   return (
     <Pressable onPress={handlePress} style={[styles.lessonItem, item.status === 'locked' && styles.lessonItemLocked]}>
-      {/* ... (The rest of the component remains the same) */}
+       <View style={{ flex: 1, marginRight: 10 }}>
+        <Text style={styles.lessonTitle}>{item.title}</Text>
+        <Text style={styles.lessonSubtitle}>{item.duration || '15 min'}</Text>
+      </View>
+      <FontAwesome5 name={icon.name} size={24} color={icon.color} solid={icon.solid} />
     </Pressable>
   );
 });
@@ -44,22 +57,18 @@ export default function SubjectDetailsScreen() {
   const [subjectData, setSubjectData] = useState(null);
   const [progressData, setProgressData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFavorite, setIsFavorite] = useState(false); // State for the favorite icon
+  const [isFavorite, setIsFavorite] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user || !params.id) {
         setIsLoading(false);
         return;
       }
-
       const [subjectDetails, userProgress] = await Promise.all([
         getSubjectDetails(user.selectedPathId, params.id),
         getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
       ]);
-
-      // --- DEBUGGING LOG ---
-      console.log('Fetched Subject Details:', JSON.stringify(subjectDetails, null, 2));
-      
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setProgressData(userProgress);
@@ -85,7 +94,6 @@ export default function SubjectDetailsScreen() {
     );
   }
 
-  // --- DATA MERGING (More Robust) ---
   const mergedLessons = Array.isArray(subjectData.lessons)
     ? subjectData.lessons.map(lesson => ({
         ...lesson,
@@ -97,7 +105,6 @@ export default function SubjectDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* --- IMPROVED HEADER --- */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}>
           <FontAwesome5 name="arrow-left" size={22} color="white" />
@@ -106,6 +113,8 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
+        {/* Placeholder for the right icon to maintain balance */}
+        <View style={styles.headerIcon} />
       </View>
 
       <View style={styles.progressContainer}>
@@ -143,14 +152,11 @@ const styles = StyleSheet.create({
   errorText: { color: '#EF4444', fontSize: 20, textAlign: 'center', marginTop: 20, marginBottom: 30 },
   backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
   backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
-  
-  // -- Header Styles --
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60,marginTop:10 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, marginTop:10 },
   headerIcon: { width: 40, justifyContent: 'center', alignItems: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   headerSubtitle: { color: '#9CA3AF', fontSize: 14, marginTop: 2 },
-  
   progressContainer: { height: 8, backgroundColor: '#1E293B', borderRadius: 4, marginHorizontal: 20, marginTop: 15 },
   progressBar: { height: '100%', borderRadius: 4 },
   sectionTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginHorizontal: 20, marginTop: 30, marginBottom: 15 },

@@ -76,9 +76,6 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    // --- START: ROBUST ROUTING LOGIC ---
-
-    // Don't do anything until both auth and onboarding status are resolved.
     if (authLoading || hasCompletedOnboarding === null) {
       return;
     }
@@ -86,25 +83,28 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
     const inAppGroup = segments[0] === '(tabs)';
+    
+    // --- THE FIX IS HERE ---
+    // We consider 'subject-details' as a valid, authenticated screen.
+    const onDetailsScreen = segments[0] === 'subject-details';
 
-    // Case 1: User is logged in
     if (user) {
       const status = user.profileStatus;
       if (status === 'pending_setup' && !inSetupGroup) {
         console.log('Redirecting to (setup)...');
         router.replace('/(setup)/profile-setup');
-      } else if (status === 'completed' && !inAppGroup) {
+      } 
+      // Redirect to tabs ONLY if user is completed AND is NOT in tabs, setup, or details screen.
+      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !onDetailsScreen) {
         console.log('Redirecting to (tabs)...');
         router.replace('/(tabs)/');
       }
     } 
-    // Case 2: User is NOT logged in
     else if (!inAuthGroup) {
       console.log('Redirecting to (auth)...');
       router.replace('/(auth)/');
     }
-    // --- END: ROBUST ROUTING LOGIC ---
-  }, [user, user?.profileStatus, segments, authLoading, hasCompletedOnboarding]); // More robust dependencies
+}, [user, user?.profileStatus, segments, authLoading, hasCompletedOnboarding]);
 
   return (
     <Stack>

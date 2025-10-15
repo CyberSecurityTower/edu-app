@@ -95,3 +95,57 @@ export const getSubjectDetails = async (pathId, subjectId) => {
     return null;
   }
 };
+
+/**
+ * Gets a user's progress for a specific subject. If no progress exists, it creates a default entry.
+ * @param {string} userId - The user's ID.
+ * @param {string} pathId - The educational path ID.
+ * @param {string} subjectId - The subject ID.
+ * @returns {object} The user's progress data for that subject.
+ */
+export const getUserProgressForSubject = async (userId, pathId, subjectId) => {
+  const progressRef = doc(db, `userProgress/${userId}`);
+  const progressSnap = await getDoc(progressRef);
+
+  if (progressSnap.exists() && progressSnap.data()?.[pathId]?.subjects?.[subjectId]) {
+    console.log("Found existing user progress.");
+    return progressSnap.data()[pathId].subjects[subjectId];
+  } else {
+    console.log("No progress found, creating default entry.");
+    // Create a default structure. In a real app, you might unlock the first lesson here.
+    const defaultProgress = {
+      progress: 0,
+      lessons: {}, // Initially no lessons are completed
+    };
+    
+    // Using setDoc with merge: true to avoid overwriting other subjects/paths
+    await setDoc(progressRef, {
+      [pathId]: {
+        subjects: {
+          [subjectId]: defaultProgress
+        }
+      }
+    }, { merge: true });
+
+    return defaultProgress;
+  }
+};
+
+/**
+ * Updates the status of a specific lesson for a user.
+ * @param {string} userId - The user's ID.
+ * @param {string} pathId - The educational path ID.
+ * @param {string} subjectId - The subject ID.
+ * @param {string} lessonId - The lesson ID to update.
+ * @param {string} status - The new status ('completed', 'current', etc.).
+ */
+export const updateLessonStatus = async (userId, pathId, subjectId, lessonId, status) => {
+  const progressRef = doc(db, `userProgress/${userId}`);
+  // Use dot notation for updating nested fields
+  const lessonKey = `${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
+  
+  await updateDoc(progressRef, {
+    [lessonKey]: status
+    // Here you would also add logic to recalculate and update subject/path progress
+  });
+};

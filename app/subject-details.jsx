@@ -1,18 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-  FlatList,
-} from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { getSubjectDetails } from '../services/firestoreService';
-import { useAppState } from './_layout';
-import AnimatedGradientButton from '../components/AnimatedGradientButton';
+import { useAppState } from './_layout'; // Corrected path
 
 export default function SubjectDetailsScreen() {
   const params = useLocalSearchParams();
@@ -21,15 +14,26 @@ export default function SubjectDetailsScreen() {
 
   const [subject, setSubject] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchSubject = async () => {
+      // Log the IDs we are about to use
+      console.log(`Fetching details for Subject ID: ${params.id} in Path ID: ${user?.selectedPathId}`);
+
       if (user?.selectedPathId && params.id) {
         const details = await getSubjectDetails(user.selectedPathId, params.id);
-        setSubject(details);
+        if (details) {
+          setSubject(details);
+        } else {
+          setError('Could not find the subject details. It might not exist in the database.');
+        }
+      } else {
+        setError('Missing user path or subject ID.');
       }
       setIsLoading(false);
     };
+    
     fetchSubject();
   }, [user, params.id]);
 
@@ -41,10 +45,10 @@ export default function SubjectDetailsScreen() {
     );
   }
 
-  if (!subject) {
+  if (error || !subject) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Could not load subject details.</Text>
+      <SafeAreaView style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error || 'An unexpected error occurred.'}</Text>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </Pressable>
@@ -54,97 +58,38 @@ export default function SubjectDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backIcon}>
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
         <Text style={styles.headerTitle}>{subject.name}</Text>
       </View>
-
-      {/* Smart Tools Section */}
-      <View style={styles.toolsSection}>
-        <AnimatedGradientButton text="Smart Summary" icon="brain" />
-        <AnimatedGradientButton text="Interactive Quiz" icon="question-circle" />
-        <AnimatedGradientButton text="Flashcards" icon="clone" />
-      </View>
-
-      {/* Lessons List */}
       <Text style={styles.lessonsTitle}>Lessons</Text>
       <FlatList
         data={subject.lessons || []}
         keyExtractor={(item, index) => `${item.id}-${index}`}
         renderItem={({ item }) => (
-          <Pressable style={styles.lessonItem}>
-            <Text style={styles.lessonText}>{item.title}</Text>
-          </Pressable>
+          <View style={styles.lessonItem}>
+            <Text style={styles.lessonText}>{typeof item === 'string' ? item : (item.title || 'Unnamed Lesson')}</Text>
+          </View>
         )}
+        ListEmptyComponent={<Text style={styles.emptyText}>No lessons available for this subject yet.</Text>}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#040624',
-    paddingHorizontal: 16,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'white',
-    fontSize: 18,
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  backButton: {
-    marginTop: 20,
-    alignSelf: 'center',
-    padding: 10,
-    backgroundColor: '#10B981',
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 10,
-  },
-  backIcon: {
-    marginRight: 10,
-  },
-  headerTitle: {
-    fontSize: 22,
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  toolsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  lessonsTitle: {
-    color: 'white',
-    fontSize: 20,
-    marginBottom: 10,
-    fontWeight: 'bold',
-  },
-  lessonItem: {
-    backgroundColor: '#1E1E2F',
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  lessonText: {
-    color: 'white',
-    fontSize: 16,
-  },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
+  container: { flex: 1, backgroundColor: '#0C0F27' },
+  errorText: { color: '#EF4444', fontSize: 18, textAlign: 'center', marginBottom: 20 },
+  backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
+  backButtonText: { color: '#10B981', fontSize: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20 },
+  backIcon: { marginRight: 20 },
+  headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+  lessonsTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginHorizontal: 20, marginBottom: 10 },
+  lessonItem: { backgroundColor: '#1E293B', padding: 20, marginHorizontal: 20, marginBottom: 10, borderRadius: 12 },
+  lessonText: { color: 'white', fontSize: 16 },
+  emptyText: { color: '#a7adb8ff', fontSize: 16, textAlign: 'center', marginTop: 30 },
 });

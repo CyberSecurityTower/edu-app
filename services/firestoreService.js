@@ -58,29 +58,40 @@ export const getEducationalPathById = async (pathId) => {
     return null;
   }
 };
+
 export const getSubjectDetails = async (pathId, subjectId) => {
   if (!pathId || !subjectId) {
-    console.error("Path ID and Subject ID are required for getSubjectDetails.");
+    console.error("Path ID and Subject ID are required.");
     return null;
   }
+  
+  console.log(`--- Searching for Subject ---`);
+  console.log(`Path ID received: ${pathId}`);
+  console.log(`Subject ID received: ${subjectId}`);
+
   try {
-    // 1. Fetch the entire educational path document
     const pathDoc = await getEducationalPathById(pathId);
     
-    // 2. Check if the path and its subjects array exist
     if (pathDoc && pathDoc.subjects) {
-      // 3. Find the specific subject within the array
+      console.log('Available subject IDs in this path:');
+      pathDoc.subjects.forEach(sub => console.log(`- ${sub.id}`)); // Log all available IDs
+
       const subject = pathDoc.subjects.find(sub => sub.id === subjectId);
-      
-      // 4. Return the found subject, or null if it wasn't found
-      return subject || null; 
+
+      if (subject) {
+        console.log('SUCCESS: Subject found!', subject.name);
+        return subject;
+      } else {
+        console.error(`ERROR: Subject with ID "${subjectId}" NOT FOUND in the path.`);
+        return null; 
+      }
     }
     
     console.warn(`Path with ID ${pathId} not found or has no subjects.`);
     return null;
 
   } catch (error) {
-    console.error("Error fetching subject details:", error);
-    return null; // Return null so the UI can handle the error gracefully
+    console.error("Error inside getSubjectDetails:", error);
+    return null;
   }
 };

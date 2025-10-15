@@ -60,16 +60,25 @@ export default function SubjectDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user || !params.id) {
-        setIsLoading(false);
-        return;
-      }
-      const [subjectDetails, userProgress] = await Promise.all([
-        getSubjectDetails(user.selectedPathId, params.id),
-        getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
-      ]);
+useEffect(() => {
+  const fetchData = async () => {
+    // --- THE FIX IS HERE ---
+    // Step 1: Immediately reset the state and show the loader
+    setIsLoading(true);
+    setSubjectData(null); 
+    setProgressData(null);
+    // ----------------------
+
+    if (!user || !params.id) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Step 2: Fetch the new data as before
+    const [subjectDetails, userProgress] = await Promise.all([
+      getSubjectDetails(user.selectedPathId, params.id),
+      getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
+    ]);
       
       if (subjectDetails) {
         setSubjectData(subjectDetails);

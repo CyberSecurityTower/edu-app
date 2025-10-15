@@ -3,43 +3,44 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from '
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { getSubjectDetails, getUserProgressForSubject } from '../../services/firestoreService';
-import { useAppState } from '../_layout'; // <-- THE FIX IS HERE
 import { LinearGradient } from 'expo-linear-gradient';
-import { updateUserFavoriteSubject } from '../../services/firestoreService'; // Add this import
-// --- LessonItem Component (Memoized for Performance) ---
-const LessonItem = memo(({ item }) => {
+import { getSubjectDetails, getUserProgressForSubject, updateUserFavoriteSubject } from '../../services/firestoreService';
+import { useAppState } from '../_layout';
+
+// --- Memoized LessonItem Component for PEAK PERFORMANCE ---
+const LessonItem = memo(({ item, subjectId, pathId }) => {
   const router = useRouter();
 
   const getIcon = () => {
+    // NEW 3-STATE ICON LOGIC
     switch (item.status) {
-      case 'completed':
+      case 'completed': // انتهيت من الدرس
         return { name: 'check-circle', color: '#10B981', solid: true };
-      case 'current':
+      case 'current': // الدرس قيد القراءة
         return { name: 'play-circle', color: '#3B82F6', solid: true };
-      case 'locked':
-      default:
-        return { name: 'lock', color: '#6B7280', solid: false };
+      case 'locked': // This now means "Not Started"
+      default: // لم تبدأ أصلاً
+        return { name: 'play', color: '#9CA3AF', solid: true };
     }
   };
   const icon = getIcon();
 
   const handlePress = () => {
-    if (item.status === 'locked') {
-      console.log('This lesson is locked.');
-      return;
-    }
-    
     console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
     router.push({
       pathname: '/(tabs)/lesson-view',
-      params: { lessonId: item.id, lessonTitle: item.title },
+      params: { 
+        lessonId: item.id, 
+        lessonTitle: item.title,
+        subjectId: subjectId, 
+        pathId: pathId 
+      },
     });
   };
 
   return (
-    <Pressable onPress={handlePress} style={[styles.lessonItem, item.status === 'locked' && styles.lessonItemLocked]}>
-       <View style={{ flex: 1, marginRight: 10 }}>
+    <Pressable onPress={handlePress} style={styles.lessonItem}>
+      <View style={{ flex: 1, marginRight: 10 }}>
         <Text style={styles.lessonTitle}>{item.title}</Text>
         <Text style={styles.lessonSubtitle}>{item.duration || '15 min'}</Text>
       </View>
@@ -69,17 +70,24 @@ export default function SubjectDetailsScreen() {
         getSubjectDetails(user.selectedPathId, params.id),
         getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
       ]);
+      
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setProgressData(userProgress);
+        // Load initial favorite state from the database
+        if (userProgress?.favorites?.subjects?.includes(params.id)) {
+          setIsFavorite(true);
+        }
       }
       setIsLoading(false);
     };
     fetchData();
   }, [user, params.id]);
 
-  const handleFavoritePress = () => {
-    setIsFavorite(!isFavorite);
+  const handleFavoritePress = async () => {
+    const newFavoriteState = !isFavorite;
+    setIsFavorite(newFavoriteState); // Update UI immediately for a snappy feel
+    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState); // Update DB in the background
   };
 
   if (isLoading) {
@@ -141,7 +149,13 @@ export default function SubjectDetailsScreen() {
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <LessonItem item={item} />}
+        renderItem={({ item }) => (
+          <LessonItem 
+            item={item} 
+            subjectId={params.id} 
+            pathId={user.selectedPathId} 
+          />
+        )}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -174,7 +188,6 @@ const styles = StyleSheet.create({
   emptyText: { color: '#D1D5DB', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 20 },
   emptySubtext: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 5 },
   lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, marginBottom: 10 },
-  lessonItemLocked: { opacity: 0.6 },
   lessonTitle: { color: 'white', fontSize: 16, fontWeight: '600' },
   lessonSubtitle: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
 });

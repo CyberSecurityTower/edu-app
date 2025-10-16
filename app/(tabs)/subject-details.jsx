@@ -97,11 +97,18 @@ export default function SubjectDetailsScreen() {
     fetchData();
   }, [user, params.id]); // useEffect سيعمل في كل مرة يتغير فيها المستخدم أو معرف المادة
 
+  
   const handleFavoritePress = async () => {
     const newFavoriteState = !isFavorite;
-    // تحديث واجهة المستخدم فورًا لتجربة مستخدم سلسة (Optimistic Update)
     setIsFavorite(newFavoriteState);
-    // ثم قم بتحديث قاعدة البيانات في الخلفية
+
+    // --- DEBUGGING STEP 1: VERIFY DATA BEFORE SENDING ---
+    console.log(`--- Calling Firestore Service ---`);
+    console.log(`User ID: ${user.uid}`);
+    console.log(`Subject ID: ${params.id}`);
+    console.log(`Set as favorite?: ${newFavoriteState}`);
+    console.log(`-----------------------------`);
+
     await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
   };
 

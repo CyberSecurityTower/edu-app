@@ -69,33 +69,47 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
-// --- THE BULLETPROOF, FINAL, GUARANTEED FIX ---
+// --- THE FINAL, MANUAL, AND BULLETPROOF FIX ---
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
 
-  // First, check if the document exists at all.
-  const docSnap = await getDoc(progressRef);
+  try {
+    const docSnap = await getDoc(progressRef);
 
-  if (docSnap.exists()) {
-    // If the document exists, we can safely use updateDoc.
-    // This is the most efficient method for existing documents.
-    await updateDoc(progressRef, {
-      'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
-    });
-  } else {
-    // If the document does NOT exist (e.g., a brand new user),
-    // we use setDoc to create it from scratch.
-    // This ensures the 'subjects' field is correctly created as an ARRAY.
-    if (isFavorite) {
-      await setDoc(progressRef, {
-        favorites: {
-          subjects: [subjectId] // CRITICAL: Initialize as an array
-        }
-      }, { merge: true }); // Merge in case other fields are being created simultaneously
+    // الحالة الأولى: المستند موجود، نقوم بتعديله
+    if (docSnap.exists()) {
+      const progressData = docSnap.data();
+      
+      // 1. نقرأ المصفوفة الحالية وننظفها من أي قيم فارغة مثل ""
+      const currentFavorites = (progressData.favorites?.subjects || []).filter(id => id);
+
+      let newFavorites;
+      if (isFavorite) {
+        // 2. نضيف المادة المفضلة الجديدة، ونستخدم Set لمنع أي تكرار
+        newFavorites = [...new Set([...currentFavorites, subjectId])];
+      } else {
+        // 2. نزيل المادة من المفضلة
+        newFavorites = currentFavorites.filter(id => id !== subjectId);
+      }
+      
+      // 3. نكتب المصفوفة النظيفة والجديدة مرة أخرى
+      await updateDoc(progressRef, {
+        'favorites.subjects': newFavorites
+      });
+
+    } else {
+      // الحالة الثانية: المستند غير موجود (مستخدم جديد)، نقوم بإنشائه
+      if (isFavorite) {
+        await setDoc(progressRef, {
+          favorites: {
+            subjects: [subjectId] // ننشئها كمصفوفة تحتوي على العنصر الأول
+          }
+        }, { merge: true });
+      }
     }
-    // If isFavorite is false, we don't need to do anything because the document
-    // and the array don't exist, so there's nothing to remove.
+  } catch (error) {
+    console.error("A critical error occurred in updateUserFavoriteSubject:", error);
   }
 };
 

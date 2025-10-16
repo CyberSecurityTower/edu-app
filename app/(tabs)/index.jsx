@@ -7,66 +7,58 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
-const SubjectCard = ({ item }) => {
-  const router = useRouter();
-  const total = item.totalLessons || 0;
-  const completed = item.completedLessons || 0;
-  const progress = item.progress || 0;
-  const handlePress = () => {
-    router.push({ pathname: '/subject-details', params: { id: item.id, name: item.name } });
-  };
-  return (
-    <Pressable style={styles.cardContainer} onPress={handlePress}>
-      <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
-        <View style={styles.iconContainer}><FontAwesome5 name={item.icon || 'book'} size={32} color="white" /></View>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        <View style={styles.progressContainer}><View style={[styles.progressBar, { width: `${progress}%` }]} /></View>
-        <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
-      </LinearGradient>
-    </Pressable>
-  );
-};
+    const SubjectCard = ({ item }) => {
+      const router = useRouter(); // Initialize router
+      const total = parseInt(item.totalLessons, 10) || 0;
+      const completed = parseInt(item.completedLessons, 10) || 0;
+      const progress = total > 0 ? (completed / total) * 100 : 0;
 
+      const handlePress = () => {
+        router.push({
+          pathname: '/subject-details', // Navigate to the new file
+          params: { id: item.id, name: item.name }
+        });
+      };
+
+      return (
+        <Pressable style={styles.cardContainer} onPress={handlePress}>
+          <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
+            <View style={styles.iconContainer}>
+              <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
+            </View>
+            <Text style={styles.cardTitle}>{item.name}</Text>
+            <View style={styles.progressContainer}>
+              <View style={[styles.progressBar, { width: `${progress}%` }]} />
+            </View>
+            <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
+          </LinearGradient>
+        </Pressable>
+      );
+    };
 const HomeScreen = () => {
-  const { user, userProgress } = useAppState(); // --- ✨ الحصول على userProgress من السياق العام
-  const [pathTemplate, setPathTemplate] = useState(null); // حالة للقالب الثابت
+  const { user } = useAppState();
+  const [pathDetails, setPathDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // التأثير الأول: جلب القالب الثابت للمسار مرة واحدة
   useEffect(() => {
-    const fetchPathTemplate = async () => {
+    const fetchPathData = async () => {
       if (user && user.selectedPathId) {
-        setIsLoading(true);
         const details = await getEducationalPathById(user.selectedPathId);
-        setPathTemplate(details);
-        setIsLoading(false);
+        setPathDetails(details);
       }
+      setIsLoading(false);
     };
-    fetchPathTemplate();
+    fetchPathData();
   }, [user]);
 
-  if (isLoading || !pathTemplate) {
+  if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
-
-  // --- ✨ منطق الدمج الآن بسيط ومباشر ومضمون ---
-  const mergedSubjects = (pathTemplate.subjects || []).map(subject => {
-    const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
-    const completedLessonsCount = progressData?.lessons 
-      ? Object.values(progressData.lessons).filter(status => status === 'completed').length
-      : 0;
-    return {
-      ...subject,
-      progress: progressData?.progress || 0,
-      completedLessons: completedLessonsCount,
-      totalLessons: (subject.lessons || []).length,
-    };
-  });
 
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={mergedSubjects}
+        data={pathDetails?.subjects || []}
         renderItem={({ item }) => <SubjectCard item={item} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
@@ -74,18 +66,26 @@ const HomeScreen = () => {
           <>
             <Text style={styles.headerTitle}>Hello, {user?.firstName}!</Text>
             <View style={styles.searchContainer}>
-              <FontAwesome5 name="search" size={18} color="#8A94A4" /><TextInput style={styles.searchInput} placeholder="Search for a subject or lesson..." placeholderTextColor="#8A94A4" />
+              <FontAwesome5 name="search" size={18} color="#8A94A4" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for a subject or lesson..."
+                placeholderTextColor="#8A94A4"
+              />
             </View>
             <Text style={styles.sectionTitle}>My Subjects</Text>
           </>
         }
-        ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>No subjects available for this path yet.</Text></View>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No subjects available for this path yet.</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
 };
 
-// الأنماط تبقى كما هي
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   container: { flex: 1, backgroundColor: '#0C0F27' },
@@ -103,4 +103,5 @@ const styles = StyleSheet.create({
   emptyContainer: { marginTop: 50, alignItems: 'center' },
   emptyText: { color: '#a7adb8ff', fontSize: 16 },
 });
+
 export default HomeScreen;

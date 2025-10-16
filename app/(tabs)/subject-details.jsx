@@ -1,28 +1,44 @@
-import React, { useState, memo, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails } from '../../services/firestoreService';
+import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
+// --- Memoized LessonItem Component for PEAK PERFORMANCE ---
+// It now receives 'totalLessons' as a prop from its parent.
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
+
   const getIcon = () => {
     switch (item.status) {
-      case 'completed': return { name: 'check-circle', color: '#10B981', solid: true };
-      case 'current': return { name: 'play-circle', color: '#3B82F6', solid: true };
-      default: return { name: 'play', color: '#9CA3AF', solid: true };
+      case 'completed':
+        return { name: 'check-circle', color: '#10B981', solid: true };
+      case 'current':
+        return { name: 'play-circle', color: '#3B82F6', solid: true };
+      case 'locked':
+      default:
+        return { name: 'play', color: '#9CA3AF', solid: true };
     }
   };
   const icon = getIcon();
+
   const handlePress = () => {
+    console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
     router.push({
       pathname: '/(tabs)/lesson-view',
-      params: { lessonId: item.id, lessonTitle: item.title, subjectId, pathId, totalLessons },
+      params: { 
+        lessonId: item.id, 
+        lessonTitle: item.title,
+        subjectId: subjectId, 
+        pathId: pathId,
+        totalLessons: totalLessons // Pass the total number of lessons to the next screen
+      },
     });
   };
+
   return (
     <Pressable onPress={handlePress} style={styles.lessonItem}>
       <View style={{ flex: 1, marginRight: 10 }}>
@@ -34,55 +50,108 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   );
 });
 
+// --- Main Screen Component ---
 export default function SubjectDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
-  const { user, userProgress } = useAppState(); // --- ✨ الحصول على userProgress من السياق العام
+  const { user } = useAppState();
 
-  const [subjectTemplate, setSubjectTemplate] = useState(null); // حالة للقالب الثابت
+  const [subjectData, setSubjectData] = useState(null);
+  const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFavorite, setIsFavorite] = useState(false);
 
-  // التأثير الأول: جلب القالب الثابت للمادة مرة واحدة فقط
   useEffect(() => {
-    const fetchSubjectTemplate = async () => {
-      if (user && user.selectedPathId && params.id) {
-        setIsLoading(true);
-        const details = await getSubjectDetails(user.selectedPathId, params.id);
-        setSubjectTemplate(details);
+    const fetchData = async () => {
+      setIsLoading(true);
+      setSubjectData(null);
+      setUserProgress(null);
+
+      if (!user || !params.id) {
         setIsLoading(false);
+        return;
       }
+      
+      const [subjectDetails, progressDoc] = await Promise.all([
+        getSubjectDetails(user.selectedPathId, params.id),
+        getUserProgressDocument(user.uid),
+      ]);
+      
+      if (subjectDetails) {
+        setSubjectData(subjectDetails);
+        setUserProgress(progressDoc || {});
+        if (progressDoc?.favorites?.subjects?.includes(params.id)) {
+          setIsFavorite(true);
+        } else {
+          setIsFavorite(false);
+        }
+      }
+      setIsLoading(false);
     };
-    fetchSubjectTemplate();
+    
+    fetchData();
   }, [user, params.id]);
 
-  if (isLoading || !subjectTemplate) {
+  const handleFavoritePress = async () => {
+    const newFavoriteState = !isFavorite;
+    setIsFavorite(newFavoriteState);
+    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
+  };
+
+  if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
-  // --- ✨ منطق الدمج الآن بسيط ومباشر ومضمون ---
-  const subjectProgressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
-  
-  const mergedLessons = (subjectTemplate.lessons || []).map(lesson => ({
-    ...lesson,
-    status: subjectProgressData?.lessons?.[lesson.id] || 'locked',
-  }));
+  if (!subjectData) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <FontAwesome5 name="exclamation-triangle" size={48} color="#EF4444" />
+        <Text style={styles.errorText}>Could not load subject details.</Text>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
 
-  const progress = subjectProgressData?.progress || 0;
-  const totalLessons = (subjectTemplate.lessons || []).length;
+  const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
+  
+  const mergedLessons = Array.isArray(subjectData.lessons)
+    ? subjectData.lessons.map(lesson => ({
+        ...lesson,
+        status: subjectProgress?.lessons?.[lesson.id] || 'locked',
+      }))
+    : [];
+
+  const progress = subjectProgress?.progress || 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
+        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
+          <FontAwesome5 name="arrow-left" size={22} color="white" />
+        </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{subjectTemplate.name}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        <View style={styles.headerIcon} />
+        <Pressable onPress={handleFavoritePress} style={styles.headerIcon}>
+          <FontAwesome5 
+            name="star" 
+            size={22} 
+            color={isFavorite ? '#FFD700' : '#6B7280'}
+            solid={isFavorite}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.progressContainer}>
-        <LinearGradient colors={['#10B981', '#34D399']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.progressBar, { width: `${progress}%` }]} />
+        <LinearGradient
+          colors={['#10B981', '#34D399']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.progressBar, { width: `${progress}%` }]}
+        />
       </View>
 
       <Text style={styles.sectionTitle}>Lessons</Text>
@@ -90,18 +159,36 @@ export default function SubjectDetailsScreen() {
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <LessonItem item={item} subjectId={params.id} pathId={user.selectedPathId} totalLessons={totalLessons} />}
+        renderItem={({ item }) => (
+          <LessonItem 
+            item={item} 
+            subjectId={params.id} 
+            pathId={user.selectedPathId}
+            // --- THE FIX IS HERE ---
+            // We pass the total number of lessons to the child component
+            totalLessons={subjectData.lessons.length} 
+          />
+        )}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-        ListEmptyComponent={<View style={styles.emptyContainer}><FontAwesome5 name="book-dead" size={60} color="#4B5563" /><Text style={styles.emptyText}>No lessons have been added yet.</Text></View>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <FontAwesome5 name="book-dead" size={60} color="#4B5563" />
+            <Text style={styles.emptyText}>No lessons have been added yet.</Text>
+            <Text style={styles.emptySubtext}>Check back soon!</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
 }
 
-// الأنماط تبقى كما هي
+// --- Professional Styles ---
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
   container: { flex: 1, backgroundColor: '#0C0F27' },
+  errorText: { color: '#EF4444', fontSize: 20, textAlign: 'center', marginTop: 20, marginBottom: 30 },
+  backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
+  backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, backgroundColor: '#0C0F27' },
   headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
@@ -112,6 +199,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginHorizontal: 20, marginTop: 30, marginBottom: 15 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.8 },
   emptyText: { color: '#D1D5DB', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 20 },
+  emptySubtext: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 5 },
   lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, marginBottom: 10 },
   lessonTitle: { color: 'white', fontSize: 16, fontWeight: '600' },
   lessonSubtitle: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },

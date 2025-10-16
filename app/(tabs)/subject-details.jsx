@@ -1,15 +1,16 @@
 
-import React, { useState, useEffect, memo } from 'react';
+import React, {useState, useEffect, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
+import { getSubjectDetails, getUserProgressDocument } from '../../services/firestoreService'; // تم حذف updateUserFavoriteSubject
 import { useAppState } from '../_layout';
 
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
+
   const getIcon = () => {
     switch (item.status) {
       case 'completed': return { name: 'check-circle', color: '#10B981', solid: true };
@@ -18,6 +19,7 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
     }
   };
   const icon = getIcon();
+
   const handlePress = () => {
     router.push({
       pathname: '/(tabs)/lesson-view',
@@ -25,11 +27,12 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
         lessonId: item.id, 
         lessonTitle: item.title,
         subjectId: subjectId, 
-        pathId: pathId, // --- FIX: We now have the correct pathId here
+        pathId: pathId,
         totalLessons: totalLessons
       },
     });
   };
+
   return (
     <Pressable onPress={handlePress} style={styles.lessonItem}>
       <View style={{ flex: 1, marginRight: 10 }}>
@@ -42,59 +45,38 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
 });
 
 export default function SubjectDetailsScreen() {
-  // --- FIX: Get pathId directly from navigation parameters ---
   const params = useLocalSearchParams();
-  const { id: subjectId, pathId } = params;
-
   const router = useRouter();
   const { user } = useAppState();
 
   const [subjectData, setSubjectData] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFavorite, setIsFavorite] = useState(false);
+  // تم حذف حالة isFavorite
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        // --- FIX: Use pathId from params, not from user object ---
-        const [subjectDetails, progressDoc] = await Promise.all([
-          getSubjectDetails(pathId, subjectId),
-          getUserProgressDocument(user.uid),
-        ]);
-        
-        if (subjectDetails) {
-          setSubjectData(subjectDetails);
-          setUserProgress(progressDoc || {});
-          const isSubFavorited = progressDoc?.favorites?.subjects?.includes(subjectId) || false;
-          setIsFavorite(isSubFavorited);
-        } else {
-          setSubjectData(null);
-        }
-      } catch (error) {
-        console.error("Error fetching subject details:", error);
-        setSubjectData(null);
-      } finally {
+      setIsLoading(true);
+      if (!user || !params.id) {
         setIsLoading(false);
+        return;
       }
-    };
-
-    // The guard: Wait for user.uid AND pathId from params
-    if (user?.uid && pathId && subjectId) {
-      fetchData();
-    } else if (!user) {
-      // If auth is still loading, wait. If auth is done and user is null, stop loading.
+      
+      // العودة إلى المنطق الأصلي البسيط
+      const [subjectDetails, progressDoc] = await Promise.all([
+        getSubjectDetails(user.selectedPathId, params.id),
+        getUserProgressDocument(user.uid),
+      ]);
+      
+      if (subjectDetails) {
+        setSubjectData(subjectDetails);
+        setUserProgress(progressDoc || {});
+      }
       setIsLoading(false);
-    }
-  }, [user, subjectId, pathId]); // Depend on the actual data needed
-
-  
-  const handleFavoritePress = async () => {
-    if (!user?.uid || !subjectId) return;
-    const newFavoriteState = !isFavorite;
-    setIsFavorite(newFavoriteState);
-    await updateUserFavoriteSubject(user.uid, subjectId, newFavoriteState);
-  };
+    };
+    
+    fetchData();
+  }, [user, params.id]);
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
@@ -112,8 +94,7 @@ export default function SubjectDetailsScreen() {
     );
   }
 
-  // --- FIX: Use pathId from params to get the correct progress ---
-  const subjectProgress = userProgress?.pathProgress?.[pathId]?.subjects?.[subjectId];
+  const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
   
   const mergedLessons = Array.isArray(subjectData.lessons)
     ? subjectData.lessons.map(lesson => ({
@@ -134,18 +115,8 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        <Pressable 
-          onPress={handleFavoritePress} 
-          style={styles.headerIcon}
-          disabled={!user?.uid}
-        >
-          <FontAwesome5 
-            name="star" 
-            size={22} 
-            color={isFavorite ? '#FFD700' : '#6B7280'}
-            solid={isFavorite}
-          />
-        </Pressable>
+        {/* تم حذف زر النجمة بالكامل */}
+        <View style={styles.headerIcon} />
       </View>
 
       <View style={styles.progressContainer}>
@@ -165,8 +136,8 @@ export default function SubjectDetailsScreen() {
         renderItem={({ item }) => (
           <LessonItem 
             item={item} 
-            subjectId={subjectId} 
-            pathId={pathId} // --- FIX: Pass the correct pathId down
+            subjectId={params.id} 
+            pathId={user.selectedPathId}
             totalLessons={subjectData.lessons.length} 
           />
         )}

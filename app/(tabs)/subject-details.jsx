@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
-// --- Memoized LessonItem Component (No changes needed here) ---
+// --- Memoized LessonItem Component (No changes needed) ---
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
 
@@ -56,62 +56,66 @@ export default function SubjectDetailsScreen() {
 
   const [subjectData, setSubjectData] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // يبدأ التحميل دائمًا
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
+    // --- THE FINAL BULLETPROOF FIX ---
+    // هذه الدالة لن يتم استدعاؤها إلا عندما تكون جميع البيانات المطلوبة جاهزة.
     const fetchData = async () => {
-      // --- FIX #1: WAIT FOR A VALID USER OBJECT WITH A UID ---
-      // لا تبدأ في جلب أي شيء إلا إذا كان لدينا كائن مستخدم صالح يحتوي على uid.
-      if (!user || !user.uid || !params.id) {
-        // إذا لم يكن المستخدم جاهزًا بعد، انتظر. useEffect سيعمل مرة أخرى عندما يتغير المستخدم.
-        // قمنا بتعيين isLoading إلى false إذا لم يكن هناك مستخدم لمنع التحميل اللانهائي.
-        if (!user) setIsLoading(false);
-        return; 
+      try {
+        const [subjectDetails, progressDoc] = await Promise.all([
+          getSubjectDetails(user.selectedPathId, params.id),
+          getUserProgressDocument(user.uid),
+        ]);
+        
+        if (subjectDetails) {
+          setSubjectData(subjectDetails);
+          setUserProgress(progressDoc || {});
+          const isSubFavorited = progressDoc?.favorites?.subjects?.includes(params.id) || false;
+          setIsFavorite(isSubFavorited);
+        } else {
+          // إذا لم يتم العثور على تفاصيل المادة لسبب ما، تأكد من إيقاف التحميل
+          setSubjectData(null);
+        }
+      } catch (error) {
+        console.error("Error fetching subject details:", error);
+        setSubjectData(null); // في حالة حدوث خطأ، قم بتعيين البيانات إلى null لعرض رسالة الخطأ
+      } finally {
+        // الأهم: أوقف التحميل دائمًا بعد انتهاء العملية
+        setIsLoading(false);
       }
-
-      setIsLoading(true);
-      setSubjectData(null);
-      setUserProgress(null);
-      setIsFavorite(false); 
-      
-      // الآن نحن متأكدون من أن user.uid موجود
-      const [subjectDetails, progressDoc] = await Promise.all([
-        getSubjectDetails(user.selectedPathId, params.id),
-        getUserProgressDocument(user.uid),
-      ]);
-      
-      if (subjectDetails) {
-        setSubjectData(subjectDetails);
-        setUserProgress(progressDoc || {});
-        const isSubFavorited = progressDoc?.favorites?.subjects?.includes(params.id) || false;
-        setIsFavorite(isSubFavorited);
-      }
-      setIsLoading(false);
     };
-    
-    fetchData();
-  }, [user, params.id]); // useEffect سيعمل في كل مرة يتغير فيها المستخدم أو معرف المادة
+
+    // هذا هو "الحارس". لن يسمح بتشغيل fetchData إلا عند استيفاء جميع الشروط.
+    // إذا لم تكن الشروط مستوفاة، فإنه لا يفعل شيئًا، ويظل مؤشر التحميل يدور،
+    // في انتظار التحديث التالي لكائن `user` من السياق (Context).
+    if (user && user.uid && user.selectedPathId && params.id) {
+      fetchData();
+    } else if (user === null) {
+      // إذا اكتملت المصادقة والمستخدم غير مسجل دخوله (user is null)،
+      // أوقف التحميل لمنع الدوران اللانهائي.
+      setIsLoading(false);
+    }
+  }, [user, params.id]); // سيعمل هذا التأثير في كل مرة يتغير فيها كائن المستخدم
 
   
   const handleFavoritePress = async () => {
-    // --- FIX #2: DEFENSIVE CHECK BEFORE SENDING REQUEST ---
-    // كإجراء وقائي إضافي، تحقق مرة أخرى من وجود user.uid قبل إرسال الطلب.
-    if (!user || !user.uid) {
-      console.error("Cannot update favorite: User UID is missing on press.");
-      return; // أوقف العملية إذا كان uid غير موجود لسبب ما.
-    }
+    if (!user?.uid || !params.id) return;
 
     const newFavoriteState = !isFavorite;
     setIsFavorite(newFavoriteState);
     await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
   };
 
-  // ... (بقية الكود الخاص بالعرض يبقى كما هو بدون تغيير) ...
+  // إذا كان التحميل لا يزال جاريًا، اعرض مؤشر الدوران.
+  // هذا هو الوضع الافتراضي حتى يصبح `user` جاهزًا بالكامل.
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
+  // إذا توقف التحميل ولم يتم العثور على بيانات المادة، اعرض رسالة الخطأ.
+  // هذا سيحدث الآن فقط في حالة وجود خطأ حقيقي (مثل فشل الشبكة).
   if (!subjectData) {
     return (
       <SafeAreaView style={styles.centerContainer}>
@@ -148,9 +152,7 @@ export default function SubjectDetailsScreen() {
         <Pressable 
           onPress={handleFavoritePress} 
           style={styles.headerIcon}
-          // --- FIX #3: DISABLE BUTTON IF USER IS NOT READY OR DATA IS LOADING ---
-          // قم بتعطيل الزر إذا كان المستخدم غير جاهز أو إذا كانت البيانات لا تزال قيد التحميل
-          disabled={isLoading || !user || !user.uid}
+          disabled={!user?.uid}
         >
           <FontAwesome5 
             name="star" 
@@ -161,6 +163,7 @@ export default function SubjectDetailsScreen() {
         </Pressable>
       </View>
 
+      {/* ... بقية واجهة المستخدم تبقى كما هي ... */}
       <View style={styles.progressContainer}>
         <LinearGradient
           colors={['#10B981', '#34D399']}
@@ -169,9 +172,7 @@ export default function SubjectDetailsScreen() {
           style={[styles.progressBar, { width: `${progress}%` }]}
         />
       </View>
-
       <Text style={styles.sectionTitle}>Lessons</Text>
-
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
@@ -196,7 +197,7 @@ export default function SubjectDetailsScreen() {
   );
 }
 
-// --- Styles (No changes needed here) ---
+// --- Styles (No changes needed) ---
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
   container: { flex: 1, backgroundColor: '#0C0F27' },

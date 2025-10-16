@@ -101,3 +101,49 @@ export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, 
     await updateDoc(progressRef, { [progressKey]: newProgress });
   }
 };
+
+/**
+ * يبحث عن المواد حسب الاسم عبر جميع المسارات التعليمية.
+ * البحث غير حساس لحالة الأحرف.
+ * @param {string} searchText النص المراد البحث عنه.
+ * @returns {Promise<Array<Object>>} بروميس يتم حله بمصفوفة من كائنات المواد المطابقة.
+ */
+export const searchSubjectsByName = async (searchText) => {
+  // لا تقم بالبحث إذا كان النص فارغًا أو قصيرًا جدًا
+  if (!searchText || searchText.trim().length < 3) {
+    return [];
+  }
+
+  try {
+    const pathsCollectionRef = collection(db, 'educationalPaths');
+    const querySnapshot = await getDocs(pathsCollectionRef);
+    
+    const results = [];
+    const normalizedSearchText = searchText.toLowerCase();
+
+    querySnapshot.forEach(doc => {
+      const pathData = doc.data();
+      const pathId = doc.id;
+
+      // تحقق من وجود مصفوفة المواد
+      if (pathData.subjects && Array.isArray(pathData.subjects)) {
+        pathData.subjects.forEach(subject => {
+          // قم بإجراء المطابقة غير الحساسة لحالة الأحرف
+          if (subject.name.toLowerCase().includes(normalizedSearchText)) {
+            // أضف معلومات المسار الأصلية (مثل اسم الكلية) للسياق في نتائج البحث
+            results.push({
+              ...subject,
+              faculty: pathData.displayName || 'N/A', // نفترض أن displayName هو اسم الكلية/المسار
+              pathId: pathId,
+            });
+          }
+        });
+      }
+    });
+
+    return results;
+  } catch (error) {
+    console.error("Error searching subjects:", error);
+    return []; // إرجاع مصفوفة فارغة في حالة حدوث خطأ
+  }
+};

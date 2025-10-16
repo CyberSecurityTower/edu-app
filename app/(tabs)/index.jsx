@@ -8,34 +8,37 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
-    const SubjectCard = ({ item }) => {
-      const router = useRouter(); // Initialize router
-      const total = parseInt(item.totalLessons, 10) || 0;
-      const completed = parseInt(item.completedLessons, 10) || 0;
-      const progress = total > 0 ? (completed / total) * 100 : 0;
+// --- FIX: Add pathId as a prop ---
+const SubjectCard = ({ item, pathId }) => {
+  const router = useRouter();
+  const total = parseInt(item.totalLessons, 10) || 0;
+  const completed = parseInt(item.completedLessons, 10) || 0;
+  const progress = total > 0 ? (completed / total) * 100 : 0;
 
-      const handlePress = () => {
-        router.push({
-          pathname: '/subject-details', // Navigate to the new file
-          params: { id: item.id, name: item.name }
-        });
-      };
+  const handlePress = () => {
+    // --- FIX: Pass the pathId in the params ---
+    router.push({
+      pathname: '/subject-details',
+      params: { id: item.id, name: item.name, pathId: pathId }
+    });
+  };
 
-      return (
-        <Pressable style={styles.cardContainer} onPress={handlePress}>
-          <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
-            <View style={styles.iconContainer}>
-              <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
-            </View>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBar, { width: `${progress}%` }]} />
-            </View>
-            <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
-          </LinearGradient>
-        </Pressable>
-      );
-    };
+  return (
+    <Pressable style={styles.cardContainer} onPress={handlePress}>
+      <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
+        <View style={styles.iconContainer}>
+          <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
+        </View>
+        <Text style={styles.cardTitle}>{item.name}</Text>
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        </View>
+        <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+};
+
 const HomeScreen = () => {
   const { user } = useAppState();
   const [pathDetails, setPathDetails] = useState(null);
@@ -60,7 +63,8 @@ const HomeScreen = () => {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={pathDetails?.subjects || []}
-        renderItem={({ item }) => <SubjectCard item={item} />}
+        // --- FIX: Pass the pathId down to the card ---
+        renderItem={({ item }) => <SubjectCard item={item} pathId={user.selectedPathId} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
         ListHeaderComponent={

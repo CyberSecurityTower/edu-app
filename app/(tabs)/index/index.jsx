@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppState } from '../_layout';
-import { getEducationalPathById } from '../../services/firestoreService';
+import { useAppState } from '../../_layout';
+import { getEducationalPathById } from '../../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -15,7 +15,8 @@ import { useRouter } from 'expo-router';
 
 const handlePress = () => {
   router.push({
-    pathname: '/subject-details', // This is now correct and unambiguous
+    // We now specify the full path within the stack
+    pathname: '/(tabs)/index/subject-details', 
     params: { id: item.id, name: item.name }
   });
 };

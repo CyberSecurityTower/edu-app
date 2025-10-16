@@ -4,19 +4,19 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
-import { getUserProfile, listenToUserProgress } from '../services/firestoreService'; // استيراد listenToUserProgress
+import { getUserProfile, listenToUserProgress } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
 const AppStateContext = createContext(null);
 export function useAppState() {
-  return useContext(AppStateContext);
+  return useContext(AppState);
 }
 
 function AppStateProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [userProgress, setUserProgress] = useState(null); // --- ✨ حالة جديدة لتقدم المستخدم
+  const [userProgress, setUserProgress] = useState({}); // --- ✨ ابدأ بكائن فارغ
   const [authLoading, setAuthLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
 
@@ -40,27 +40,18 @@ function AppStateProvider({ children }) {
     return () => unsubscribeAuth();
   }, []);
 
-  // --- ✨ التأثير الجديد الذي يستمع لتقدم المستخدم ---
   useEffect(() => {
-    // إذا لم يكن هناك مستخدم، لا تفعل شيئًا
     if (!user || !user.uid) {
-      setUserProgress(null);
+      setUserProgress({}); // --- ✨ أعد التعيين إلى كائن فارغ
       return;
     }
 
-    // ابدأ الاستماع...
-    console.log(`Setting up userProgress listener for UID: ${user.uid}`);
     const unsubscribe = listenToUserProgress(user.uid, (progressData) => {
-      console.log("Global context received progress update!");
-      setUserProgress(progressData); // تحديث الحالة العامة عند وصول بيانات جديدة
+      setUserProgress(progressData || {}); // --- ✨ تأكد دائمًا من أنه كائن
     });
 
-    // أوقف الاستماع عند تسجيل الخروج أو تغيير المستخدم
-    return () => {
-      console.log("Cleaning up userProgress listener.");
-      unsubscribe();
-    };
-  }, [user]); // هذا التأثير يعمل فقط عندما يتغير كائن المستخدم
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <AppStateContext.Provider
@@ -71,9 +62,7 @@ function AppStateProvider({ children }) {
   );
 }
 
-// --- RootLayoutNav و MainLayout و RootLayout تبقى كما هي تمامًا ---
-// (لا حاجة لتغيير أي شيء في بقية الملف)
-
+// ... بقية الملف (RootLayoutNav, MainLayout, etc.) تبقى كما هي تمامًا ...
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();

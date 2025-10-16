@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, onSnapshot } from "firebase/firestore"; 
 import { db } from '../firebase';
 
 // --- User Profile Functions ---
@@ -20,7 +20,6 @@ export const updateUserProfile = async (uid, data) => {
   await updateDoc(userDocRef, data);
 };
 
-// --- Educational Content Functions ---
 export const getEducationalPaths = async () => {
   try {
     const pathsCollectionRef = collection(db, 'educationalPaths');
@@ -57,11 +56,10 @@ export const getSubjectDetails = async (pathId, subjectId) => {
 export const getLessonContent = async (lessonId) => {
   if (!lessonId) return null;
   const lessonRef = doc(db, 'lessonsContent', lessonId);
-  const lessonSnap = await getDoc(lessonRef);
+  const lessonSnap = await getDoc(lessonSnap);
   return lessonSnap.exists() ? lessonSnap.data() : null;
 };
 
-// --- User Progress Functions ---
 export const getUserProgressDocument = async (userId) => {
   if (!userId) return null;
   const progressRef = doc(db, `userProgress/${userId}`);
@@ -69,70 +67,51 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
+// --- ✨ الدالة المصححة ---
+export const listenToUserProgress = (userId, callback) => {
+  if (!userId) {
+    callback(null); // --- ✨ هذا هو السطر الذي كان مفقودًا
+    return () => {}; 
+  }
+  const progressRef = doc(db, `userProgress/${userId}`);
+  const unsubscribe = onSnapshot(progressRef, (docSnap) => {
+    callback(docSnap.exists() ? docSnap.data() : {}); // أرجع كائنًا فارغًا بدلاً من null لضمان الاستقرار
+  }, (error) => {
+    console.error("Error listening to user progress:", error);
+    callback({}); // أرجع كائنًا فارغًا عند الخطأ أيضًا
+  });
+  return unsubscribe;
+};
 
-// --- ✨ الدالة المصححة والنهائية ✨ ---
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
   
   const progressRef = doc(db, `userProgress/${userId}`);
 
-  // الخطوة 1: جلب البيانات الحالية مرة واحدة فقط
   const progressSnap = await getDoc(progressRef);
-  const progressData = progressSnap.exists() ? progressSnap.data() : {};
+  if (!progressSnap.exists()) {
+    await setDoc(progressRef, {});
+  }
 
-  // الخطوة 2: تحديث البيانات محليًا
-  // نستخدم ?. للوصول الآمن إلى البيانات المتداخلة
-  const lessonsMap = progressData?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
-  
-  // إذا كانت الحالة لم تتغير، لا تفعل شيئًا لتجنب الكتابة غير الضرورية
+  const currentProgressData = (await getDoc(progressRef)).data() || {};
+  const lessonsMap = currentProgressData?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
+
   if (lessonsMap[lessonId] === status) {
-    console.log("Lesson status is already up-to-date. No update needed.");
     return;
   }
 
-  lessonsMap[lessonId] = status; // تحديث حالة الدرس في الخريطة المحلية
-
-  // الخطوة 3: بناء حمولة التحديث (Update Payload)
-  // نستخدم dot notation لتحديث الحقول المتداخلة بكفاءة
   const updatePayload = {
     [`pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`]: status
   };
 
-  // إذا تم إكمال الدرس، قم بحساب النسبة المئوية الجديدة وأضفها إلى الحمولة
-  if (status === 'completed' || status === 'current') {
-    const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
-    const newProgress = totalLessonsInSubject > 0 
-      ? Math.round((completedCount / totalLessonsInSubject) * 100) 
-      : 0;
-    
-    updatePayload[`pathProgress.${pathId}.subjects.${subjectId}.progress`] = newProgress;
-  }
-
-  // الخطوة 4: إرسال أمر كتابة واحد وآمن إلى Firestore
-  // نستخدم setDoc مع merge: true لأنه ينشئ الحقول إذا لم تكن موجودة، وهو أكثر أمانًا من updateDoc
-  await setDoc(progressRef, updatePayload, { merge: true });
-  console.log("Lesson progress updated successfully with new percentage.");
-};
-
-// --- ✨ الدالة الجديدة للاستماع في الوقت الفعلي ✨ ---
-export const listenToUserProgress = (userId, callback) => {
-  if (!userId) {
-    // إذا لم يكن هناك مستخدم، قم باستدعاء الكولباك بـ null وأرجع دالة إلغاء اشتراك فارغة
-    callback(null);
-    return () => {};
-  }
-
-  const progressRef = doc(db, `userProgress/${userId}`);
+  const tempLessonsMap = { ...lessonsMap, [lessonId]: status };
+  const completedCount = Object.values(tempLessonsMap).filter(s => s === 'completed').length;
+  const newProgress = totalLessonsInSubject > 0 
+    ? Math.round((completedCount / totalLessonsInSubject) * 100) 
+    : 0;
   
-  // onSnapshot ترجع دالة "unsubscribe" التي نستخدمها لإيقاف الاستماع
-  const unsubscribe = onSnapshot(progressRef, (docSnap) => {
-    // في كل مرة يتغير فيها المستند، سيتم استدعاء هذا الكود
-    const data = docSnap.exists() ? docSnap.data() : null;
-    callback(data); // نرسل البيانات الجديدة إلى الشاشة
-  }, (error) => {
-    console.error("Error listening to user progress:", error);
-    callback(null); // في حالة حدوث خطأ، أرسل null
-  });
+  updatePayload[`pathProgress.${pathId}.subjects.${subjectId}.progress`] = newProgress;
 
-  return unsubscribe; // أرجع دالة إلغاء الاشتراك ليتم استخدامها عند مغادرة الشاشة
+  await updateDoc(progressRef, updatePayload);
+  console.log("Lesson progress updated successfully using updateDoc.");
 };

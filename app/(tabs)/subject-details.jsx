@@ -1,11 +1,10 @@
-
-import React, {useState, useEffect, memo } from 'react';
+import React, { useState, memo, useCallback } from 'react'; // --- تغيير: استيراد useCallback
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'; // --- تغيير: استيراد useFocusEffect
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails, getUserProgressDocument } from '../../services/firestoreService'; // تم حذف updateUserFavoriteSubject
+import { getSubjectDetails, getUserProgressDocument } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
@@ -15,7 +14,7 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
     switch (item.status) {
       case 'completed': return { name: 'check-circle', color: '#10B981', solid: true };
       case 'current': return { name: 'play-circle', color: '#3B82F6', solid: true };
-      default: return { name: 'play', color: '#9CA3AF', solid: true };
+      case 'locked': default: return { name: 'play', color: '#9CA3AF', solid: true };
     }
   };
   const icon = getIcon();
@@ -52,31 +51,37 @@ export default function SubjectDetailsScreen() {
   const [subjectData, setSubjectData] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  // تم حذف حالة isFavorite
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      if (!user || !params.id) {
-        setIsLoading(false);
-        return;
-      }
+  
+  // --- ✨ التغيير الجذري هنا: استبدال useEffect بـ useFocusEffect ✨ ---
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        if (!user || !params.id) {
+          setIsLoading(false);
+          return;
+        }
+        
+        try {
+          setIsLoading(true);
+          const [subjectDetails, progressDoc] = await Promise.all([
+            getSubjectDetails(user.selectedPathId, params.id),
+            getUserProgressDocument(user.uid),
+          ]);
+          
+          if (subjectDetails) {
+            setSubjectData(subjectDetails);
+            setUserProgress(progressDoc || {});
+          }
+        } catch (error) {
+          console.error("Error fetching subject details:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
       
-      // العودة إلى المنطق الأصلي البسيط
-      const [subjectDetails, progressDoc] = await Promise.all([
-        getSubjectDetails(user.selectedPathId, params.id),
-        getUserProgressDocument(user.uid),
-      ]);
-      
-      if (subjectDetails) {
-        setSubjectData(subjectDetails);
-        setUserProgress(progressDoc || {});
-      }
-      setIsLoading(false);
-    };
-    
-    fetchData();
-  }, [user, params.id]);
+      fetchData();
+    }, [user, params.id]) // الاعتماد على user و params.id
+  );
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
@@ -115,7 +120,6 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        {/* تم حذف زر النجمة بالكامل */}
         <View style={styles.headerIcon} />
       </View>
 

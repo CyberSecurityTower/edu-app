@@ -1,20 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react'; // --- تغيير: استيراد useCallback
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../_layout';
-// --- التغيير هنا ---
-// سنجلب دالة getUserProgressDocument أيضًا
 import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router'; // --- تغيير: استيراد useFocusEffect
 
-// --- التغيير هنا ---
-// SubjectCard الآن يعرض البيانات الديناميكية التي تصله
 const SubjectCard = ({ item }) => {
   const router = useRouter();
   
-  // نستخدم البيانات المدمجة مباشرة
   const total = item.totalLessons || 0;
   const completed = item.completedLessons || 0;
   const progress = item.progress || 0;
@@ -44,50 +39,57 @@ const SubjectCard = ({ item }) => {
 
 const HomeScreen = () => {
   const { user } = useAppState();
-  const [mergedSubjects, setMergedSubjects] = useState([]); // --- حالة جديدة للبيانات المدمجة
+  const [mergedSubjects, setMergedSubjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchAndMergeData = async () => {
-      if (!user || !user.selectedPathId) {
-        setIsLoading(false);
-        return;
-      }
-      
-      try {
-        // جلب بيانات المسار وبيانات تقدم المستخدم في نفس الوقت لتحسين الأداء
-        const [pathDetails, userProgress] = await Promise.all([
-          getEducationalPathById(user.selectedPathId),
-          getUserProgressDocument(user.uid)
-        ]);
-
-        if (pathDetails && pathDetails.subjects) {
-          // دمج البيانات هنا
-          const subjectsWithProgress = pathDetails.subjects.map(subject => {
-            const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
-            
-            const completedLessonsCount = progressData?.lessons 
-              ? Object.values(progressData.lessons).filter(status => status === 'completed').length
-              : 0;
-
-            return {
-              ...subject, // بيانات المادة الأساسية (الاسم، الأيقونة، إلخ)
-              progress: progressData?.progress || 0, // النسبة المئوية من قاعدة البيانات
-              completedLessons: completedLessonsCount, // عدد الدروس المكتملة المحسوب
-              totalLessons: subject.lessons?.length || 0, // العدد الإجمالي للدروس
-            };
-          });
-          setMergedSubjects(subjectsWithProgress);
+  // --- ✨ التغيير الجذري هنا: استبدال useEffect بـ useFocusEffect ✨ ---
+  useFocusEffect(
+    useCallback(() => {
+      const fetchAndMergeData = async () => {
+        if (!user || !user.selectedPathId) {
+          setIsLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error("Failed to fetch and merge data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+        
+        try {
+          setIsLoading(true); // إظهار التحميل عند كل تركيز لضمان عرض البيانات المحدثة
+          const [pathDetails, userProgress] = await Promise.all([
+            getEducationalPathById(user.selectedPathId),
+            getUserProgressDocument(user.uid)
+          ]);
 
-    fetchAndMergeData();
-  }, [user]);
+          if (pathDetails && pathDetails.subjects) {
+            const subjectsWithProgress = pathDetails.subjects.map(subject => {
+              const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
+              
+              const completedLessonsCount = progressData?.lessons 
+                ? Object.values(progressData.lessons).filter(status => status === 'completed').length
+                : 0;
+
+              return {
+                ...subject,
+                progress: progressData?.progress || 0,
+                completedLessons: completedLessonsCount,
+                totalLessons: subject.lessons?.length || 0,
+              };
+            });
+            setMergedSubjects(subjectsWithProgress);
+          }
+        } catch (error) {
+          console.error("Failed to fetch and merge data:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchAndMergeData();
+
+      // الدالة التي يتم إرجاعها هنا تعمل عند مغادرة الشاشة (اختياري)
+      return () => {
+        // يمكننا تنظيف أي شيء هنا إذا احتجنا لذلك
+      };
+    }, [user]) // الاعتماد على user فقط
+  );
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
@@ -96,7 +98,7 @@ const HomeScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={mergedSubjects} // --- استخدام البيانات المدمجة هنا
+        data={mergedSubjects}
         renderItem={({ item }) => <SubjectCard item={item} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
@@ -124,7 +126,6 @@ const HomeScreen = () => {
   );
 };
 
-// الأنماط تبقى كما هي
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   container: { flex: 1, backgroundColor: '#0C0F27' },

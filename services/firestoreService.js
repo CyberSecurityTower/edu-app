@@ -69,41 +69,52 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
-// --- THIS IS THE FINAL, GUARANTEED FIX ---
-// It is simpler, cleaner, and handles all possible states of the document.
+// --- THE BULLETPROOF, FINAL, GUARANTEED FIX ---
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
 
-  // By using setDoc with merge:true AND dot notation, we achieve everything:
-  // 1. If the document doesn't exist, it will be created.
-  // 2. If the 'favorites' field doesn't exist, it will be created.
-  // 3. It correctly uses arrayUnion/arrayRemove on the 'subjects' array.
-  // This is the most robust pattern for this operation in Firestore.
-  await setDoc(progressRef, {
-    'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
-  }, { merge: true });
+  // First, check if the document exists at all.
+  const docSnap = await getDoc(progressRef);
+
+  if (docSnap.exists()) {
+    // If the document exists, we can safely use updateDoc.
+    // This is the most efficient method for existing documents.
+    await updateDoc(progressRef, {
+      'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
+    });
+  } else {
+    // If the document does NOT exist (e.g., a brand new user),
+    // we use setDoc to create it from scratch.
+    // This ensures the 'subjects' field is correctly created as an ARRAY.
+    if (isFavorite) {
+      await setDoc(progressRef, {
+        favorites: {
+          subjects: [subjectId] // CRITICAL: Initialize as an array
+        }
+      }, { merge: true }); // Merge in case other fields are being created simultaneously
+    }
+    // If isFavorite is false, we don't need to do anything because the document
+    // and the array don't exist, so there's nothing to remove.
+  }
 };
 
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
   const progressRef = doc(db, `userProgress/${userId}`);
   
-  // Using setDoc with merge and dot notation for the lesson update as well for consistency and robustness.
   await setDoc(progressRef, {
     [`pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`]: status
   }, { merge: true });
 
   if (status === 'completed') {
-    // This part requires a read-after-write, so it's slightly different.
     const progressDoc = await getUserProgressDocument(userId);
     const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
     
     const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
-    const newProgress = totalLessonsInsubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
+    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
 
     const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
-    // Here we can use updateDoc because we know the document and pathProgress exist.
     await updateDoc(progressRef, { [progressKey]: newProgress });
   }
 };

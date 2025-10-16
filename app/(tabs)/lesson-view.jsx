@@ -1,4 +1,4 @@
-import React, {useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,7 +15,10 @@ export default function LessonViewScreen() {
 
   const [lessonContent, setLessonContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isCompleted, setIsCompleted] = useState(false);
+  
+  // --- التغيير هنا ---
+  // هذه الحالة ستمنعنا من إرسال تحديثات متكررة إلى قاعدة البيانات
+  const [completionFired, setCompletionFired] = useState(false);
 
   useEffect(() => {
     const loadLesson = async () => {
@@ -27,23 +30,28 @@ export default function LessonViewScreen() {
         setLessonContent(contentData.content);
       }
       
+      // تحديث حالة الدرس إلى "قيد القراءة" عند فتحه
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', parseInt(totalLessons, 10));
       setIsLoading(false);
     };
 
     loadLesson();
-  }, [lessonId, user]); // Added user to dependency array for robustness
+  }, [lessonId, user]);
 
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
+    // نعتبر أن المستخدم وصل للنهاية إذا كان على بعد 30 بكسل منها
     const paddingToBottom = 30;
     return layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
   };
 
+  // --- التغيير هنا ---
+  // جعلنا هذه الدالة أكثر أمانًا
   const handleCompleteLesson = async () => {
-    if (isCompleted || !user) return;
+    // إذا لم يكن هناك مستخدم، أو إذا تم بالفعل إرسال طلب الإكمال، لا تفعل شيئًا
+    if (completionFired || !user) return;
     
-    console.log('Lesson completed!');
-    setIsCompleted(true);
+    console.log(`Lesson completed: ${lessonId}. Firing update.`);
+    setCompletionFired(true); // نرفع العلم لمنع الإرسال مرة أخرى
     await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
   };
 
@@ -67,13 +75,13 @@ export default function LessonViewScreen() {
         <ScrollView 
           contentContainerStyle={styles.contentContainer}
           onScroll={({ nativeEvent }) => {
+            // عند كل حركة سكرول، تحقق إذا كان المستخدم قريبًا من النهاية
             if (isCloseToBottom(nativeEvent)) {
               handleCompleteLesson();
             }
           }}
-          scrollEventThrottle={400}
+          scrollEventThrottle={400} // استدعاء onScroll كل 400ms كحد أقصى لتحسين الأداء
         >
-          {/* --- THE RTL FIX IS HERE --- */}
           <View style={{ writingDirection: 'rtl' }}>
             <Markdown style={markdownStyles}>
               {lessonContent || 'No content available.'}
@@ -85,7 +93,7 @@ export default function LessonViewScreen() {
   );
 }
 
-// --- STYLES ---
+// الأنماط تبقى كما هي
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
@@ -96,45 +104,11 @@ const styles = StyleSheet.create({
   contentContainer: { padding: 20 },
 });
 
-// --- MARKDOWN STYLES ---
 const markdownStyles = StyleSheet.create({
-  heading1: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    borderBottomWidth: 1,
-    borderColor: '#334155',
-    paddingBottom: 10,
-    textAlign: 'right', // Align header text to the right
-  },
-  heading2: {
-    color: '#E5E7EB',
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 10,
-    marginTop: 15,
-    textAlign: 'right',
-  },
-  body: {
-    color: '#D1D5DB',
-    fontSize: 17,
-    lineHeight: 28,
-    textAlign: 'right', // Align body text to the right
-  },
-  strong: {
-    fontWeight: 'bold',
-    color: '#10B981',
-  },
-  list_item: {
-    color: '#D1D5DB',
-    fontSize: 16,
-    lineHeight: 26,
-    marginBottom: 8,
-    flexDirection: 'row-reverse', // Make bullet points appear on the right
-    textAlign: 'right',
-  },
-  bullet_list: {
-    marginBottom: 10,
-  }
+  heading1: { color: '#FFFFFF', fontSize: 28, fontWeight: 'bold', marginBottom: 15, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 10, textAlign: 'right' },
+  heading2: { color: '#E5E7EB', fontSize: 22, fontWeight: '600', marginBottom: 10, marginTop: 15, textAlign: 'right' },
+  body: { color: '#D1D5DB', fontSize: 17, lineHeight: 28, textAlign: 'right' },
+  strong: { fontWeight: 'bold', color: '#10B981' },
+  list_item: { color: '#D1D5DB', fontSize: 16, lineHeight: 26, marginBottom: 8, flexDirection: 'row-reverse', textAlign: 'right' },
+  bullet_list: { marginBottom: 10 },
 });

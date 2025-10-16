@@ -1,18 +1,23 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../_layout';
-import { getEducationalPathById } from '../../services/firestoreService';
+// --- التغيير هنا ---
+// سنجلب دالة getUserProgressDocument أيضًا
+import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
+// --- التغيير هنا ---
+// SubjectCard الآن يعرض البيانات الديناميكية التي تصله
 const SubjectCard = ({ item }) => {
   const router = useRouter();
-  const total = parseInt(item.totalLessons, 10) || 0;
-  const completed = parseInt(item.completedLessons, 10) || 0;
-  const progress = total > 0 ? (completed / total) * 100 : 0;
+  
+  // نستخدم البيانات المدمجة مباشرة
+  const total = item.totalLessons || 0;
+  const completed = item.completedLessons || 0;
+  const progress = item.progress || 0;
 
   const handlePress = () => {
     router.push({
@@ -39,18 +44,49 @@ const SubjectCard = ({ item }) => {
 
 const HomeScreen = () => {
   const { user } = useAppState();
-  const [pathDetails, setPathDetails] = useState(null);
+  const [mergedSubjects, setMergedSubjects] = useState([]); // --- حالة جديدة للبيانات المدمجة
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchPathData = async () => {
-      if (user && user.selectedPathId) {
-        const details = await getEducationalPathById(user.selectedPathId);
-        setPathDetails(details);
+    const fetchAndMergeData = async () => {
+      if (!user || !user.selectedPathId) {
+        setIsLoading(false);
+        return;
       }
-      setIsLoading(false);
+      
+      try {
+        // جلب بيانات المسار وبيانات تقدم المستخدم في نفس الوقت لتحسين الأداء
+        const [pathDetails, userProgress] = await Promise.all([
+          getEducationalPathById(user.selectedPathId),
+          getUserProgressDocument(user.uid)
+        ]);
+
+        if (pathDetails && pathDetails.subjects) {
+          // دمج البيانات هنا
+          const subjectsWithProgress = pathDetails.subjects.map(subject => {
+            const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
+            
+            const completedLessonsCount = progressData?.lessons 
+              ? Object.values(progressData.lessons).filter(status => status === 'completed').length
+              : 0;
+
+            return {
+              ...subject, // بيانات المادة الأساسية (الاسم، الأيقونة، إلخ)
+              progress: progressData?.progress || 0, // النسبة المئوية من قاعدة البيانات
+              completedLessons: completedLessonsCount, // عدد الدروس المكتملة المحسوب
+              totalLessons: subject.lessons?.length || 0, // العدد الإجمالي للدروس
+            };
+          });
+          setMergedSubjects(subjectsWithProgress);
+        }
+      } catch (error) {
+        console.error("Failed to fetch and merge data:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    fetchPathData();
+
+    fetchAndMergeData();
   }, [user]);
 
   if (isLoading) {
@@ -60,7 +96,7 @@ const HomeScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={pathDetails?.subjects || []}
+        data={mergedSubjects} // --- استخدام البيانات المدمجة هنا
         renderItem={({ item }) => <SubjectCard item={item} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
@@ -88,6 +124,7 @@ const HomeScreen = () => {
   );
 };
 
+// الأنماط تبقى كما هي
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   container: { flex: 1, backgroundColor: '#0C0F27' },

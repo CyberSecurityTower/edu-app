@@ -76,35 +76,45 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    // 1. Wait until we know the user's auth and onboarding status.
     if (authLoading || hasCompletedOnboarding === null) {
       return;
     }
 
+    // 2. Define the current location context.
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
     const inAppGroup = segments[0] === '(tabs)';
-    
-    // --- THE FIX IS HERE ---
-    // We consider 'subject-details' as a valid, authenticated screen.
-    const onDetailsScreen = segments[0] === 'subject-details';
 
+    // --- THE ROBUST FIX IS HERE ---
+    // This variable checks if the user is ANYWHERE inside the authenticated part of the app.
+    const inProtectedGroup = inAppGroup || inSetupGroup;
+
+    // 3. Handle authenticated users.
     if (user) {
-      const status = user.profileStatus;
-      if (status === 'pending_setup' && !inSetupGroup) {
-        console.log('Redirecting to (setup)...');
-        router.replace('/(setup)/profile-setup');
-      } 
-      // Redirect to tabs ONLY if user is completed AND is NOT in tabs, setup, or details screen.
-      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !onDetailsScreen) {
-        console.log('Redirecting to (tabs)...');
-        router.replace('/(tabs)/');
+      // If profile is incomplete, redirect to setup IF they are not already there.
+      if (user.profileStatus === 'pending_setup' && !inSetupGroup) {
+        console.log('User needs setup. Redirecting to (setup)...');
+        return router.replace('/(setup)/profile-setup');
+      }
+      
+      // If profile is complete, redirect to the main app IF they are not already in a protected area.
+      // This is the key change: it prevents redirection when navigating between screens
+      // like `(tabs)/index` and `(tabs)/subject-details`.
+      if (user.profileStatus === 'completed' && !inProtectedGroup) {
+        console.log('User is authenticated. Redirecting to (tabs)...');
+        return router.replace('/(tabs)/');
       }
     } 
-    else if (!inAuthGroup) {
-      console.log('Redirecting to (auth)...');
-      router.replace('/(auth)/');
+    // 4. Handle unauthenticated users.
+    else {
+      // If not logged in and not in the auth flow, redirect them.
+      if (!inAuthGroup) {
+        console.log('User not authenticated. Redirecting to (auth)...');
+        return router.replace('/(auth)/');
+      }
     }
-}, [user, user?.profileStatus, segments, authLoading, hasCompletedOnboarding]);
+}, [user, segments, authLoading, hasCompletedOnboarding]);
 
   return (
     <Stack>

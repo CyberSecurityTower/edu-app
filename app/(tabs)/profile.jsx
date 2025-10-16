@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../_layout';
 import { useRouter } from 'expo-router';
@@ -45,7 +45,6 @@ export default function ProfileScreen() {
       if (progressDoc) {
         const userStats = progressDoc.stats || { points: 0 };
         
-        // Calculate completed lessons
         let completedCount = 0;
         if (progressDoc.pathProgress) {
           Object.values(progressDoc.pathProgress).forEach(path => {
@@ -79,8 +78,8 @@ export default function ProfileScreen() {
           style: "destructive", 
           onPress: async () => {
             await signOut(auth);
-            setUser(null); // Immediately clear user state
-            router.replace('/(auth)/'); // Redirect to auth flow
+            setUser(null);
+            router.replace('/(auth)/');
           } 
         }
       ]
@@ -88,6 +87,7 @@ export default function ProfileScreen() {
   };
 
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Guest';
+  const avatarUrl = `https://ui-avatars.com/api/?name=${fullName.replace(' ', '+')}&background=0C0F27&color=FFFFFF&size=128`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -96,11 +96,16 @@ export default function ProfileScreen() {
 
         {/* User Info Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <FontAwesome5 name="user-graduate" size={40} color="white" />
-          </View>
+          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           <Text style={styles.userName}>{fullName}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
+          
+          {/* Display new user info if it exists */}
+          {user?.dateOfBirth && (
+            <Text style={styles.userInfoText}>
+              Born on {new Date(user.dateOfBirth).toLocaleDateString()} in {user.placeOfBirth || 'N/A'}
+            </Text>
+          )}
         </View>
 
         {/* Stats Section */}
@@ -120,10 +125,9 @@ export default function ProfileScreen() {
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Settings</Text>
           <View style={styles.menuGroup}>
-            <MenuItem icon="user-edit" name="Edit Profile" onPress={() => {}} />
+            <MenuItem icon="user-edit" name="Edit Profile" onPress={() => router.push('/(setup)/edit-profile')} />
             <MenuItem icon="bell" name="Notifications" onPress={() => {}} />
             <MenuItem icon="shield-alt" name="Security" onPress={() => {}} />
-            <MenuItem icon="question-circle" name="Help Center" onPress={() => {}} />
           </View>
         </View>
 
@@ -142,30 +146,26 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 20, paddingBottom: 40 },
   headerTitle: { color: 'white', fontSize: 32, fontWeight: 'bold', marginBottom: 20 },
   
-  // Profile Card
   profileCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 30 },
-  avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(16, 185, 129, 0.3)', justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderWidth: 2, borderColor: '#10B981' },
+  avatar: { width: 90, height: 90, borderRadius: 45, marginBottom: 15, borderWidth: 2, borderColor: '#10B981' },
   userName: { color: 'white', fontSize: 22, fontWeight: 'bold' },
   userEmail: { color: '#a7adb8ff', fontSize: 14, marginTop: 4 },
+  userInfoText: { color: '#a7adb8ff', fontSize: 12, marginTop: 10, fontStyle: 'italic' },
 
-  // Sections
   sectionContainer: { marginBottom: 30 },
   sectionTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 15 },
   
-  // Stats
   statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
   statBox: { flex: 1, backgroundColor: '#1E293B', borderRadius: 12, padding: 20, alignItems: 'center', marginHorizontal: 5 },
   statValue: { color: 'white', fontSize: 24, fontWeight: 'bold', marginVertical: 8 },
   statLabel: { color: '#a7adb8ff', fontSize: 12 },
 
-  // Menu
   menuGroup: { backgroundColor: '#1E293B', borderRadius: 12 },
   menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: '#334155' },
   menuItemContent: { flexDirection: 'row', alignItems: 'center' },
   menuIcon: { width: 30 },
   menuText: { color: 'white', fontSize: 16, marginLeft: 10 },
 
-  // Logout Button
   logoutButton: { backgroundColor: '#1E293B', borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 10 },
   logoutButtonText: { color: '#EF4444', fontSize: 16, fontWeight: 'bold' },
 });

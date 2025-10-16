@@ -1,4 +1,4 @@
-import { Stack, useSegments, useNavigationContainerRef, useRouter } from 'expo-router';
+import { Stack, useSegments, useRouter } from 'expo-router';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
@@ -28,8 +28,15 @@ function AppStateProvider({ children }) {
         console.log('User profile fetched:', userProfile);
 
         if (userProfile) {
-          setUser(userProfile);
+          // --- THE FIX IS HERE ---
+          // We now ensure the UID from the auth object is always included
+          // with the profile data from Firestore.
+          setUser({
+            uid: currentUser.uid, 
+            ...userProfile
+          });
         } else {
+          // This part was already correct.
           console.log('No profile found, setting up pending user.');
           setUser({
             uid: currentUser.uid,

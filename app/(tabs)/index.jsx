@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppState } from '../../_layout';
-import { getEducationalPathById } from '../../../services/firestoreService';
+import { useAppState } from '../_layout';
+import { getEducationalPathById } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -13,13 +13,12 @@ import { useRouter } from 'expo-router';
       const completed = parseInt(item.completedLessons, 10) || 0;
       const progress = total > 0 ? (completed / total) * 100 : 0;
 
-const handlePress = () => {
-  router.push({
-    // We now specify the full path within the stack
-    pathname: '/(tabs)/index/subject-details', 
-    params: { id: item.id, name: item.name }
-  });
-};
+  const handlePress = () => {
+          router.push({
+            pathname: '/subject-details', // المسار البسيط
+            params: { id: item.id, name: item.name }
+          });
+        };
 
       return (
         <Pressable style={styles.cardContainer} onPress={handlePress}>

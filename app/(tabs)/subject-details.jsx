@@ -28,7 +28,7 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const handlePress = () => {
     console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
     router.push({
-      pathname: '/(tabs)/lesson-view',
+      pathname: './lesson-view',
       params: { 
         lessonId: item.id, 
         lessonTitle: item.title,

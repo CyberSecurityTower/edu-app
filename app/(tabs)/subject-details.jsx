@@ -1,14 +1,13 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
-// --- Memoized LessonItem Component for PEAK PERFORMANCE ---
-// It now receives 'totalLessons' as a prop from its parent.
+// --- Memoized LessonItem Component ---
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
 
@@ -26,15 +25,15 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const icon = getIcon();
 
   const handlePress = () => {
-    console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
     router.push({
-      pathname: '/(tabs)/lesson-view',
+      // --- NAVIGATION FIX: Use the explicit path to stay within the tabs stack ---
+      pathname: '/(tabs)/lesson-view', 
       params: { 
         lessonId: item.id, 
         lessonTitle: item.title,
         subjectId: subjectId, 
         pathId: pathId,
-        totalLessons: totalLessons // Pass the total number of lessons to the next screen
+        totalLessons: totalLessons
       },
     });
   };
@@ -61,36 +60,43 @@ export default function SubjectDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  // --- THE CORRECTED DATA FETCHING LOGIC ---
+  const fetchData = useCallback(async () => {
+    // Don't show a full-screen loader on refresh, only on initial load.
+    if (!subjectData) {
       setIsLoading(true);
-      setSubjectData(null);
-      setUserProgress(null);
+    }
 
-      if (!user || !params.id) {
-        setIsLoading(false);
-        return;
-      }
-      
-      const [subjectDetails, progressDoc] = await Promise.all([
-        getSubjectDetails(user.selectedPathId, params.id),
-        getUserProgressDocument(user.uid),
-      ]);
-      
-      if (subjectDetails) {
-        setSubjectData(subjectDetails);
-        setUserProgress(progressDoc || {});
-        if (progressDoc?.favorites?.subjects?.includes(params.id)) {
-          setIsFavorite(true);
-        } else {
-          setIsFavorite(false);
-        }
-      }
+    if (!user || !params.id) {
       setIsLoading(false);
-    };
+      return;
+    }
     
-    fetchData();
+    const [subjectDetails, progressDoc] = await Promise.all([
+      getSubjectDetails(user.selectedPathId, params.id),
+      getUserProgressDocument(user.uid),
+    ]);
+    
+    if (subjectDetails) {
+      setSubjectData(subjectDetails);
+      setUserProgress(progressDoc || {});
+      if (progressDoc?.favorites?.subjects?.includes(params.id)) {
+        setIsFavorite(true);
+      } else {
+        setIsFavorite(false);
+      }
+    }
+    setIsLoading(false);
+  // --- DATA SYNC FIX: The dependency array is now correct, without subjectData ---
   }, [user, params.id]);
+
+  // This hook now works correctly because the fetchData function it depends on is stable.
+  useFocusEffect(
+    useCallback(() => {
+      console.log("SubjectDetails screen focused. Fetching latest data...");
+      fetchData();
+    }, [fetchData])
+  );
 
   const handleFavoritePress = async () => {
     const newFavoriteState = !isFavorite;
@@ -115,14 +121,12 @@ export default function SubjectDetailsScreen() {
   }
 
   const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
-  
   const mergedLessons = Array.isArray(subjectData.lessons)
     ? subjectData.lessons.map(lesson => ({
         ...lesson,
         status: subjectProgress?.lessons?.[lesson.id] || 'locked',
       }))
     : [];
-
   const progress = subjectProgress?.progress || 0;
 
   return (
@@ -164,8 +168,6 @@ export default function SubjectDetailsScreen() {
             item={item} 
             subjectId={params.id} 
             pathId={user.selectedPathId}
-            // --- THE FIX IS HERE ---
-            // We pass the total number of lessons to the child component
             totalLessons={subjectData.lessons.length} 
           />
         )}

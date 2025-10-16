@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import React, {useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- CHANGE 1: Import from here
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../_layout';
 import { useRouter } from 'expo-router';
@@ -7,7 +8,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { getUserProgressDocument } from '../../services/firestoreService';
 
-// Helper component for menu items
+// Helper components remain the same...
 const MenuItem = ({ icon, name, onPress }) => (
   <Pressable style={styles.menuItem} onPress={onPress}>
     <View style={styles.menuItemContent}>
@@ -18,7 +19,6 @@ const MenuItem = ({ icon, name, onPress }) => (
   </Pressable>
 );
 
-// Helper component for stats
 const StatItem = ({ icon, value, label }) => (
   <View style={styles.statBox}>
     <FontAwesome5 name={icon} size={24} color="#10B981" />
@@ -90,7 +90,8 @@ export default function ProfileScreen() {
   const avatarUrl = `https://ui-avatars.com/api/?name=${fullName.replace(' ', '+')}&background=0C0F27&color=FFFFFF&size=128`;
 
   return (
-    <SafeAreaView style={styles.container}>
+    // CHANGE 2: Add the `edges` prop to ensure top area is safe
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.headerTitle}>My Profile</Text>
 
@@ -100,7 +101,6 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>{fullName}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
           
-          {/* Display new user info if it exists */}
           {user?.dateOfBirth && (
             <Text style={styles.userInfoText}>
               Born on {new Date(user.dateOfBirth).toLocaleDateString()} in {user.placeOfBirth || 'N/A'}
@@ -141,6 +141,7 @@ export default function ProfileScreen() {
   );
 }
 
+// Styles remain exactly the same
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   scrollContent: { padding: 20, paddingBottom: 40 },

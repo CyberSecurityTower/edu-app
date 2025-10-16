@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,45 +19,50 @@ export default function LessonViewScreen() {
 
   useEffect(() => {
     const loadLesson = async () => {
+      if (!user) return;
       setIsLoading(true);
       
-      // Fetch lesson content
       const contentData = await getLessonContent(lessonId);
       if (contentData) {
         setLessonContent(contentData.content);
       }
       
-      // Mark lesson as 'current' when the user opens it
-      await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', parseInt(totalLessons));
-      
+      await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', parseInt(totalLessons, 10));
       setIsLoading(false);
     };
 
     loadLesson();
-  }, [lessonId]);
+  }, [lessonId, user]); // Added user to dependency array for robustness
 
-  // Function to check if user has scrolled to the bottom
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
     const paddingToBottom = 30;
     return layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
   };
 
-  // Function to mark lesson as complete
   const handleCompleteLesson = async () => {
-    if (isCompleted) return; // Prevent multiple calls
+    if (isCompleted || !user) return;
     
     console.log('Lesson completed!');
     setIsCompleted(true);
-    await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons));
-    // Optionally, show a success message or animation here
+    await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ... (Header remains the same) ... */}
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
+          <FontAwesome5 name="arrow-left" size={22} color="white" />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
+        </View>
+        <View style={styles.headerIcon} />
+      </View>
 
       {isLoading ? (
-        <View style={styles.centerContent}><ActivityIndicator size="large" color="#10B981" /></View>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#10B981" />
+        </View>
       ) : (
         <ScrollView 
           contentContainerStyle={styles.contentContainer}
@@ -66,11 +71,14 @@ export default function LessonViewScreen() {
               handleCompleteLesson();
             }
           }}
-          scrollEventThrottle={400} // Check scroll position roughly twice a second
+          scrollEventThrottle={400}
         >
-          <Markdown style={markdownStyles}>
-            {lessonContent}
-          </Markdown>
+          {/* --- THE RTL FIX IS HERE --- */}
+          <View style={{ writingDirection: 'rtl' }}>
+            <Markdown style={markdownStyles}>
+              {lessonContent || 'No content available.'}
+            </Markdown>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -89,7 +97,6 @@ const styles = StyleSheet.create({
 });
 
 // --- MARKDOWN STYLES ---
-// This object allows us to style the rendered Markdown content
 const markdownStyles = StyleSheet.create({
   heading1: {
     color: '#FFFFFF',
@@ -99,6 +106,7 @@ const markdownStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: '#334155',
     paddingBottom: 10,
+    textAlign: 'right', // Align header text to the right
   },
   heading2: {
     color: '#E5E7EB',
@@ -106,20 +114,27 @@ const markdownStyles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 10,
     marginTop: 15,
+    textAlign: 'right',
   },
   body: {
     color: '#D1D5DB',
     fontSize: 17,
-    lineHeight: 28, // For better readability
+    lineHeight: 28,
+    textAlign: 'right', // Align body text to the right
   },
   strong: {
     fontWeight: 'bold',
-    color: '#10B981', // Highlight important text
+    color: '#10B981',
   },
   list_item: {
     color: '#D1D5DB',
     fontSize: 16,
     lineHeight: 26,
     marginBottom: 8,
+    flexDirection: 'row-reverse', // Make bullet points appear on the right
+    textAlign: 'right',
   },
+  bullet_list: {
+    marginBottom: 10,
+  }
 });

@@ -24,18 +24,15 @@ const LessonItem = memo(({ item, subjectId, pathId }) => {
   };
   const icon = getIcon();
 
-  const handlePress = () => {
-    console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
-    router.push({
-      pathname: '/(tabs)/lesson-view',
-      params: { 
-        lessonId: item.id, 
-        lessonTitle: item.title,
-        subjectId: subjectId, 
-        pathId: pathId 
-      },
-    });
-  };
+const handlePress = () => {
+  router.push({
+    pathname: '/(tabs)/lesson-view',
+    params: { 
+      // ... other params
+      totalLessons: subjectData.lessons.length // <-- ADD THIS LINE
+    },
+  });
+};
 
   return (
     <Pressable onPress={handlePress} style={styles.lessonItem}>

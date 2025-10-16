@@ -1,161 +1,67 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, FieldValue, arrayUnion, arrayRemove  } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove } from "firebase/firestore"; 
 import { db } from '../firebase';
 
+// --- User Profile Functions ---
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
   try {
     const userDocRef = doc(db, 'users', uid);
     const userDocSnap = await getDoc(userDocRef);
-    if (userDocSnap.exists()) {
-      return { uid, ...userDocSnap.data() };
-    } else {
-      console.warn("No user profile found in Firestore for UID:", uid);
-      return null;
-    }
+    return userDocSnap.exists() ? userDocSnap.data() : null;
   } catch (error) {
     console.error("Error fetching user profile:", error);
     return null;
   }
 };
 
+export const updateUserProfile = async (uid, data) => {
+  if (!uid) throw new Error("User ID is required to update profile.");
+  const userDocRef = doc(db, 'users', uid);
+  await updateDoc(userDocRef, data);
+};
+
+// --- Educational Content Functions ---
 export const getEducationalPaths = async () => {
   try {
     const pathsCollectionRef = collection(db, 'educationalPaths');
     const querySnapshot = await getDocs(pathsCollectionRef);
-    const paths = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    return paths;
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error("Error fetching educational paths:", error);
     return [];
   }
 };
 
-export const updateUserProfile = async (uid, data) => {
-  if (!uid) throw new Error("User ID is required to update profile.");
-  try {
-    const userDocRef = doc(db, 'users', uid);
-    await updateDoc(userDocRef, data);
-  } catch (error) {
-    console.error("Error updating user profile:", error);
-    throw error;
-  }
-};
 export const getEducationalPathById = async (pathId) => {
   if (!pathId) return null;
-  try {
-    const pathDocRef = doc(db, 'educationalPaths', pathId);
-    const pathDocSnap = await getDoc(pathDocRef);
-    if (pathDocSnap.exists()) {
-      return { id: pathDocSnap.id, ...pathDocSnap.data() };
-    } else {
-      console.warn("No educational path found for ID:", pathId);
-      return null;
-    }
-  } catch (error) {
-    console.error("Error fetching educational path by ID:", error);
-    return null;
-  }
+  const pathDocRef = doc(db, 'educationalPaths', pathId);
+  const pathDocSnap = await getDoc(pathDocRef);
+  return pathDocSnap.exists() ? { id: pathDocSnap.id, ...pathDocSnap.data() } : null;
 };
 
 export const getSubjectDetails = async (pathId, subjectId) => {
-  if (!pathId || !subjectId) {
-    console.error("Path ID and Subject ID are required.");
-    return null;
-  }
-  
-  console.log(`--- Searching for Subject ---`);
-  console.log(`Path ID received: ${pathId}`);
-  console.log(`Subject ID received: ${subjectId}`);
-
+  if (!pathId || !subjectId) return null;
   try {
     const pathDoc = await getEducationalPathById(pathId);
-    
-    if (pathDoc && pathDoc.subjects) {
-      console.log('Available subject IDs in this path:');
-      pathDoc.subjects.forEach(sub => console.log(`- ${sub.id}`)); // Log all available IDs
-
+    if (pathDoc?.subjects) {
       const subject = pathDoc.subjects.find(sub => sub.id === subjectId);
-
-      if (subject) {
-        console.log('SUCCESS: Subject found!', subject.name);
-        return subject;
-      } else {
-        console.error(`ERROR: Subject with ID "${subjectId}" NOT FOUND in the path.`);
-        return null; 
-      }
+      return subject || null;
     }
-    
-    console.warn(`Path with ID ${pathId} not found or has no subjects.`);
     return null;
-
   } catch (error) {
-    console.error("Error inside getSubjectDetails:", error);
+    console.error("Error getting subject details:", error);
     return null;
   }
 };
 
-/**
- * Gets a user's progress for a specific subject. If no progress exists, it creates a default entry.
- * @param {string} userId - The user's ID.
- * @param {string} pathId - The educational path ID.
- * @param {string} subjectId - The subject ID.
- * @returns {object} The user's progress data for that subject.
- */
-export const getUserProgressForSubject = async (userId, pathId, subjectId) => {
-  const progressRef = doc(db, `userProgress/${userId}`);
-  const progressSnap = await getDoc(progressRef);
-
-  if (progressSnap.exists() && progressSnap.data()?.[pathId]?.subjects?.[subjectId]) {
-    console.log("Found existing user progress.");
-    return progressSnap.data()[pathId].subjects[subjectId];
-  } else {
-    console.log("No progress found, creating default entry.");
-    // Create a default structure. In a real app, you might unlock the first lesson here.
-    const defaultProgress = {
-      progress: 0,
-      lessons: {}, // Initially no lessons are completed
-    };
-    
-    // Using setDoc with merge: true to avoid overwriting other subjects/paths
-    await setDoc(progressRef, {
-      [pathId]: {
-        subjects: {
-          [subjectId]: defaultProgress
-        }
-      }
-    }, { merge: true });
-
-    return defaultProgress;
-  }
+export const getLessonContent = async (lessonId) => {
+  if (!lessonId) return null;
+  const lessonRef = doc(db, 'lessonsContent', lessonId);
+  const lessonSnap = await getDoc(lessonRef);
+  return lessonSnap.exists() ? lessonSnap.data() : null;
 };
 
-/**
- * Updates the status of a specific lesson for a user.
- * @param {string} userId - The user's ID.
- * @param {string} pathId - The educational path ID.
- * @param {string} subjectId - The subject ID.
- * @param {string} lessonId - The lesson ID to update.
- * @param {string} status - The new status ('completed', 'current', etc.).
- */
-export const updateLessonStatus = async (userId, pathId, subjectId, lessonId, status) => {
-  const progressRef = doc(db, `userProgress/${userId}`);
-  // Use dot notation for updating nested fields
-  const lessonKey = `${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
-  
-  await updateDoc(progressRef, {
-    [lessonKey]: status
-    // Here you would also add logic to recalculate and update subject/path progress
-  });
-};
-// --- NEW, MORE GENERAL FUNCTION ---
-/**
- * Fetches the entire user progress document.
- * @param {string} userId - The user's ID.
- * @returns {object|null} The entire progress document or null if it doesn't exist.
- */
+// --- User Progress Functions ---
 export const getUserProgressDocument = async (userId) => {
   if (!userId) return null;
   const progressRef = doc(db, `userProgress/${userId}`);
@@ -163,36 +69,35 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
-// --- ENHANCED UPDATE FUNCTION ---
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
   const favoriteKey = 'favorites.subjects';
-
-  // This ensures the document and the 'favorites' map exist before trying to update the array.
+  
   await setDoc(progressRef, { 
     favorites: { 
       subjects: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId) 
     } 
-  }, { merge: true }); // merge:true is the key to not overwriting other data.
-  
-  console.log(`Successfully updated favorites for subject ${subjectId}`);
+  }, { merge: true });
 };
 
-/**
- * Fetches the content for a specific lesson.
- * @param {string} lessonId - The ID of the lesson to fetch.
- * @returns {object|null} The lesson content document or null.
- */
-export const getLessonContent = async (lessonId) => {
-  if (!lessonId) return null;
-  const lessonRef = doc(db, 'lessonsContent', lessonId);
-  const lessonSnap = await getDoc(lessonRef);
+export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
+  if (!userId || !pathId || !subjectId || !lessonId || !status) return;
+  const progressRef = doc(db, `userProgress/${userId}`);
+  const lessonKey = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
+  
+  await setDoc(progressRef, {
+    pathProgress: { [pathId]: { subjects: { [subjectId]: { lessons: { [lessonId]: status } } } } }
+  }, { merge: true });
 
-  if (lessonSnap.exists()) {
-    return lessonSnap.data();
-  } else {
-    console.warn(`Lesson content not found for ID: ${lessonId}`);
-    return null;
+  if (status === 'completed') {
+    const progressDoc = await getUserProgressDocument(userId);
+    const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
+    
+    const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
+    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
+
+    const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
+    await updateDoc(progressRef, { [progressKey]: newProgress });
   }
 };

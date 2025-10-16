@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,8 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
-// --- Memoized LessonItem Component for PEAK PERFORMANCE ---
-// It now receives 'totalLessons' as a prop from its parent.
+// --- Memoized LessonItem Component (No changes needed here) ---
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
 
@@ -26,7 +26,6 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const icon = getIcon();
 
   const handlePress = () => {
-    console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
     router.push({
       pathname: '/(tabs)/lesson-view',
       params: { 
@@ -34,7 +33,7 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
         lessonTitle: item.title,
         subjectId: subjectId, 
         pathId: pathId,
-        totalLessons: totalLessons // Pass the total number of lessons to the next screen
+        totalLessons: totalLessons
       },
     });
   };
@@ -64,8 +63,12 @@ export default function SubjectDetailsScreen() {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      // --- FIX STARTS HERE (1/2) ---
+      // إعادة تعيين الحالة لتجنب عرض حالة قديمة من مادة سابقة أثناء التحميل
       setSubjectData(null);
       setUserProgress(null);
+      setIsFavorite(false); 
+      // --- END OF PART 1 ---
 
       if (!user || !params.id) {
         setIsLoading(false);
@@ -80,24 +83,29 @@ export default function SubjectDetailsScreen() {
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setUserProgress(progressDoc || {});
-        if (progressDoc?.favorites?.subjects?.includes(params.id)) {
-          setIsFavorite(true);
-        } else {
-          setIsFavorite(false);
-        }
+
+        // --- FIX STARTS HERE (2/2) ---
+        // هذا هو المنطق الحاسم: تحقق من المستند الذي تم جلبه مباشرة من Firestore
+        // واستخدمه لتعيين الحالة الأولية للنجمة.
+        const isSubFavorited = progressDoc?.favorites?.subjects?.includes(params.id) || false;
+        setIsFavorite(isSubFavorited);
+        // --- END OF PART 2 ---
       }
       setIsLoading(false);
     };
     
     fetchData();
-  }, [user, params.id]);
+  }, [user, params.id]); // useEffect سيعمل في كل مرة يتغير فيها المستخدم أو معرف المادة
 
   const handleFavoritePress = async () => {
     const newFavoriteState = !isFavorite;
+    // تحديث واجهة المستخدم فورًا لتجربة مستخدم سلسة (Optimistic Update)
     setIsFavorite(newFavoriteState);
+    // ثم قم بتحديث قاعدة البيانات في الخلفية
     await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
   };
 
+  // ... (بقية الكود الخاص بالعرض يبقى كما هو بدون تغيير) ...
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
@@ -164,8 +172,6 @@ export default function SubjectDetailsScreen() {
             item={item} 
             subjectId={params.id} 
             pathId={user.selectedPathId}
-            // --- THE FIX IS HERE ---
-            // We pass the total number of lessons to the child component
             totalLessons={subjectData.lessons.length} 
           />
         )}
@@ -182,7 +188,7 @@ export default function SubjectDetailsScreen() {
   );
 }
 
-// --- Professional Styles ---
+// --- Styles (No changes needed here) ---
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
   container: { flex: 1, backgroundColor: '#0C0F27' },

@@ -69,16 +69,19 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
+
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
-  const favoriteKey = 'favorites.subjects';
   
-  await setDoc(progressRef, { 
-    favorites: { 
-      subjects: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId) 
-    } 
-  }, { merge: true });
+  // --- THE FIX IS HERE ---
+  // نستخدم 'updateDoc' لتعديل حقل معين بدلاً من دمج المستند بأكمله.
+  // نستخدم "dot notation" للوصول إلى المصفوفة المتداخلة 'subjects'.
+  // هذا يضمن أن العمليات الذرية 'arrayUnion' و 'arrayRemove' تعمل بشكل صحيح
+  // دون التأثير على أي حقول أخرى داخل الكائن 'favorites' (مثل 'favorites.lessons').
+  await updateDoc(progressRef, {
+    'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
+  });
 };
 
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {

@@ -98,11 +98,13 @@ export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) =
   }
 };
 
+
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
   const progressRef = doc(db, `userProgress/${userId}`);
   const lessonKey = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
   
+  // هذا الكود صحيح لأنه يستخدم setDoc مع merge، والذي ينشئ المستند إذا لم يكن موجودًا
   await setDoc(progressRef, {
     pathProgress: { [pathId]: { subjects: { [subjectId]: { lessons: { [lessonId]: status } } } } }
   }, { merge: true });

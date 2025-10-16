@@ -69,19 +69,33 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
-
+// --- THE ROBUST FIX IS HERE ---
+// هذه هي النسخة النهائية والقوية التي تعالج جميع الحالات
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
-  
-  // --- THE FIX IS HERE ---
-  // نستخدم 'updateDoc' لتعديل حقل معين بدلاً من دمج المستند بأكمله.
-  // نستخدم "dot notation" للوصول إلى المصفوفة المتداخلة 'subjects'.
-  // هذا يضمن أن العمليات الذرية 'arrayUnion' و 'arrayRemove' تعمل بشكل صحيح
-  // دون التأثير على أي حقول أخرى داخل الكائن 'favorites' (مثل 'favorites.lessons').
-  await updateDoc(progressRef, {
-    'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
-  });
+
+  try {
+    // 1. نحاول التحديث أولاً. هذا سينجح 99% من الوقت للمستخدمين الحاليين.
+    await updateDoc(progressRef, {
+      'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
+    });
+  } catch (error) {
+    // 2. إذا فشل التحديث، نتحقق من السبب.
+    // إذا كان السبب هو أن المستند غير موجود (مستخدم جديد)، فإننا ننشئه.
+    if (error.code === 'not-found') {
+      console.log("User progress document not found, creating a new one...");
+      await setDoc(progressRef, {
+        favorites: {
+          // بما أن هذا هو أول إجراء تفضيل، فمن المؤكد أن isFavorite ستكون true
+          subjects: isFavorite ? [subjectId] : [] 
+        }
+      }, { merge: true }); // نستخدم merge لضمان عدم الكتابة فوق حقول أخرى إذا تم إنشاؤها بطريقة ما
+    } else {
+      // 3. لأي خطأ آخر، نقوم بتسجيله لتصحيحه لاحقًا.
+      console.error("An unexpected error occurred while updating favorite subject:", error);
+    }
+  }
 };
 
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {

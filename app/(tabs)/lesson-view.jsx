@@ -46,14 +46,15 @@ export default function LessonViewScreen() {
 
   // --- التغيير هنا ---
   // جعلنا هذه الدالة أكثر أمانًا
-  const handleCompleteLesson = async () => {
-    // إذا لم يكن هناك مستخدم، أو إذا تم بالفعل إرسال طلب الإكمال، لا تفعل شيئًا
-    if (completionFired || !user) return;
-    
-    console.log(`Lesson completed: ${lessonId}. Firing update.`);
-    setCompletionFired(true); // نرفع العلم لمنع الإرسال مرة أخرى
-    await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
-  };
+        const handleCompleteLesson = async () => {
+          if (isCompleted || isUpdating || !user) return; // منع الاستدعاءات المتعددة
+          
+          setIsUpdating(true); // بدء التحديث
+          console.log('Lesson completed!');
+          await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
+          setIsCompleted(true); // تمييز الدرس كمكتمل في هذه الجلسة
+          setIsUpdating(false); // انتهاء التحديث
+        };
 
   return (
     <SafeAreaView style={styles.container}>

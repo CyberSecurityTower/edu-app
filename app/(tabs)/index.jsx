@@ -1,36 +1,28 @@
-import React, { useState, useCallback } from 'react'; // --- تغيير: استيراد useCallback
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../_layout';
-import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
+import { getEducationalPathById, listenToUserProgress } from '../../services/firestoreService'; // استيراد الدالة الجديدة
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router'; // --- تغيير: استيراد useFocusEffect
+import { useRouter, useFocusEffect } from 'expo-router';
 
 const SubjectCard = ({ item }) => {
   const router = useRouter();
-  
   const total = item.totalLessons || 0;
   const completed = item.completedLessons || 0;
   const progress = item.progress || 0;
 
   const handlePress = () => {
-    router.push({
-      pathname: '/subject-details',
-      params: { id: item.id, name: item.name }
-    });
+    router.push({ pathname: '/subject-details', params: { id: item.id, name: item.name } });
   };
 
   return (
     <Pressable style={styles.cardContainer} onPress={handlePress}>
       <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
-        <View style={styles.iconContainer}>
-          <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
-        </View>
+        <View style={styles.iconContainer}><FontAwesome5 name={item.icon || 'book'} size={32} color="white" /></View>
         <Text style={styles.cardTitle}>{item.name}</Text>
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { width: `${progress}%` }]} />
-        </View>
+        <View style={styles.progressContainer}><View style={[styles.progressBar, { width: `${progress}%` }]} /></View>
         <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
       </LinearGradient>
     </Pressable>
@@ -41,54 +33,57 @@ const HomeScreen = () => {
   const { user } = useAppState();
   const [mergedSubjects, setMergedSubjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // سنحتفظ ببيانات المسار الثابتة في حالة منفصلة
+  const [pathDetails, setPathDetails] = useState(null);
 
-  // --- ✨ التغيير الجذري هنا: استبدال useEffect بـ useFocusEffect ✨ ---
+  // الخطوة الأولى: جلب بيانات المسار الثابتة مرة واحدة
+  useEffect(() => {
+    const fetchPathData = async () => {
+      if (user && user.selectedPathId) {
+        const details = await getEducationalPathById(user.selectedPathId);
+        setPathDetails(details);
+      }
+    };
+    fetchPathData();
+  }, [user]);
+
+  // الخطوة الثانية: إعداد المستمع للبيانات الديناميكية (تقدم المستخدم)
   useFocusEffect(
     useCallback(() => {
-      const fetchAndMergeData = async () => {
-        if (!user || !user.selectedPathId) {
-          setIsLoading(false);
-          return;
-        }
+      if (!user || !pathDetails) {
+        setIsLoading(false);
+        return;
+      }
+
+      // بدء الاستماع...
+      const unsubscribe = listenToUserProgress(user.uid, (userProgress) => {
+        // هذا الكود سيعمل فورًا، ثم مرة أخرى مع كل تحديث
+        console.log("Home screen received progress update via listener.");
         
-        try {
-          setIsLoading(true); // إظهار التحميل عند كل تركيز لضمان عرض البيانات المحدثة
-          const [pathDetails, userProgress] = await Promise.all([
-            getEducationalPathById(user.selectedPathId),
-            getUserProgressDocument(user.uid)
-          ]);
+        const subjectsWithProgress = pathDetails.subjects.map(subject => {
+          const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
+          const completedLessonsCount = progressData?.lessons 
+            ? Object.values(progressData.lessons).filter(status => status === 'completed').length
+            : 0;
+          return {
+            ...subject,
+            progress: progressData?.progress || 0,
+            completedLessons: completedLessonsCount,
+            totalLessons: subject.lessons?.length || 0,
+          };
+        });
+        
+        setMergedSubjects(subjectsWithProgress);
+        setIsLoading(false);
+      });
 
-          if (pathDetails && pathDetails.subjects) {
-            const subjectsWithProgress = pathDetails.subjects.map(subject => {
-              const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
-              
-              const completedLessonsCount = progressData?.lessons 
-                ? Object.values(progressData.lessons).filter(status => status === 'completed').length
-                : 0;
-
-              return {
-                ...subject,
-                progress: progressData?.progress || 0,
-                completedLessons: completedLessonsCount,
-                totalLessons: subject.lessons?.length || 0,
-              };
-            });
-            setMergedSubjects(subjectsWithProgress);
-          }
-        } catch (error) {
-          console.error("Failed to fetch and merge data:", error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      fetchAndMergeData();
-
-      // الدالة التي يتم إرجاعها هنا تعمل عند مغادرة الشاشة (اختياري)
+      // الأهم: إيقاف الاستماع عند مغادرة الشاشة
       return () => {
-        // يمكننا تنظيف أي شيء هنا إذا احتجنا لذلك
+        console.log("Unsubscribing from Home screen listener.");
+        unsubscribe();
       };
-    }, [user]) // الاعتماد على user فقط
+    }, [user, pathDetails]) // إعادة تشغيل المستمع إذا تغير المستخدم أو المسار
   );
 
   if (isLoading) {
@@ -106,26 +101,18 @@ const HomeScreen = () => {
           <>
             <Text style={styles.headerTitle}>Hello, {user?.firstName}!</Text>
             <View style={styles.searchContainer}>
-              <FontAwesome5 name="search" size={18} color="#8A94A4" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search for a subject or lesson..."
-                placeholderTextColor="#8A94A4"
-              />
+              <FontAwesome5 name="search" size={18} color="#8A94A4" /><TextInput style={styles.searchInput} placeholder="Search for a subject or lesson..." placeholderTextColor="#8A94A4" />
             </View>
             <Text style={styles.sectionTitle}>My Subjects</Text>
           </>
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No subjects available for this path yet.</Text>
-          </View>
-        }
+        ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>No subjects available for this path yet.</Text></View>}
       />
     </SafeAreaView>
   );
 };
 
+// الأنماط تبقى كما هي
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   container: { flex: 1, backgroundColor: '#0C0F27' },

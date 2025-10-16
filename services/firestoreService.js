@@ -113,3 +113,26 @@ export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, 
   await setDoc(progressRef, updatePayload, { merge: true });
   console.log("Lesson progress updated successfully with new percentage.");
 };
+
+// --- ✨ الدالة الجديدة للاستماع في الوقت الفعلي ✨ ---
+export const listenToUserProgress = (userId, callback) => {
+  if (!userId) {
+    // إذا لم يكن هناك مستخدم، قم باستدعاء الكولباك بـ null وأرجع دالة إلغاء اشتراك فارغة
+    callback(null);
+    return () => {};
+  }
+
+  const progressRef = doc(db, `userProgress/${userId}`);
+  
+  // onSnapshot ترجع دالة "unsubscribe" التي نستخدمها لإيقاف الاستماع
+  const unsubscribe = onSnapshot(progressRef, (docSnap) => {
+    // في كل مرة يتغير فيها المستند، سيتم استدعاء هذا الكود
+    const data = docSnap.exists() ? docSnap.data() : null;
+    callback(data); // نرسل البيانات الجديدة إلى الشاشة
+  }, (error) => {
+    console.error("Error listening to user progress:", error);
+    callback(null); // في حالة حدوث خطأ، أرسل null
+  });
+
+  return unsubscribe; // أرجع دالة إلغاء الاشتراك ليتم استخدامها عند مغادرة الشاشة
+};

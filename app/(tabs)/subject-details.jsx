@@ -1,37 +1,28 @@
-import React, { useState, memo, useCallback } from 'react'; // --- تغيير: استيراد useCallback
+import React, { useState, memo, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'; // --- تغيير: استيراد useFocusEffect
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails, getUserProgressDocument } from '../../services/firestoreService';
+import { getSubjectDetails, listenToUserProgress } from '../../services/firestoreService'; // استيراد الدالة الجديدة
 import { useAppState } from '../_layout';
 
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
-
   const getIcon = () => {
     switch (item.status) {
       case 'completed': return { name: 'check-circle', color: '#10B981', solid: true };
       case 'current': return { name: 'play-circle', color: '#3B82F6', solid: true };
-      case 'locked': default: return { name: 'play', color: '#9CA3AF', solid: true };
+      default: return { name: 'play', color: '#9CA3AF', solid: true };
     }
   };
   const icon = getIcon();
-
   const handlePress = () => {
     router.push({
       pathname: '/(tabs)/lesson-view',
-      params: { 
-        lessonId: item.id, 
-        lessonTitle: item.title,
-        subjectId: subjectId, 
-        pathId: pathId,
-        totalLessons: totalLessons
-      },
+      params: { lessonId: item.id, lessonTitle: item.title, subjectId, pathId, totalLessons },
     });
   };
-
   return (
     <Pressable onPress={handlePress} style={styles.lessonItem}>
       <View style={{ flex: 1, marginRight: 10 }}>
@@ -49,38 +40,50 @@ export default function SubjectDetailsScreen() {
   const { user } = useAppState();
 
   const [subjectData, setSubjectData] = useState(null);
-  const [userProgress, setUserProgress] = useState(null);
+  const [mergedLessons, setMergedLessons] = useState([]);
+  const [progress, setProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // --- ✨ التغيير الجذري هنا: استبدال useEffect بـ useFocusEffect ✨ ---
+
+  // الخطوة الأولى: جلب بيانات المادة الثابتة مرة واحدة
+  useEffect(() => {
+    const fetchSubjectData = async () => {
+      if (user && user.selectedPathId && params.id) {
+        const details = await getSubjectDetails(user.selectedPathId, params.id);
+        setSubjectData(details);
+      }
+    };
+    fetchSubjectData();
+  }, [user, params.id]);
+
+  // الخطوة الثانية: إعداد المستمع للبيانات الديناميكية
   useFocusEffect(
     useCallback(() => {
-      const fetchData = async () => {
-        if (!user || !params.id) {
-          setIsLoading(false);
-          return;
-        }
+      if (!user || !subjectData) {
+        setIsLoading(false);
+        return;
+      }
+
+      const unsubscribe = listenToUserProgress(user.uid, (userProgress) => {
+        console.log("Subject Details received progress update via listener.");
+        const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
         
-        try {
-          setIsLoading(true);
-          const [subjectDetails, progressDoc] = await Promise.all([
-            getSubjectDetails(user.selectedPathId, params.id),
-            getUserProgressDocument(user.uid),
-          ]);
-          
-          if (subjectDetails) {
-            setSubjectData(subjectDetails);
-            setUserProgress(progressDoc || {});
-          }
-        } catch (error) {
-          console.error("Error fetching subject details:", error);
-        } finally {
-          setIsLoading(false);
-        }
+        const lessons = Array.isArray(subjectData.lessons)
+          ? subjectData.lessons.map(lesson => ({
+              ...lesson,
+              status: subjectProgress?.lessons?.[lesson.id] || 'locked',
+            }))
+          : [];
+        
+        setMergedLessons(lessons);
+        setProgress(subjectProgress?.progress || 0);
+        setIsLoading(false);
+      });
+
+      return () => {
+        console.log("Unsubscribing from Subject Details listener.");
+        unsubscribe();
       };
-      
-      fetchData();
-    }, [user, params.id]) // الاعتماد على user و params.id
+    }, [user, subjectData])
   );
 
   if (isLoading) {
@@ -92,30 +95,15 @@ export default function SubjectDetailsScreen() {
       <SafeAreaView style={styles.centerContainer}>
         <FontAwesome5 name="exclamation-triangle" size={48} color="#EF4444" />
         <Text style={styles.errorText}>Could not load subject details.</Text>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </Pressable>
+        <Pressable onPress={() => router.back()} style={styles.backButton}><Text style={styles.backButtonText}>Go Back</Text></Pressable>
       </SafeAreaView>
     );
   }
 
-  const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
-  
-  const mergedLessons = Array.isArray(subjectData.lessons)
-    ? subjectData.lessons.map(lesson => ({
-        ...lesson,
-        status: subjectProgress?.lessons?.[lesson.id] || 'locked',
-      }))
-    : [];
-
-  const progress = subjectProgress?.progress || 0;
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
-          <FontAwesome5 name="arrow-left" size={22} color="white" />
-        </Pressable>
+        <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
@@ -124,12 +112,7 @@ export default function SubjectDetailsScreen() {
       </View>
 
       <View style={styles.progressContainer}>
-        <LinearGradient
-          colors={['#10B981', '#34D399']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.progressBar, { width: `${progress}%` }]}
-        />
+        <LinearGradient colors={['#10B981', '#34D399']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.progressBar, { width: `${progress}%` }]} />
       </View>
 
       <Text style={styles.sectionTitle}>Lessons</Text>
@@ -137,27 +120,15 @@ export default function SubjectDetailsScreen() {
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <LessonItem 
-            item={item} 
-            subjectId={params.id} 
-            pathId={user.selectedPathId}
-            totalLessons={subjectData.lessons.length} 
-          />
-        )}
+        renderItem={({ item }) => <LessonItem item={item} subjectId={params.id} pathId={user.selectedPathId} totalLessons={subjectData.lessons.length} />}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <FontAwesome5 name="book-dead" size={60} color="#4B5563" />
-            <Text style={styles.emptyText}>No lessons have been added yet.</Text>
-            <Text style={styles.emptySubtext}>Check back soon!</Text>
-          </View>
-        }
+        ListEmptyComponent={<View style={styles.emptyContainer}><FontAwesome5 name="book-dead" size={60} color="#4B5563" /><Text style={styles.emptyText}>No lessons have been added yet.</Text><Text style={styles.emptySubtext}>Check back soon!</Text></View>}
       />
     </SafeAreaView>
   );
 }
 
+// الأنماط تبقى كما هي
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
   container: { flex: 1, backgroundColor: '#0C0F27' },

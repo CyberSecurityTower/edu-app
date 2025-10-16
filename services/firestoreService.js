@@ -1,5 +1,6 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove } from "firebase/firestore"; 
-import { db } from '../firebase';
+
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore"; 
+import { db } from '../firebase'; // المسار الصحيح: ../ يذهب من مجلد services إلى المجلد الرئيسي
 
 // --- User Profile Functions ---
 export const getUserProfile = async (uid) => {

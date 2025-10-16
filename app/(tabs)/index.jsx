@@ -1,91 +1,109 @@
 
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove } from "firebase/firestore"; 
-import { db } from '../firebase';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppState } from '../_layout';
+import { getEducationalPathById } from '../../services/firestoreService';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
-// --- User Profile Functions ---
-export const getUserProfile = async (uid) => {
-  if (!uid) return null;
-  try {
-    const userDocRef = doc(db, 'users', uid);
-    const userDocSnap = await getDoc(userDocRef);
-    return userDocSnap.exists() ? userDocSnap.data() : null;
-  } catch (error) {
-    console.error("Error fetching user profile:", error);
-    return null;
+const SubjectCard = ({ item }) => {
+  const router = useRouter();
+  const total = parseInt(item.totalLessons, 10) || 0;
+  const completed = parseInt(item.completedLessons, 10) || 0;
+  const progress = total > 0 ? (completed / total) * 100 : 0;
+
+  const handlePress = () => {
+    router.push({
+      pathname: '/subject-details',
+      params: { id: item.id, name: item.name }
+    });
+  };
+
+  return (
+    <Pressable style={styles.cardContainer} onPress={handlePress}>
+      <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
+        <View style={styles.iconContainer}>
+          <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
+        </View>
+        <Text style={styles.cardTitle}>{item.name}</Text>
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        </View>
+        <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+};
+
+const HomeScreen = () => {
+  const { user } = useAppState();
+  const [pathDetails, setPathDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPathData = async () => {
+      if (user && user.selectedPathId) {
+        const details = await getEducationalPathById(user.selectedPathId);
+        setPathDetails(details);
+      }
+      setIsLoading(false);
+    };
+    fetchPathData();
+  }, [user]);
+
+  if (isLoading) {
+    return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={pathDetails?.subjects || []}
+        renderItem={({ item }) => <SubjectCard item={item} />}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        ListHeaderComponent={
+          <>
+            <Text style={styles.headerTitle}>Hello, {user?.firstName}!</Text>
+            <View style={styles.searchContainer}>
+              <FontAwesome5 name="search" size={18} color="#8A94A4" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for a subject or lesson..."
+                placeholderTextColor="#8A94A4"
+              />
+            </View>
+            <Text style={styles.sectionTitle}>My Subjects</Text>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No subjects available for this path yet.</Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
+  );
 };
 
-export const updateUserProfile = async (uid, data) => {
-  if (!uid) throw new Error("User ID is required to update profile.");
-  const userDocRef = doc(db, 'users', uid);
-  await updateDoc(userDocRef, data);
-};
+const styles = StyleSheet.create({
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
+  container: { flex: 1, backgroundColor: '#0C0F27' },
+  headerTitle: { fontSize: 32, fontWeight: 'bold', color: 'white', marginHorizontal: 20, marginTop: 20 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 12, paddingHorizontal: 15, marginHorizontal: 20, marginTop: 20 },
+  searchInput: { flex: 1, color: 'white', fontSize: 16, paddingVertical: 14, marginLeft: 10 },
+  sectionTitle: { fontSize: 22, fontWeight: 'bold', color: 'white', marginHorizontal: 20, marginTop: 30, marginBottom: 10 },
+  cardContainer: { flex: 1, padding: 8 },
+  card: { borderRadius: 16, padding: 20, minHeight: 180, justifyContent: 'space-between' },
+  iconContainer: { alignSelf: 'flex-start', opacity: 0.8 },
+  cardTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginTop: 10 },
+  progressContainer: { height: 4, backgroundColor: 'rgba(255, 255, 255, 0.3)', borderRadius: 2, marginTop: 10 },
+  progressBar: { height: '100%', backgroundColor: 'white', borderRadius: 2 },
+  cardSubtitle: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 12, marginTop: 5 },
+  emptyContainer: { marginTop: 50, alignItems: 'center' },
+  emptyText: { color: '#a7adb8ff', fontSize: 16 },
+});
 
-// --- Educational Content Functions ---
-export const getEducationalPaths = async () => {
-  try {
-    const pathsCollectionRef = collection(db, 'educationalPaths');
-    const querySnapshot = await getDocs(pathsCollectionRef);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch (error) {
-    console.error("Error fetching educational paths:", error);
-    return [];
-  }
-};
-
-export const getEducationalPathById = async (pathId) => {
-  if (!pathId) return null;
-  const pathDocRef = doc(db, 'educationalPaths', pathId);
-  const pathDocSnap = await getDoc(pathDocRef);
-  return pathDocSnap.exists() ? { id: pathDocSnap.id, ...pathDocSnap.data() } : null;
-};
-
-export const getSubjectDetails = async (pathId, subjectId) => {
-  if (!pathId || !subjectId) return null;
-  try {
-    const pathDoc = await getEducationalPathById(pathId);
-    if (pathDoc?.subjects) {
-      const subject = pathDoc.subjects.find(sub => sub.id === subjectId);
-      return subject || null;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error getting subject details:", error);
-    return null;
-  }
-};
-
-export const getLessonContent = async (lessonId) => {
-  if (!lessonId) return null;
-  const lessonRef = doc(db, 'lessonsContent', lessonId);
-  const lessonSnap = await getDoc(lessonRef);
-  return lessonSnap.exists() ? lessonSnap.data() : null;
-};
-
-// --- User Progress Functions ---
-export const getUserProgressDocument = async (userId) => {
-  if (!userId) return null;
-  const progressRef = doc(db, `userProgress/${userId}`);
-  const progressSnap = await getDoc(progressRef);
-  return progressSnap.exists() ? progressSnap.data() : null;
-};
-
-export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
-  if (!userId || !pathId || !subjectId || !lessonId || !status) return;
-  const progressRef = doc(db, `userProgress/${userId}`);
-  
-  await setDoc(progressRef, {
-    pathProgress: { [pathId]: { subjects: { [subjectId]: { lessons: { [lessonId]: status } } } } }
-  }, { merge: true });
-
-  if (status === 'completed') {
-    const progressDoc = await getUserProgressDocument(userId);
-    const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
-    
-    const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
-    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
-
-    const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
-    await updateDoc(progressRef, { [progressKey]: newProgress });
-  }
-};
+export default HomeScreen;

@@ -111,10 +111,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(setup)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="subject-details"
-        options={{ headerShown: false, animation: 'slide_from_right' }}
-      />
+      {/* The extra screen definition for "subject-details" is now removed. */}
     </Stack>
   );
 }

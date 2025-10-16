@@ -13,12 +13,12 @@ import { useRouter } from 'expo-router';
       const completed = parseInt(item.completedLessons, 10) || 0;
       const progress = total > 0 ? (completed / total) * 100 : 0;
 
-      const handlePress = () => {
-        router.push({
-          pathname: '/subject-details', // Navigate to the new file
-          params: { id: item.id, name: item.name }
-        });
-      };
+const handlePress = () => {
+  router.push({
+    pathname: '/subject-details', // This is now correct and unambiguous
+    params: { id: item.id, name: item.name }
+  });
+};
 
       return (
         <Pressable style={styles.cardContainer} onPress={handlePress}>

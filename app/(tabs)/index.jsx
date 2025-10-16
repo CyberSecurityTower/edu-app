@@ -1,51 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../_layout';
-import { getEducationalPathById } from '../../services/firestoreService';
+import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-
-const SubjectCard = ({ item }) => {
-  const router = useRouter();
-  const total = parseInt(item.totalLessons, 10) || 0;
-  const completed = parseInt(item.completedLessons, 10) || 0;
-  const progress = total > 0 ? (completed / total) * 100 : 0;
-
-  const handlePress = () => {
-    router.push({
-      pathname: '/subject-details',
-      params: { id: item.id, name: item.name }
-    });
-  };
-
-  return (
-    <Pressable style={styles.cardContainer} onPress={handlePress}>
-      <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
-        <View style={styles.iconContainer}>
-          <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
-        </View>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { width: `${progress}%` }]} />
-        </View>
-        <Text style={styles.cardSubtitle}>{`${completed}/${total} Lessons`}</Text>
-      </LinearGradient>
-    </Pressable>
-  );
-};
+import SubjectCard from '../../components/SubjectCard'; // <-- Import the new component
 
 const HomeScreen = () => {
   const { user } = useAppState();
   const [pathDetails, setPathDetails] = useState(null);
+  const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchPathData = async () => {
       if (user && user.selectedPathId) {
-        const details = await getEducationalPathById(user.selectedPathId);
+        // Fetch path details and user progress in parallel for better performance
+        const [details, progressDoc] = await Promise.all([
+          getEducationalPathById(user.selectedPathId),
+          getUserProgressDocument(user.uid)
+        ]);
+
         setPathDetails(details);
+        setUserProgress(progressDoc?.pathProgress?.[user.selectedPathId] || {});
       }
       setIsLoading(false);
     };
@@ -60,7 +37,7 @@ const HomeScreen = () => {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={pathDetails?.subjects || []}
-        renderItem={({ item }) => <SubjectCard item={item} />}
+        renderItem={({ item }) => <SubjectCard item={item} userProgress={userProgress} />} // <-- Use the new component
         keyExtractor={(item) => item.id}
         numColumns={2}
         ListHeaderComponent={
@@ -82,6 +59,7 @@ const HomeScreen = () => {
             <Text style={styles.emptyText}>No subjects available for this path yet.</Text>
           </View>
         }
+        contentContainerStyle={{ paddingHorizontal: 8 }}
       />
     </SafeAreaView>
   );
@@ -90,17 +68,10 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  headerTitle: { fontSize: 32, fontWeight: 'bold', color: 'white', marginHorizontal: 20, marginTop: 20 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 12, paddingHorizontal: 15, marginHorizontal: 20, marginTop: 20 },
+  headerTitle: { fontSize: 32, fontWeight: 'bold', color: 'white', marginHorizontal: 12, marginTop: 20 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 12, paddingHorizontal: 15, marginHorizontal: 12, marginTop: 20 },
   searchInput: { flex: 1, color: 'white', fontSize: 16, paddingVertical: 14, marginLeft: 10 },
-  sectionTitle: { fontSize: 22, fontWeight: 'bold', color: 'white', marginHorizontal: 20, marginTop: 30, marginBottom: 10 },
-  cardContainer: { flex: 1, padding: 8 },
-  card: { borderRadius: 16, padding: 20, minHeight: 180, justifyContent: 'space-between' },
-  iconContainer: { alignSelf: 'flex-start', opacity: 0.8 },
-  cardTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginTop: 10 },
-  progressContainer: { height: 4, backgroundColor: 'rgba(255, 255, 255, 0.3)', borderRadius: 2, marginTop: 10 },
-  progressBar: { height: '100%', backgroundColor: 'white', borderRadius: 2 },
-  cardSubtitle: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 12, marginTop: 5 },
+  sectionTitle: { fontSize: 22, fontWeight: 'bold', color: 'white', marginHorizontal: 12, marginTop: 30, marginBottom: 10 },
   emptyContainer: { marginTop: 50, alignItems: 'center' },
   emptyText: { color: '#a7adb8ff', fontSize: 16 },
 });

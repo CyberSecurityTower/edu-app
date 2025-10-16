@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, onSnapshot } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove } from "firebase/firestore"; 
 import { db } from '../firebase';
 
 // --- User Profile Functions ---
@@ -20,6 +20,7 @@ export const updateUserProfile = async (uid, data) => {
   await updateDoc(userDocRef, data);
 };
 
+// --- Educational Content Functions ---
 export const getEducationalPaths = async () => {
   try {
     const pathsCollectionRef = collection(db, 'educationalPaths');
@@ -56,10 +57,11 @@ export const getSubjectDetails = async (pathId, subjectId) => {
 export const getLessonContent = async (lessonId) => {
   if (!lessonId) return null;
   const lessonRef = doc(db, 'lessonsContent', lessonId);
-  const lessonSnap = await getDoc(lessonSnap);
+  const lessonSnap = await getDoc(lessonRef);
   return lessonSnap.exists() ? lessonSnap.data() : null;
 };
 
+// --- User Progress Functions ---
 export const getUserProgressDocument = async (userId) => {
   if (!userId) return null;
   const progressRef = doc(db, `userProgress/${userId}`);
@@ -67,51 +69,35 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
-// --- ✨ الدالة المصححة ---
-export const listenToUserProgress = (userId, callback) => {
-  if (!userId) {
-    callback(null); // --- ✨ هذا هو السطر الذي كان مفقودًا
-    return () => {}; 
-  }
+export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
+  if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
-  const unsubscribe = onSnapshot(progressRef, (docSnap) => {
-    callback(docSnap.exists() ? docSnap.data() : {}); // أرجع كائنًا فارغًا بدلاً من null لضمان الاستقرار
-  }, (error) => {
-    console.error("Error listening to user progress:", error);
-    callback({}); // أرجع كائنًا فارغًا عند الخطأ أيضًا
-  });
-  return unsubscribe;
+  const favoriteKey = 'favorites.subjects';
+  
+  await setDoc(progressRef, { 
+    favorites: { 
+      subjects: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId) 
+    } 
+  }, { merge: true });
 };
 
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
-  
   const progressRef = doc(db, `userProgress/${userId}`);
-
-  const progressSnap = await getDoc(progressRef);
-  if (!progressSnap.exists()) {
-    await setDoc(progressRef, {});
-  }
-
-  const currentProgressData = (await getDoc(progressRef)).data() || {};
-  const lessonsMap = currentProgressData?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
-
-  if (lessonsMap[lessonId] === status) {
-    return;
-  }
-
-  const updatePayload = {
-    [`pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`]: status
-  };
-
-  const tempLessonsMap = { ...lessonsMap, [lessonId]: status };
-  const completedCount = Object.values(tempLessonsMap).filter(s => s === 'completed').length;
-  const newProgress = totalLessonsInSubject > 0 
-    ? Math.round((completedCount / totalLessonsInSubject) * 100) 
-    : 0;
+  const lessonKey = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
   
-  updatePayload[`pathProgress.${pathId}.subjects.${subjectId}.progress`] = newProgress;
+  await setDoc(progressRef, {
+    pathProgress: { [pathId]: { subjects: { [subjectId]: { lessons: { [lessonId]: status } } } } }
+  }, { merge: true });
 
-  await updateDoc(progressRef, updatePayload);
-  console.log("Lesson progress updated successfully using updateDoc.");
+  if (status === 'completed') {
+    const progressDoc = await getUserProgressDocument(userId);
+    const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
+    
+    const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
+    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
+
+    const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
+    await updateDoc(progressRef, { [progressKey]: newProgress });
+  }
 };

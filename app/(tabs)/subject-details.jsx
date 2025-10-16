@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,23 +8,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
-// --- Memoized LessonItem Component (No changes needed) ---
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
-
   const getIcon = () => {
     switch (item.status) {
-      case 'completed':
-        return { name: 'check-circle', color: '#10B981', solid: true };
-      case 'current':
-        return { name: 'play-circle', color: '#3B82F6', solid: true };
-      case 'locked':
-      default:
-        return { name: 'play', color: '#9CA3AF', solid: true };
+      case 'completed': return { name: 'check-circle', color: '#10B981', solid: true };
+      case 'current': return { name: 'play-circle', color: '#3B82F6', solid: true };
+      default: return { name: 'play', color: '#9CA3AF', solid: true };
     }
   };
   const icon = getIcon();
-
   const handlePress = () => {
     router.push({
       pathname: '/(tabs)/lesson-view',
@@ -31,12 +25,11 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
         lessonId: item.id, 
         lessonTitle: item.title,
         subjectId: subjectId, 
-        pathId: pathId,
+        pathId: pathId, // --- FIX: We now have the correct pathId here
         totalLessons: totalLessons
       },
     });
   };
-
   return (
     <Pressable onPress={handlePress} style={styles.lessonItem}>
       <View style={{ flex: 1, marginRight: 10 }}>
@@ -48,74 +41,65 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   );
 });
 
-// --- Main Screen Component ---
 export default function SubjectDetailsScreen() {
+  // --- FIX: Get pathId directly from navigation parameters ---
   const params = useLocalSearchParams();
+  const { id: subjectId, pathId } = params;
+
   const router = useRouter();
   const { user } = useAppState();
 
   const [subjectData, setSubjectData] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // يبدأ التحميل دائمًا
+  const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
-    // --- THE FINAL BULLETPROOF FIX ---
-    // هذه الدالة لن يتم استدعاؤها إلا عندما تكون جميع البيانات المطلوبة جاهزة.
     const fetchData = async () => {
       try {
+        // --- FIX: Use pathId from params, not from user object ---
         const [subjectDetails, progressDoc] = await Promise.all([
-          getSubjectDetails(user.selectedPathId, params.id),
+          getSubjectDetails(pathId, subjectId),
           getUserProgressDocument(user.uid),
         ]);
         
         if (subjectDetails) {
           setSubjectData(subjectDetails);
           setUserProgress(progressDoc || {});
-          const isSubFavorited = progressDoc?.favorites?.subjects?.includes(params.id) || false;
+          const isSubFavorited = progressDoc?.favorites?.subjects?.includes(subjectId) || false;
           setIsFavorite(isSubFavorited);
         } else {
-          // إذا لم يتم العثور على تفاصيل المادة لسبب ما، تأكد من إيقاف التحميل
           setSubjectData(null);
         }
       } catch (error) {
         console.error("Error fetching subject details:", error);
-        setSubjectData(null); // في حالة حدوث خطأ، قم بتعيين البيانات إلى null لعرض رسالة الخطأ
+        setSubjectData(null);
       } finally {
-        // الأهم: أوقف التحميل دائمًا بعد انتهاء العملية
         setIsLoading(false);
       }
     };
 
-    // هذا هو "الحارس". لن يسمح بتشغيل fetchData إلا عند استيفاء جميع الشروط.
-    // إذا لم تكن الشروط مستوفاة، فإنه لا يفعل شيئًا، ويظل مؤشر التحميل يدور،
-    // في انتظار التحديث التالي لكائن `user` من السياق (Context).
-    if (user && user.uid && user.selectedPathId && params.id) {
+    // The guard: Wait for user.uid AND pathId from params
+    if (user?.uid && pathId && subjectId) {
       fetchData();
-    } else if (user === null) {
-      // إذا اكتملت المصادقة والمستخدم غير مسجل دخوله (user is null)،
-      // أوقف التحميل لمنع الدوران اللانهائي.
+    } else if (!user) {
+      // If auth is still loading, wait. If auth is done and user is null, stop loading.
       setIsLoading(false);
     }
-  }, [user, params.id]); // سيعمل هذا التأثير في كل مرة يتغير فيها كائن المستخدم
+  }, [user, subjectId, pathId]); // Depend on the actual data needed
 
   
   const handleFavoritePress = async () => {
-    if (!user?.uid || !params.id) return;
-
+    if (!user?.uid || !subjectId) return;
     const newFavoriteState = !isFavorite;
     setIsFavorite(newFavoriteState);
-    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
+    await updateUserFavoriteSubject(user.uid, subjectId, newFavoriteState);
   };
 
-  // إذا كان التحميل لا يزال جاريًا، اعرض مؤشر الدوران.
-  // هذا هو الوضع الافتراضي حتى يصبح `user` جاهزًا بالكامل.
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
-  // إذا توقف التحميل ولم يتم العثور على بيانات المادة، اعرض رسالة الخطأ.
-  // هذا سيحدث الآن فقط في حالة وجود خطأ حقيقي (مثل فشل الشبكة).
   if (!subjectData) {
     return (
       <SafeAreaView style={styles.centerContainer}>
@@ -128,7 +112,8 @@ export default function SubjectDetailsScreen() {
     );
   }
 
-  const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
+  // --- FIX: Use pathId from params to get the correct progress ---
+  const subjectProgress = userProgress?.pathProgress?.[pathId]?.subjects?.[subjectId];
   
   const mergedLessons = Array.isArray(subjectData.lessons)
     ? subjectData.lessons.map(lesson => ({
@@ -163,7 +148,6 @@ export default function SubjectDetailsScreen() {
         </Pressable>
       </View>
 
-      {/* ... بقية واجهة المستخدم تبقى كما هي ... */}
       <View style={styles.progressContainer}>
         <LinearGradient
           colors={['#10B981', '#34D399']}
@@ -172,15 +156,17 @@ export default function SubjectDetailsScreen() {
           style={[styles.progressBar, { width: `${progress}%` }]}
         />
       </View>
+
       <Text style={styles.sectionTitle}>Lessons</Text>
+
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <LessonItem 
             item={item} 
-            subjectId={params.id} 
-            pathId={user.selectedPathId}
+            subjectId={subjectId} 
+            pathId={pathId} // --- FIX: Pass the correct pathId down
             totalLessons={subjectData.lessons.length} 
           />
         )}
@@ -197,7 +183,6 @@ export default function SubjectDetailsScreen() {
   );
 }
 
-// --- Styles (No changes needed) ---
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
   container: { flex: 1, backgroundColor: '#0C0F27' },

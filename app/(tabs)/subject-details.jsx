@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -62,19 +61,21 @@ export default function SubjectDetailsScreen() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // --- FIX #1: WAIT FOR A VALID USER OBJECT WITH A UID ---
+      // لا تبدأ في جلب أي شيء إلا إذا كان لدينا كائن مستخدم صالح يحتوي على uid.
+      if (!user || !user.uid || !params.id) {
+        // إذا لم يكن المستخدم جاهزًا بعد، انتظر. useEffect سيعمل مرة أخرى عندما يتغير المستخدم.
+        // قمنا بتعيين isLoading إلى false إذا لم يكن هناك مستخدم لمنع التحميل اللانهائي.
+        if (!user) setIsLoading(false);
+        return; 
+      }
+
       setIsLoading(true);
-      // --- FIX STARTS HERE (1/2) ---
-      // إعادة تعيين الحالة لتجنب عرض حالة قديمة من مادة سابقة أثناء التحميل
       setSubjectData(null);
       setUserProgress(null);
       setIsFavorite(false); 
-      // --- END OF PART 1 ---
-
-      if (!user || !params.id) {
-        setIsLoading(false);
-        return;
-      }
       
+      // الآن نحن متأكدون من أن user.uid موجود
       const [subjectDetails, progressDoc] = await Promise.all([
         getSubjectDetails(user.selectedPathId, params.id),
         getUserProgressDocument(user.uid),
@@ -83,13 +84,8 @@ export default function SubjectDetailsScreen() {
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setUserProgress(progressDoc || {});
-
-        // --- FIX STARTS HERE (2/2) ---
-        // هذا هو المنطق الحاسم: تحقق من المستند الذي تم جلبه مباشرة من Firestore
-        // واستخدمه لتعيين الحالة الأولية للنجمة.
         const isSubFavorited = progressDoc?.favorites?.subjects?.includes(params.id) || false;
         setIsFavorite(isSubFavorited);
-        // --- END OF PART 2 ---
       }
       setIsLoading(false);
     };
@@ -99,16 +95,15 @@ export default function SubjectDetailsScreen() {
 
   
   const handleFavoritePress = async () => {
+    // --- FIX #2: DEFENSIVE CHECK BEFORE SENDING REQUEST ---
+    // كإجراء وقائي إضافي، تحقق مرة أخرى من وجود user.uid قبل إرسال الطلب.
+    if (!user || !user.uid) {
+      console.error("Cannot update favorite: User UID is missing on press.");
+      return; // أوقف العملية إذا كان uid غير موجود لسبب ما.
+    }
+
     const newFavoriteState = !isFavorite;
     setIsFavorite(newFavoriteState);
-
-    // --- DEBUGGING STEP 1: VERIFY DATA BEFORE SENDING ---
-    console.log(`--- Calling Firestore Service ---`);
-    console.log(`User ID: ${user.uid}`);
-    console.log(`Subject ID: ${params.id}`);
-    console.log(`Set as favorite?: ${newFavoriteState}`);
-    console.log(`-----------------------------`);
-
     await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
   };
 
@@ -150,7 +145,13 @@ export default function SubjectDetailsScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        <Pressable onPress={handleFavoritePress} style={styles.headerIcon}>
+        <Pressable 
+          onPress={handleFavoritePress} 
+          style={styles.headerIcon}
+          // --- FIX #3: DISABLE BUTTON IF USER IS NOT READY OR DATA IS LOADING ---
+          // قم بتعطيل الزر إذا كان المستخدم غير جاهز أو إذا كانت البيانات لا تزال قيد التحميل
+          disabled={isLoading || !user || !user.uid}
+        >
           <FontAwesome5 
             name="star" 
             size={22} 

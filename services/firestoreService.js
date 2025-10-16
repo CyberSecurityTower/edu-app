@@ -71,45 +71,70 @@ export const getUserProgressDocument = async (userId) => {
 
 // --- THE FINAL, MANUAL, AND BULLETPROOF FIX ---
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
-  if (!userId || !subjectId) return;
+  // --- DEBUGGING STEP 2: VERIFY DATA RECEIVED ---
+  console.log(`--- Firestore Service Function Started ---`);
+  console.log(`Received User ID: ${userId}`);
+  console.log(`Received Subject ID: ${subjectId}`);
+  console.log(`Received isFavorite: ${isFavorite}`);
+
+  if (!userId || !subjectId) {
+    console.error("Function stopped: Missing userId or subjectId.");
+    return;
+  }
   const progressRef = doc(db, `userProgress/${userId}`);
 
   try {
+    console.log("Step A: Attempting to get document from Firestore...");
     const docSnap = await getDoc(progressRef);
 
-    // الحالة الأولى: المستند موجود، نقوم بتعديله
     if (docSnap.exists()) {
+      console.log("Step B: Document EXISTS. Proceeding with 'Read-Modify-Write'.");
       const progressData = docSnap.data();
       
-      // 1. نقرأ المصفوفة الحالية وننظفها من أي قيم فارغة مثل ""
+      // --- DEBUGGING STEP 3: LOG CURRENT DATA ---
+      console.log("Current document data:", JSON.stringify(progressData, null, 2));
+      
       const currentFavorites = (progressData.favorites?.subjects || []).filter(id => id);
+      console.log("Step C: Read and cleaned current favorites array:", currentFavorites);
 
       let newFavorites;
       if (isFavorite) {
-        // 2. نضيف المادة المفضلة الجديدة، ونستخدم Set لمنع أي تكرار
         newFavorites = [...new Set([...currentFavorites, subjectId])];
+        console.log("Step D: Adding subject. New favorites array will be:", newFavorites);
       } else {
-        // 2. نزيل المادة من المفضلة
         newFavorites = currentFavorites.filter(id => id !== subjectId);
+        console.log("Step D: Removing subject. New favorites array will be:", newFavorites);
       }
       
-      // 3. نكتب المصفوفة النظيفة والجديدة مرة أخرى
+      console.log("Step E: Attempting to 'updateDoc' with new array...");
       await updateDoc(progressRef, {
         'favorites.subjects': newFavorites
       });
+      console.log("SUCCESS: 'updateDoc' completed without error.");
 
     } else {
-      // الحالة الثانية: المستند غير موجود (مستخدم جديد)، نقوم بإنشائه
+      console.log("Step B: Document DOES NOT EXIST. Proceeding to create it.");
       if (isFavorite) {
-        await setDoc(progressRef, {
+        const newDocData = {
           favorites: {
-            subjects: [subjectId] // ننشئها كمصفوفة تحتوي على العنصر الأول
+            subjects: [subjectId]
           }
-        }, { merge: true });
+        };
+        console.log("Step D: Creating new document with data:", JSON.stringify(newDocData, null, 2));
+        console.log("Step E: Attempting to 'setDoc'...");
+        await setDoc(progressRef, newDocData, { merge: true });
+        console.log("SUCCESS: 'setDoc' completed without error.");
+      } else {
+        console.log("Skipping write because isFavorite is false and document doesn't exist.");
       }
     }
   } catch (error) {
-    console.error("A critical error occurred in updateUserFavoriteSubject:", error);
+    // --- DEBUGGING STEP 4: CATCH AND LOG ANY AND ALL ERRORS ---
+    console.error("---!!! CRITICAL ERROR CAUGHT !!!---");
+    console.error("Error Code:", error.code);
+    console.error("Error Message:", error.message);
+    console.error("Full Error Object:", error);
+    console.error("------------------------------------");
   }
 };
 

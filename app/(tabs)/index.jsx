@@ -6,7 +6,8 @@ import { getEducationalPathById } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-
+import { useRouter, useFocusEffect } from 'expo-router'; // Add useFocusEffect
+ import React, { useState, useEffect, useCallback } from 'react'; // Import React and useCallback
     const SubjectCard = ({ item }) => {
       const router = useRouter(); // Initialize router
       const total = parseInt(item.totalLessons, 10) || 0;
@@ -40,16 +41,30 @@ const HomeScreen = () => {
   const [pathDetails, setPathDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchPathData = async () => {
-      if (user && user.selectedPathId) {
-        const details = await getEducationalPathById(user.selectedPathId);
-        setPathDetails(details);
-      }
-      setIsLoading(false);
-    };
-    fetchPathData();
-  }, [user]);
+ useFocusEffect(
+    React.useCallback(() => {
+      const fetchPathData = async () => {
+        if (user && user.selectedPathId) {
+          setIsLoading(true);
+          console.log("HomeScreen focused, fetching data..."); // For debugging
+          const details = await getEducationalPathById(user.selectedPathId);
+          setPathDetails(details);
+          setIsLoading(false);
+        } else {
+          // If there is no user or path, ensure we are not loading and data is null
+          setPathDetails(null); 
+          setIsLoading(false);
+        }
+      };
+
+      fetchPathData();
+
+      // Optional: return a cleanup function if needed
+      return () => {
+        console.log("HomeScreen unfocused.");
+      };
+    }, [user]) // Dependency array ensures the function is re-created if user changes
+  );
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;

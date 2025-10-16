@@ -6,9 +6,10 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
-import { getLessonContent } from '../../services/firestoreService';
+
 // --- Memoized LessonItem Component for PEAK PERFORMANCE ---
-const LessonItem = memo(({ item, subjectId, pathId }) => {
+// It now receives 'totalLessons' as a prop from its parent.
+const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
 
   const getIcon = () => {
@@ -24,15 +25,19 @@ const LessonItem = memo(({ item, subjectId, pathId }) => {
   };
   const icon = getIcon();
 
-const handlePress = () => {
-  router.push({
-    pathname: '/(tabs)/lesson-view',
-    params: { 
-      // ... other params
-      totalLessons: subjectData.lessons.length // <-- ADD THIS LINE
-    },
-  });
-};
+  const handlePress = () => {
+    console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
+    router.push({
+      pathname: '/(tabs)/lesson-view',
+      params: { 
+        lessonId: item.id, 
+        lessonTitle: item.title,
+        subjectId: subjectId, 
+        pathId: pathId,
+        totalLessons: totalLessons // Pass the total number of lessons to the next screen
+      },
+    });
+  };
 
   return (
     <Pressable onPress={handlePress} style={styles.lessonItem}>
@@ -52,13 +57,12 @@ export default function SubjectDetailsScreen() {
   const { user } = useAppState();
 
   const [subjectData, setSubjectData] = useState(null);
-  const [userProgress, setUserProgress] = useState(null); // Holds the ENTIRE progress document
+  const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Immediately reset state for a clean loading experience
       setIsLoading(true);
       setSubjectData(null);
       setUserProgress(null);
@@ -68,7 +72,6 @@ export default function SubjectDetailsScreen() {
         return;
       }
       
-      // 2. Fetch static subject data and the entire user progress document in parallel
       const [subjectDetails, progressDoc] = await Promise.all([
         getSubjectDetails(user.selectedPathId, params.id),
         getUserProgressDocument(user.uid),
@@ -76,9 +79,7 @@ export default function SubjectDetailsScreen() {
       
       if (subjectDetails) {
         setSubjectData(subjectDetails);
-        setUserProgress(progressDoc || {}); // Use the full doc, or an empty object to prevent errors
-        
-        // 3. Reliably check favorite status from the complete progress document
+        setUserProgress(progressDoc || {});
         if (progressDoc?.favorites?.subjects?.includes(params.id)) {
           setIsFavorite(true);
         } else {
@@ -93,8 +94,8 @@ export default function SubjectDetailsScreen() {
 
   const handleFavoritePress = async () => {
     const newFavoriteState = !isFavorite;
-    setIsFavorite(newFavoriteState); // Optimistic UI update for a snappy feel
-    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState); // Persist change in the background
+    setIsFavorite(newFavoriteState);
+    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState);
   };
 
   if (isLoading) {
@@ -113,8 +114,6 @@ export default function SubjectDetailsScreen() {
     );
   }
 
-  // --- DERIVED DATA ---
-  // Logic to extract the specific progress for THIS subject from the larger userProgress object
   const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
   
   const mergedLessons = Array.isArray(subjectData.lessons)
@@ -164,7 +163,10 @@ export default function SubjectDetailsScreen() {
           <LessonItem 
             item={item} 
             subjectId={params.id} 
-            pathId={user.selectedPathId} 
+            pathId={user.selectedPathId}
+            // --- THE FIX IS HERE ---
+            // We pass the total number of lessons to the child component
+            totalLessons={subjectData.lessons.length} 
           />
         )}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}

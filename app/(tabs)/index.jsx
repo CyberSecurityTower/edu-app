@@ -1,27 +1,31 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppState } from '../../_layout'; // CORRECT PATH
-import { getEducationalPathById } from '../../../services/firestoreService'; // CORRECT PATH
+import { useAppState } from '../_layout';
+import { getEducationalPathById } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 
-const SubjectCard = ({ item, userProgress }) => {
+const SubjectCard = ({ item }) => {
   const router = useRouter();
-  const subjectProgressData = userProgress?.subjects?.[item.id];
-  const progress = subjectProgressData?.progress || 0;
-  const completed = Math.round((progress / 100) * (item.lessons?.length || 0));
-  const total = item.lessons?.length || 0;
+  const total = parseInt(item.totalLessons, 10) || 0;
+  const completed = parseInt(item.completedLessons, 10) || 0;
+  const progress = total > 0 ? (completed / total) * 100 : 0;
 
   const handlePress = () => {
-    router.push({ pathname: '/subject-details', params: { id: item.id, name: item.name } });
+    router.push({
+      pathname: '/subject-details',
+      params: { id: item.id, name: item.name }
+    });
   };
 
   return (
     <Pressable style={styles.cardContainer} onPress={handlePress}>
       <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
-        <FontAwesome5 name={item.icon || 'book'} size={32} color="white" style={styles.iconContainer} />
+        <View style={styles.iconContainer}>
+          <FontAwesome5 name={item.icon || 'book'} size={32} color="white" />
+        </View>
         <Text style={styles.cardTitle}>{item.name}</Text>
         <View style={styles.progressContainer}>
           <View style={[styles.progressBar, { width: `${progress}%` }]} />
@@ -37,22 +41,16 @@ const HomeScreen = () => {
   const [pathDetails, setPathDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      const fetchPathData = async () => {
-        if (user && user.selectedPathId) {
-          setIsLoading(true);
-          const details = await getEducationalPathById(user.selectedPathId);
-          setPathDetails(details);
-          setIsLoading(false);
-        } else {
-          setPathDetails(null);
-          setIsLoading(false);
-        }
-      };
-      fetchPathData();
-    }, [user])
-  );
+  useEffect(() => {
+    const fetchPathData = async () => {
+      if (user && user.selectedPathId) {
+        const details = await getEducationalPathById(user.selectedPathId);
+        setPathDetails(details);
+      }
+      setIsLoading(false);
+    };
+    fetchPathData();
+  }, [user]);
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
@@ -62,7 +60,7 @@ const HomeScreen = () => {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={pathDetails?.subjects || []}
-        renderItem={({ item }) => <SubjectCard item={item} userProgress={pathDetails?.progress?.pathProgress?.[user.selectedPathId]} />}
+        renderItem={({ item }) => <SubjectCard item={item} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
         ListHeaderComponent={
@@ -70,12 +68,20 @@ const HomeScreen = () => {
             <Text style={styles.headerTitle}>Hello, {user?.firstName}!</Text>
             <View style={styles.searchContainer}>
               <FontAwesome5 name="search" size={18} color="#8A94A4" />
-              <TextInput style={styles.searchInput} placeholder="Search..." placeholderTextColor="#8A94A4" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for a subject or lesson..."
+                placeholderTextColor="#8A94A4"
+              />
             </View>
             <Text style={styles.sectionTitle}>My Subjects</Text>
           </>
         }
-        ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>No subjects yet.</Text></View>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No subjects available for this path yet.</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );

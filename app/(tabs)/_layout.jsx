@@ -19,7 +19,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: ({ color }) => <FontAwesome5 name="book" size={24} color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} /> }} />
 
-      {/* These two lines are essential for the simple structure */}
       <Tabs.Screen name="subject-details" options={{ href: null }} />
       <Tabs.Screen name="lesson-view" options={{ href: null }} />
     </Tabs>

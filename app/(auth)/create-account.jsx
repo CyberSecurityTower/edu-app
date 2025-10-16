@@ -86,17 +86,26 @@ const handleCreateAccount = async () => {
 
         const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         const user = userCredential.user;
+        // Calculate trial expiry date 
+        const trialPeriodDays = 14;
+        const trialExpiresAt = new Date();
+        trialExpiresAt.setDate(trialExpiresAt.getDate() + trialPeriodDays);
 
-        const newUserProfile = {
-            uid: user.uid,
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
-            email: email.trim().toLowerCase(),
-            createdAt: new Date(),
-            profileStatus: "pending_setup",
-            selectedPathId: null,
-        };
-
+       
+const newUserProfile = {
+    uid: user.uid,
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
+    email: email.trim().toLowerCase(),
+    createdAt: new Date(), // This is important for calculating trial days later
+    profileStatus: "pending_setup",
+    selectedPathId: null,
+    subscription: {
+        plan: "Trial",
+        status: "active",
+        expiresOn: trialExpiresAt, // Store the exact expiry date
+    }
+};
         await setDoc(doc(db, "users", user.uid), newUserProfile);
 
         // We use the new robust deviceId here

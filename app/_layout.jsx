@@ -7,13 +7,11 @@ import { auth } from '../firebase';
 import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 
-// ---------- Context ----------
 const AppStateContext = createContext(null);
 export function useAppState() {
   return useContext(AppStateContext);
 }
 
-// ---------- App State Provider ----------
 function AppStateProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -23,26 +21,16 @@ function AppStateProvider({ children }) {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         const userProfile = await getUserProfile(currentUser.uid);
-        if (userProfile) {
-          setUser(userProfile);
-        } else {
-          setUser({
-            uid: currentUser.uid,
-            email: currentUser.email,
-            profileStatus: 'pending_setup',
-          });
-        }
+        setUser(userProfile || { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' });
       } else {
         setUser(null);
       }
       setAuthLoading(false);
     });
-
     const checkOnboardingStatus = async () => {
       const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
       setHasCompletedOnboarding(hasCompleted === 'true');
     };
-
     checkOnboardingStatus();
     return () => unsubscribeAuth();
   }, []);
@@ -54,17 +42,13 @@ function AppStateProvider({ children }) {
   );
 }
 
-// ---------- Root Navigation (The Gatekeeper) ----------
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (authLoading || hasCompletedOnboarding === null) {
-      return;
-    }
-
+    if (authLoading || hasCompletedOnboarding === null) return;
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
     const inAppGroup = segments[0] === '(tabs)';
@@ -77,10 +61,8 @@ function RootLayoutNav() {
       if (user.profileStatus === 'completed' && !inProtectedGroup) {
         return router.replace('/(tabs)/');
       }
-    } else {
-      if (!inAuthGroup) {
-        return router.replace('/(auth)/');
-      }
+    } else if (!inAuthGroup) {
+      return router.replace('/(auth)/');
     }
   }, [user, segments, authLoading, hasCompletedOnboarding]);
 
@@ -93,31 +75,22 @@ function RootLayoutNav() {
   );
 }
 
-// ---------- Main Layout (Handles Onboarding/Loading UI) ----------
 function MainLayout() {
   const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
-
   const handleOnboardingComplete = async () => {
     await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
     setHasCompletedOnboarding(true);
   };
 
   if (authLoading || hasCompletedOnboarding === null) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10B981" />
-      </View>
-    );
+    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
-
   if (!hasCompletedOnboarding) {
     return <OnboardingScreen onComplete={handleOnboardingComplete} />;
   }
-
   return <RootLayoutNav />;
 }
 
-// ---------- Root Layout (Main Export) ----------
 export default function RootLayout() {
   return (
     <AppStateProvider>
@@ -126,12 +99,6 @@ export default function RootLayout() {
   );
 }
 
-// ---------- Styles ----------
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0C0F27',
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
 });

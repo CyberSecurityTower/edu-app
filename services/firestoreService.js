@@ -150,29 +150,49 @@ export const updateLessonStatus = async (userId, pathId, subjectId, lessonId, st
     // Here you would also add logic to recalculate and update subject/path progress
   });
 };
+// --- NEW, MORE GENERAL FUNCTION ---
+/**
+ * Fetches the entire user progress document.
+ * @param {string} userId - The user's ID.
+ * @returns {object|null} The entire progress document or null if it doesn't exist.
+ */
+export const getUserProgressDocument = async (userId) => {
+  if (!userId) return null;
+  const progressRef = doc(db, `userProgress/${userId}`);
+  const progressSnap = await getDoc(progressRef);
+  return progressSnap.exists() ? progressSnap.data() : null;
+};
+
+// --- ENHANCED UPDATE FUNCTION ---
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
+  const favoriteKey = 'favorites.subjects';
 
-  try {
-    // We use a special 'favorites' map to hold arrays of favorite items
-    const favoriteKey = 'favorites.subjects';
-    
-    await updateDoc(progressRef, {
-      [favoriteKey]: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
-    });
-    console.log(`Successfully updated favorites for subject ${subjectId}`);
-  } catch (error) {
-    // This can happen if the user document or 'favorites' map doesn't exist yet. Let's create it.
-    if (error.code === 'not-found') {
-      await setDoc(progressRef, {
-        favorites: {
-          subjects: [subjectId]
-        }
-      }, { merge: true }); // merge:true is crucial to not overwrite other data
-      console.log(`Created favorites and added subject ${subjectId}`);
-    } else {
-      console.error("Error updating favorite subject:", error);
-    }
+  // This ensures the document and the 'favorites' map exist before trying to update the array.
+  await setDoc(progressRef, { 
+    favorites: { 
+      subjects: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId) 
+    } 
+  }, { merge: true }); // merge:true is the key to not overwriting other data.
+  
+  console.log(`Successfully updated favorites for subject ${subjectId}`);
+};
+
+/**
+ * Fetches the content for a specific lesson.
+ * @param {string} lessonId - The ID of the lesson to fetch.
+ * @returns {object|null} The lesson content document or null.
+ */
+export const getLessonContent = async (lessonId) => {
+  if (!lessonId) return null;
+  const lessonRef = doc(db, 'lessonsContent', lessonId);
+  const lessonSnap = await getDoc(lessonRef);
+
+  if (lessonSnap.exists()) {
+    return lessonSnap.data();
+  } else {
+    console.warn(`Lesson content not found for ID: ${lessonId}`);
+    return null;
   }
 };

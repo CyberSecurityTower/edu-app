@@ -4,22 +4,21 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails, getUserProgressForSubject, updateUserFavoriteSubject } from '../../services/firestoreService';
+import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
-
+import { getLessonContent } from '../../services/firestoreService';
 // --- Memoized LessonItem Component for PEAK PERFORMANCE ---
 const LessonItem = memo(({ item, subjectId, pathId }) => {
   const router = useRouter();
 
   const getIcon = () => {
-    // NEW 3-STATE ICON LOGIC
     switch (item.status) {
-      case 'completed': // انتهيت من الدرس
+      case 'completed':
         return { name: 'check-circle', color: '#10B981', solid: true };
-      case 'current': // الدرس قيد القراءة
+      case 'current':
         return { name: 'play-circle', color: '#3B82F6', solid: true };
-      case 'locked': // This now means "Not Started"
-      default: // لم تبدأ أصلاً
+      case 'locked':
+      default:
         return { name: 'play', color: '#9CA3AF', solid: true };
     }
   };
@@ -56,35 +55,36 @@ export default function SubjectDetailsScreen() {
   const { user } = useAppState();
 
   const [subjectData, setSubjectData] = useState(null);
-  const [progressData, setProgressData] = useState(null);
+  const [userProgress, setUserProgress] = useState(null); // Holds the ENTIRE progress document
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      // --- THE STATE RESET FIX ---
-      // Immediately clear old data and show loader on navigation
+      // 1. Immediately reset state for a clean loading experience
       setIsLoading(true);
       setSubjectData(null);
-      setProgressData(null);
-      // ---------------------------
+      setUserProgress(null);
 
       if (!user || !params.id) {
         setIsLoading(false);
         return;
       }
-      const [subjectDetails, userProgress] = await Promise.all([
+      
+      // 2. Fetch static subject data and the entire user progress document in parallel
+      const [subjectDetails, progressDoc] = await Promise.all([
         getSubjectDetails(user.selectedPathId, params.id),
-        getUserProgressForSubject(user.uid, user.selectedPathId, params.id),
+        getUserProgressDocument(user.uid),
       ]);
       
       if (subjectDetails) {
         setSubjectData(subjectDetails);
-        setProgressData(userProgress);
-        if (userProgress?.favorites?.subjects?.includes(params.id)) {
+        setUserProgress(progressDoc || {}); // Use the full doc, or an empty object to prevent errors
+        
+        // 3. Reliably check favorite status from the complete progress document
+        if (progressDoc?.favorites?.subjects?.includes(params.id)) {
           setIsFavorite(true);
         } else {
-          // Ensure isFavorite is reset if the new subject is not a favorite
           setIsFavorite(false);
         }
       }
@@ -92,12 +92,12 @@ export default function SubjectDetailsScreen() {
     };
     
     fetchData();
-  }, [user, params.id]); // Re-runs whenever the user or the subject ID changes
+  }, [user, params.id]);
 
   const handleFavoritePress = async () => {
     const newFavoriteState = !isFavorite;
-    setIsFavorite(newFavoriteState); // Update UI immediately for a snappy feel
-    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState); // Update DB in the background
+    setIsFavorite(newFavoriteState); // Optimistic UI update for a snappy feel
+    await updateUserFavoriteSubject(user.uid, params.id, newFavoriteState); // Persist change in the background
   };
 
   if (isLoading) {
@@ -116,14 +116,18 @@ export default function SubjectDetailsScreen() {
     );
   }
 
+  // --- DERIVED DATA ---
+  // Logic to extract the specific progress for THIS subject from the larger userProgress object
+  const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
+  
   const mergedLessons = Array.isArray(subjectData.lessons)
     ? subjectData.lessons.map(lesson => ({
         ...lesson,
-        status: progressData?.lessons?.[lesson.id] || 'locked',
+        status: subjectProgress?.lessons?.[lesson.id] || 'locked',
       }))
     : [];
 
-  const progress = progressData?.progress || 0;
+  const progress = subjectProgress?.progress || 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

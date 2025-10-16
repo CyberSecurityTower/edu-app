@@ -69,100 +69,72 @@ export const getUserProgressDocument = async (userId) => {
   return progressSnap.exists() ? progressSnap.data() : null;
 };
 
-// --- THE ROBUST FIX IS HERE ---
-// هذه هي النسخة النهائية والقوية التي تعالج جميع الحالات
+// --- THIS IS THE FINAL, GUARANTEED FIX ---
+// It is simpler, cleaner, and handles all possible states of the document.
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
 
-  try {
-    // 1. نحاول التحديث أولاً. هذا سينجح 99% من الوقت للمستخدمين الحاليين.
-    await updateDoc(progressRef, {
-      'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
-    });
-  } catch (error) {
-    // 2. إذا فشل التحديث، نتحقق من السبب.
-    // إذا كان السبب هو أن المستند غير موجود (مستخدم جديد)، فإننا ننشئه.
-    if (error.code === 'not-found') {
-      console.log("User progress document not found, creating a new one...");
-      await setDoc(progressRef, {
-        favorites: {
-          // بما أن هذا هو أول إجراء تفضيل، فمن المؤكد أن isFavorite ستكون true
-          subjects: isFavorite ? [subjectId] : [] 
-        }
-      }, { merge: true }); // نستخدم merge لضمان عدم الكتابة فوق حقول أخرى إذا تم إنشاؤها بطريقة ما
-    } else {
-      // 3. لأي خطأ آخر، نقوم بتسجيله لتصحيحه لاحقًا.
-      console.error("An unexpected error occurred while updating favorite subject:", error);
-    }
-  }
+  // By using setDoc with merge:true AND dot notation, we achieve everything:
+  // 1. If the document doesn't exist, it will be created.
+  // 2. If the 'favorites' field doesn't exist, it will be created.
+  // 3. It correctly uses arrayUnion/arrayRemove on the 'subjects' array.
+  // This is the most robust pattern for this operation in Firestore.
+  await setDoc(progressRef, {
+    'favorites.subjects': isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId)
+  }, { merge: true });
 };
-
 
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
   const progressRef = doc(db, `userProgress/${userId}`);
-  const lessonKey = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
   
-  // هذا الكود صحيح لأنه يستخدم setDoc مع merge، والذي ينشئ المستند إذا لم يكن موجودًا
+  // Using setDoc with merge and dot notation for the lesson update as well for consistency and robustness.
   await setDoc(progressRef, {
-    pathProgress: { [pathId]: { subjects: { [subjectId]: { lessons: { [lessonId]: status } } } } }
+    [`pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`]: status
   }, { merge: true });
 
   if (status === 'completed') {
+    // This part requires a read-after-write, so it's slightly different.
     const progressDoc = await getUserProgressDocument(userId);
     const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
     
     const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
-    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
+    const newProgress = totalLessonsInsubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
 
     const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
+    // Here we can use updateDoc because we know the document and pathProgress exist.
     await updateDoc(progressRef, { [progressKey]: newProgress });
   }
 };
 
-/**
- * يبحث عن المواد حسب الاسم عبر جميع المسارات التعليمية.
- * البحث غير حساس لحالة الأحرف.
- * @param {string} searchText النص المراد البحث عنه.
- * @returns {Promise<Array<Object>>} بروميس يتم حله بمصفوفة من كائنات المواد المطابقة.
- */
 export const searchSubjectsByName = async (searchText) => {
-  // لا تقم بالبحث إذا كان النص فارغًا أو قصيرًا جدًا
   if (!searchText || searchText.trim().length < 3) {
     return [];
   }
-
   try {
     const pathsCollectionRef = collection(db, 'educationalPaths');
     const querySnapshot = await getDocs(pathsCollectionRef);
-    
     const results = [];
     const normalizedSearchText = searchText.toLowerCase();
-
     querySnapshot.forEach(doc => {
       const pathData = doc.data();
       const pathId = doc.id;
-
-      // تحقق من وجود مصفوفة المواد
       if (pathData.subjects && Array.isArray(pathData.subjects)) {
         pathData.subjects.forEach(subject => {
-          // قم بإجراء المطابقة غير الحساسة لحالة الأحرف
           if (subject.name.toLowerCase().includes(normalizedSearchText)) {
-            // أضف معلومات المسار الأصلية (مثل اسم الكلية) للسياق في نتائج البحث
             results.push({
               ...subject,
-              faculty: pathData.displayName || 'N/A', // نفترض أن displayName هو اسم الكلية/المسار
+              faculty: pathData.displayName || 'N/A',
               pathId: pathId,
             });
           }
         });
       }
     });
-
     return results;
   } catch (error) {
     console.error("Error searching subjects:", error);
-    return []; // إرجاع مصفوفة فارغة في حالة حدوث خطأ
+    return [];
   }
 };

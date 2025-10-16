@@ -1,10 +1,10 @@
-import React, { useState, memo, useCallback, useEffect } from 'react';
+import React, { useState, memo, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails, listenToUserProgress } from '../../services/firestoreService'; // استيراد الدالة الجديدة
+import { getSubjectDetails } from '../../services/firestoreService';
 import { useAppState } from '../_layout';
 
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
@@ -37,75 +37,45 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
 export default function SubjectDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
-  const { user } = useAppState();
+  const { user, userProgress } = useAppState(); // --- ✨ الحصول على userProgress من السياق العام
 
-  const [subjectData, setSubjectData] = useState(null);
-  const [mergedLessons, setMergedLessons] = useState([]);
-  const [progress, setProgress] = useState(0);
+  const [subjectTemplate, setSubjectTemplate] = useState(null); // حالة للقالب الثابت
   const [isLoading, setIsLoading] = useState(true);
 
-  // الخطوة الأولى: جلب بيانات المادة الثابتة مرة واحدة
+  // التأثير الأول: جلب القالب الثابت للمادة مرة واحدة فقط
   useEffect(() => {
-    const fetchSubjectData = async () => {
+    const fetchSubjectTemplate = async () => {
       if (user && user.selectedPathId && params.id) {
+        setIsLoading(true);
         const details = await getSubjectDetails(user.selectedPathId, params.id);
-        setSubjectData(details);
+        setSubjectTemplate(details);
+        setIsLoading(false);
       }
     };
-    fetchSubjectData();
+    fetchSubjectTemplate();
   }, [user, params.id]);
 
-  // الخطوة الثانية: إعداد المستمع للبيانات الديناميكية
-  useFocusEffect(
-    useCallback(() => {
-      if (!user || !subjectData) {
-        setIsLoading(false);
-        return;
-      }
-
-      const unsubscribe = listenToUserProgress(user.uid, (userProgress) => {
-        console.log("Subject Details received progress update via listener.");
-        const subjectProgress = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
-        
-        const lessons = Array.isArray(subjectData.lessons)
-          ? subjectData.lessons.map(lesson => ({
-              ...lesson,
-              status: subjectProgress?.lessons?.[lesson.id] || 'locked',
-            }))
-          : [];
-        
-        setMergedLessons(lessons);
-        setProgress(subjectProgress?.progress || 0);
-        setIsLoading(false);
-      });
-
-      return () => {
-        console.log("Unsubscribing from Subject Details listener.");
-        unsubscribe();
-      };
-    }, [user, subjectData])
-  );
-
-  if (isLoading) {
+  if (isLoading || !subjectTemplate) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
-  if (!subjectData) {
-    return (
-      <SafeAreaView style={styles.centerContainer}>
-        <FontAwesome5 name="exclamation-triangle" size={48} color="#EF4444" />
-        <Text style={styles.errorText}>Could not load subject details.</Text>
-        <Pressable onPress={() => router.back()} style={styles.backButton}><Text style={styles.backButtonText}>Go Back</Text></Pressable>
-      </SafeAreaView>
-    );
-  }
+  // --- ✨ منطق الدمج الآن بسيط ومباشر ومضمون ---
+  const subjectProgressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[params.id];
+  
+  const mergedLessons = (subjectTemplate.lessons || []).map(lesson => ({
+    ...lesson,
+    status: subjectProgressData?.lessons?.[lesson.id] || 'locked',
+  }));
+
+  const progress = subjectProgressData?.progress || 0;
+  const totalLessons = (subjectTemplate.lessons || []).length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{subjectTemplate.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
         <View style={styles.headerIcon} />
@@ -120,9 +90,9 @@ export default function SubjectDetailsScreen() {
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <LessonItem item={item} subjectId={params.id} pathId={user.selectedPathId} totalLessons={subjectData.lessons.length} />}
+        renderItem={({ item }) => <LessonItem item={item} subjectId={params.id} pathId={user.selectedPathId} totalLessons={totalLessons} />}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-        ListEmptyComponent={<View style={styles.emptyContainer}><FontAwesome5 name="book-dead" size={60} color="#4B5563" /><Text style={styles.emptyText}>No lessons have been added yet.</Text><Text style={styles.emptySubtext}>Check back soon!</Text></View>}
+        ListEmptyComponent={<View style={styles.emptyContainer}><FontAwesome5 name="book-dead" size={60} color="#4B5563" /><Text style={styles.emptyText}>No lessons have been added yet.</Text></View>}
       />
     </SafeAreaView>
   );
@@ -132,9 +102,6 @@ export default function SubjectDetailsScreen() {
 const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  errorText: { color: '#EF4444', fontSize: 20, textAlign: 'center', marginTop: 20, marginBottom: 30 },
-  backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
-  backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, backgroundColor: '#0C0F27' },
   headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
@@ -145,7 +112,6 @@ const styles = StyleSheet.create({
   sectionTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginHorizontal: 20, marginTop: 30, marginBottom: 15 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.8 },
   emptyText: { color: '#D1D5DB', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 20 },
-  emptySubtext: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 5 },
   lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, marginBottom: 10 },
   lessonTitle: { color: 'white', fontSize: 16, fontWeight: '600' },
   lessonSubtitle: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },

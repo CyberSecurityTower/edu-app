@@ -1,22 +1,20 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../_layout';
-import { getEducationalPathById, listenToUserProgress } from '../../services/firestoreService'; // استيراد الدالة الجديدة
+import { getEducationalPathById } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 const SubjectCard = ({ item }) => {
   const router = useRouter();
   const total = item.totalLessons || 0;
   const completed = item.completedLessons || 0;
   const progress = item.progress || 0;
-
   const handlePress = () => {
     router.push({ pathname: '/subject-details', params: { id: item.id, name: item.name } });
   };
-
   return (
     <Pressable style={styles.cardContainer} onPress={handlePress}>
       <LinearGradient colors={item.color || ['#4c669f', '#192f6a']} style={styles.card}>
@@ -30,65 +28,40 @@ const SubjectCard = ({ item }) => {
 };
 
 const HomeScreen = () => {
-  const { user } = useAppState();
-  const [mergedSubjects, setMergedSubjects] = useState([]);
+  const { user, userProgress } = useAppState(); // --- ✨ الحصول على userProgress من السياق العام
+  const [pathTemplate, setPathTemplate] = useState(null); // حالة للقالب الثابت
   const [isLoading, setIsLoading] = useState(true);
-  
-  // سنحتفظ ببيانات المسار الثابتة في حالة منفصلة
-  const [pathDetails, setPathDetails] = useState(null);
 
-  // الخطوة الأولى: جلب بيانات المسار الثابتة مرة واحدة
+  // التأثير الأول: جلب القالب الثابت للمسار مرة واحدة
   useEffect(() => {
-    const fetchPathData = async () => {
+    const fetchPathTemplate = async () => {
       if (user && user.selectedPathId) {
+        setIsLoading(true);
         const details = await getEducationalPathById(user.selectedPathId);
-        setPathDetails(details);
+        setPathTemplate(details);
+        setIsLoading(false);
       }
     };
-    fetchPathData();
+    fetchPathTemplate();
   }, [user]);
 
-  // الخطوة الثانية: إعداد المستمع للبيانات الديناميكية (تقدم المستخدم)
-  useFocusEffect(
-    useCallback(() => {
-      if (!user || !pathDetails) {
-        setIsLoading(false);
-        return;
-      }
-
-      // بدء الاستماع...
-      const unsubscribe = listenToUserProgress(user.uid, (userProgress) => {
-        // هذا الكود سيعمل فورًا، ثم مرة أخرى مع كل تحديث
-        console.log("Home screen received progress update via listener.");
-        
-        const subjectsWithProgress = pathDetails.subjects.map(subject => {
-          const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
-          const completedLessonsCount = progressData?.lessons 
-            ? Object.values(progressData.lessons).filter(status => status === 'completed').length
-            : 0;
-          return {
-            ...subject,
-            progress: progressData?.progress || 0,
-            completedLessons: completedLessonsCount,
-            totalLessons: subject.lessons?.length || 0,
-          };
-        });
-        
-        setMergedSubjects(subjectsWithProgress);
-        setIsLoading(false);
-      });
-
-      // الأهم: إيقاف الاستماع عند مغادرة الشاشة
-      return () => {
-        console.log("Unsubscribing from Home screen listener.");
-        unsubscribe();
-      };
-    }, [user, pathDetails]) // إعادة تشغيل المستمع إذا تغير المستخدم أو المسار
-  );
-
-  if (isLoading) {
+  if (isLoading || !pathTemplate) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
+
+  // --- ✨ منطق الدمج الآن بسيط ومباشر ومضمون ---
+  const mergedSubjects = (pathTemplate.subjects || []).map(subject => {
+    const progressData = userProgress?.pathProgress?.[user.selectedPathId]?.subjects?.[subject.id];
+    const completedLessonsCount = progressData?.lessons 
+      ? Object.values(progressData.lessons).filter(status => status === 'completed').length
+      : 0;
+    return {
+      ...subject,
+      progress: progressData?.progress || 0,
+      completedLessons: completedLessonsCount,
+      totalLessons: (subject.lessons || []).length,
+    };
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -130,5 +103,4 @@ const styles = StyleSheet.create({
   emptyContainer: { marginTop: 50, alignItems: 'center' },
   emptyText: { color: '#a7adb8ff', fontSize: 16 },
 });
-
 export default HomeScreen;

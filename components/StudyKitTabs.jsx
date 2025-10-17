@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingBottom: 20,
-    marginTop: "-20%",
+    marginTop: "-25%",
   },
   // --- FIX #2: Separated Style for Summary ---
   summaryScrollView: {

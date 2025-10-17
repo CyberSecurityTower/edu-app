@@ -66,13 +66,13 @@ const styles = StyleSheet.create({
   tabWrapper: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 10, // Reduced padding for better fit
+    paddingHorizontal: 10,
   },
   tabBarContainer: {
     backgroundColor: '#1E293B',
     borderRadius: 30,
     padding: 3,
-    marginBottom:5 // Reduced padding for a tighter look
+    marginBottom:15
   },
   tabBar: { 
     flexDirection: 'row', 
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   tabButton: { 
     paddingVertical: 8, // Reduced vertical padding
     paddingHorizontal: 15, // Reduced horizontal padding
-    borderRadius: 25, 
+    borderRadius: 30, 
     alignItems: 'center',
   },
   activeTabButton: { backgroundColor: '#10B981' },
@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingBottom: 20,
+    marginTop:-10,
   },
   contentScrollView: {
     backgroundColor: '#1E293B',

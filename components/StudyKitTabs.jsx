@@ -2,20 +2,21 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import QuizView from './QuizView'; // <-- Import our new component
 
-// A placeholder for the Quiz and Flashcards for now
-const QuizPlaceholder = () => <View style={styles.contentContainer}><Text style={styles.contentText}>Quiz will be here!</Text></View>;
+// A placeholder for Flashcards for now
 const FlashcardsPlaceholder = () => <View style={styles.contentContainer}><Text style={styles.contentText}>Flashcards will be here!</Text></View>;
 
 const StudyKitTabs = ({ data }) => {
-  const [activeTab, setActiveTab] = useState('summary'); // 'summary', 'quiz', 'flashcards'
+  const [activeTab, setActiveTab] = useState('summary');
 
   const renderContent = () => {
     switch (activeTab) {
       case 'summary':
         return <View style={styles.contentContainer}><Markdown style={markdownStyles}>{data.summary}</Markdown></View>;
       case 'quiz':
-        return <QuizPlaceholder />;
+        // --- THE FIX IS HERE: Use the real QuizView component ---
+        return <QuizView quizData={data.quiz} />;
       case 'flashcards':
         return <FlashcardsPlaceholder />;
       default:
@@ -25,29 +26,18 @@ const StudyKitTabs = ({ data }) => {
 
   return (
     <View style={styles.container}>
-      {/* Tab Buttons */}
       <View style={styles.tabBar}>
-        <Pressable
-          style={[styles.tabButton, activeTab === 'summary' && styles.activeTabButton]}
-          onPress={() => setActiveTab('summary')}
-        >
+        <Pressable style={[styles.tabButton, activeTab === 'summary' && styles.activeTabButton]} onPress={() => setActiveTab('summary')}>
           <Text style={[styles.tabText, activeTab === 'summary' && styles.activeTabText]}>Smart Summary</Text>
         </Pressable>
-        <Pressable
-          style={[styles.tabButton, activeTab === 'quiz' && styles.activeTabButton]}
-          onPress={() => setActiveTab('quiz')}
-        >
+        <Pressable style={[styles.tabButton, activeTab === 'quiz' && styles.activeTabButton]} onPress={() => setActiveTab('quiz')}>
           <Text style={[styles.tabText, activeTab === 'quiz' && styles.activeTabText]}>Short Quiz</Text>
         </Pressable>
-        <Pressable
-          style={[styles.tabButton, activeTab === 'flashcards' && styles.activeTabButton]}
-          onPress={() => setActiveTab('flashcards')}
-        >
+        <Pressable style={[styles.tabButton, activeTab === 'flashcards' && styles.activeTabButton]} onPress={() => setActiveTab('flashcards')}>
           <Text style={[styles.tabText, activeTab === 'flashcards' && styles.activeTabText]}>Flashcards</Text>
         </Pressable>
       </View>
 
-      {/* Content */}
       {renderContent()}
     </View>
   );

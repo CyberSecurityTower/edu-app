@@ -1,10 +1,16 @@
 // components/QuizView.jsx
-import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useState, useContext } from 'react'; // Import useContext
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import AnimatedGradientButton from './AnimatedGradientButton';
 
+// Import our gamification tools
+import { updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
+import { POINTS_CONFIG } from '../config/points';
+import { useAppState } from '../app/_layout'; // We need the user's UID
+
 const QuizView = ({ quizData }) => {
+  const { user } = useAppState(); // Get the current user
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -12,12 +18,23 @@ const QuizView = ({ quizData }) => {
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-  const handleAnswerPress = (option) => {
-    if (isAnswered) return; // Prevent changing answer after submission
+  const handleAnswerPress = async (option) => {
+    if (isAnswered || !user) return;
+    
     setSelectedAnswer(option);
     setIsAnswered(true);
+
     if (option === currentQuestion.correctAnswer) {
       setScore(prev => prev + 1);
+      // Award points for correct answer
+      await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_CORRECT_ANSWER);
+      console.log(`Awarded ${POINTS_CONFIG.QUIZ_CORRECT_ANSWER} points for correct answer.`);
+      // TODO: Trigger a small "+5" notification
+    } else {
+      // Deduct points for incorrect answer
+      await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_INCORRECT_ANSWER);
+      console.log(`Deducted ${POINTS_CONFIG.QUIZ_INCORRECT_ANSWER} points for incorrect answer.`);
+      // TODO: Trigger a red "-7" notification
     }
   };
 
@@ -27,7 +44,26 @@ const QuizView = ({ quizData }) => {
     setIsAnswered(false);
   };
 
-  const handleRestart = () => {
+  const handleRestart = async () => {
+    if (!user) return;
+
+    // 1. Check if the user has enough points
+    const progressDoc = await getUserProgressDocument(user.uid);
+    const currentPoints = progressDoc?.stats?.points || 0;
+    const cost = Math.abs(POINTS_CONFIG.QUIZ_RETRY); // Get the positive cost
+
+    if (currentPoints < cost) {
+      Alert.alert(
+        "Insufficient Points",
+        `You need ${cost} points to retry this quiz. Complete more lessons to earn points!`
+      );
+      return;
+    }
+
+    // 2. Deduct points and restart the quiz
+    await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_RETRY);
+    console.log(`Deducted ${cost} points for retrying the quiz.`);
+    
     setCurrentQuestionIndex(0);
     setSelectedAnswer(null);
     setIsAnswered(false);
@@ -44,10 +80,10 @@ const QuizView = ({ quizData }) => {
             You scored <Text style={{ color: '#10B981', fontWeight: 'bold' }}>{score}</Text> out of <Text style={{ fontWeight: 'bold' }}>{quizData.length}</Text>.
           </Text>
           <AnimatedGradientButton
-            text="Try Again"
+            text="Try Again (-10 pts)"
             onPress={handleRestart}
-            buttonWidth={150}
-            buttonHeight={45}
+            buttonWidth={200}
+            buttonHeight={50}
             fontSize={16}
           />
         </View>
@@ -73,12 +109,10 @@ const QuizView = ({ quizData }) => {
             optionStyle = [styles.optionButton, styles.correctOption];
           } else if (isAnswered && isSelected && !isCorrect) {
             optionStyle = [styles.optionButton, styles.incorrectOption];
-          } else if (isSelected) {
-            optionStyle = [styles.optionButton, styles.selectedOption];
           }
 
           return (
-            <Pressable key={index} style={optionStyle} onPress={() => handleAnswerPress(option)}>
+            <Pressable key={index} style={optionStyle} onPress={() => handleAnswerPress(option)} disabled={isAnswered}>
               <Text style={styles.optionText}>{option}</Text>
               {isAnswered && isCorrect && <FontAwesome5 name="check-circle" size={20} color="white" />}
             </Pressable>

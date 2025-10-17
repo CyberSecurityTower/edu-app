@@ -1,17 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { GiftedChat, Bubble, InputToolbar, Send } from 'react-native-gifted-chat';
+import { GiftedChat, Bubble, InputToolbar, Send, Composer } from 'react-native-gifted-chat';
 import { useAppState } from '../../context/AppStateContext';
 
 export default function AiChatbotScreen() {
   const router = useRouter();
   const { user } = useAppState();
   const [messages, setMessages] = useState([]);
+  const [isBotTyping, setIsBotTyping] = useState(false);
 
-  // The AI bot user object
   const BOT = {
     _id: 2,
     name: 'EduAI',
@@ -19,7 +18,6 @@ export default function AiChatbotScreen() {
   };
 
   useEffect(() => {
-    // Set the initial welcome message from the bot
     setMessages([
       {
         _id: 1,
@@ -31,20 +29,13 @@ export default function AiChatbotScreen() {
   }, []);
 
   const onSend = useCallback((messages = []) => {
-    // 1. Add the user's message to the chat
-    setMessages(previousMessages =>
-      GiftedChat.append(previousMessages, messages),
-    );
+    setMessages(previousMessages => GiftedChat.append(previousMessages, messages));
+    setIsBotTyping(true); // Show typing indicator
 
-    // 2. Simulate a bot response (the "fake" logic)
     const userMessage = messages[0].text.toLowerCase();
     
-    // Add a "typing..." indicator
-    // This part is a bit tricky in GiftedChat, we'll keep it simple for now.
-
     setTimeout(() => {
       let botResponse = "I'm still learning! Soon I'll be able to answer your questions about any lesson.";
-      
       if (userMessage.includes('summary')) {
         botResponse = "I can help with that! Which lesson would you like me to summarize?";
       } else if (userMessage.includes('quiz')) {
@@ -57,30 +48,38 @@ export default function AiChatbotScreen() {
         createdAt: new Date(),
         user: BOT,
       };
-
-      setMessages(previousMessages =>
-        GiftedChat.append(previousMessages, [botMessage]),
-      );
-    }, 1500); // Simulate a 1.5 second delay
+      
+      setIsBotTyping(false); // Hide typing indicator
+      setMessages(previousMessages => GiftedChat.append(previousMessages, [botMessage]));
+    }, 2000);
   }, []);
 
-  // --- Customizing the appearance ---
+  // --- NEW MODERN BUBBLE DESIGN ---
   const renderBubble = (props) => (
     <Bubble
       {...props}
       wrapperStyle={{
-        right: { backgroundColor: '#3B82F6' }, // User's bubble
-        left: { backgroundColor: '#334155' }, // Bot's bubble
+        right: styles.userBubble,
+        left: styles.botBubble,
       }}
       textStyle={{
-        right: { color: 'white' },
-        left: { color: 'white' },
+        right: styles.userText,
+        left: styles.botText,
+      }}
+      timeTextStyle={{
+        right: { color: '#a7adb8ff' },
+        left: { color: '#a7adb8ff' },
       }}
     />
   );
 
+  // --- NEW MODERN INPUT TOOLBAR DESIGN ---
   const renderInputToolbar = (props) => (
-    <InputToolbar {...props} containerStyle={styles.inputToolbar} />
+    <InputToolbar {...props} containerStyle={styles.inputToolbar} primaryStyle={{ alignItems: 'center' }} />
+  );
+
+  const renderComposer = (props) => (
+    <Composer {...props} textInputStyle={styles.composer} />
   );
 
   const renderSend = (props) => (
@@ -90,7 +89,8 @@ export default function AiChatbotScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    // --- FIX #1: Using SafeAreaView correctly ---
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>AI Assistant</Text>
         <Pressable onPress={() => router.back()} style={styles.closeButton}>
@@ -100,36 +100,86 @@ export default function AiChatbotScreen() {
       
       <GiftedChat
         messages={messages}
-        onSend={messages => onSend(messages)}
-        user={{ _id: user?.uid || 1 }} // Current user's ID
+        onSend={onSend}
+        user={{ _id: user?.uid || 1 }}
         renderBubble={renderBubble}
         renderInputToolbar={renderInputToolbar}
+        renderComposer={renderComposer}
         renderSend={renderSend}
-        placeholder="Ask me anything about your studies..."
+        placeholder="Ask me anything..."
         alwaysShowSend
+        isTyping={isBotTyping}
+        messagesContainerStyle={styles.messagesContainer}
       />
       
-      {/* This is needed for iOS to not have the keyboard hide the input */}
-      {Platform.OS === 'android' && <KeyboardAvoidingView behavior="padding" />}
-    </SafeAreaView>
+      {/* --- FIX #2: Proper KeyboardAvoidingView for iOS --- */}
+      {Platform.OS === 'ios' && <KeyboardAvoidingView behavior="padding" />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 20, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#1E293B',
+    // This is needed for SafeAreaView on Android
+    marginTop: Platform.OS === 'android' ? 25 : 0,
+  },
   headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   closeButton: { padding: 5 },
+  
+  // --- NEW STYLES FOR A MODERN LOOK ---
+  messagesContainer: {
+    paddingBottom: 10,
+  },
+  userBubble: {
+    backgroundColor: '#3B82F6',
+    borderTopRightRadius: 5,
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  botBubble: {
+    backgroundColor: '#334155',
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  userText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  botText: {
+    color: 'white',
+    fontSize: 16,
+    // --- FIX #3: Support for Arabic text alignment ---
+    writingDirection: 'auto',
+  },
   inputToolbar: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0C0F27',
     borderTopWidth: 1,
-    borderTopColor: '#334155',
-    padding: 5,
+    borderTopColor: '#1E293B',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  composer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    color: 'white',
+    fontSize: 16,
   },
   sendContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
-    marginBottom: 5,
+    marginLeft: 10,
+    height: '100%',
   },
 });

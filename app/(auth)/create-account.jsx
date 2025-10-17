@@ -107,7 +107,7 @@ const newUserProfile = {
     },
     stats: {
                     points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME // Give them points as if they completed one lesson
-};
+}};
         await setDoc(doc(db, "users", user.uid), newUserProfile);
 
         // We use the new robust deviceId here

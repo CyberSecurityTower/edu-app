@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
 import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
-
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message'; // <-- Import Toast
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 const AppStateContext = createContext(null);
 export function useAppState() { return useContext(AppStateContext); }

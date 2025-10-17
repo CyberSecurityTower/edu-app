@@ -9,7 +9,7 @@ const FloatingActionButton = ({ onPress }) => {
       {/* We use a View for the shadow and background color */}
       <View style={styles.fab}>
         <LottieView
-          source={require('../../assets/images/robot.lottie')}
+          source={require('../assets/images/robot.json')}
           autoPlay
           loop
           style={styles.lottie}

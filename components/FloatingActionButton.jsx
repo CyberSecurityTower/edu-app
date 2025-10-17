@@ -1,20 +1,20 @@
+// components/FloatingActionButton.jsx
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-// --- THE FIX IS HERE: Replaced the hyphen with a slash ---
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Pressable, StyleSheet, View } from 'react-native';
+import LottieView from 'lottie-react-native';
 
 const FloatingActionButton = ({ onPress }) => {
   return (
     <Pressable style={styles.fabContainer} onPress={onPress}>
-      <LinearGradient
-        colors={['#8A2BE2', '#DA70D6']}
-        start={{ x: 0.2, y: 0.2 }}
-        end={{ x: 0.8, y: 0.8 }}
-        style={styles.fab}
-      >
-        <FontAwesome5 name="robot" size={24} color="white" />
-      </LinearGradient>
+      {/* We use a View for the shadow and background color */}
+      <View style={styles.fab}>
+        <LottieView
+          source={require('../assets/images/robot.lottie')}
+          autoPlay
+          loop
+          style={styles.lottie}
+        />
+      </View>
     </Pressable>
   );
 };
@@ -24,18 +24,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 110,
     right: 25,
-    shadowColor: '#ffffffff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 1.5,
-    shadowRadius: 6,
-    elevation: 10,
   },
   fab: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70, // Increased size for the animation
+    height: 70, // Increased size for the animation
+    borderRadius: 35,
+    backgroundColor: '#8A2BE2', // A solid background color from your previous gradient
     justifyContent: 'center',
     alignItems: 'center',
+    // Shadow styles
+    shadowColor: '#8A2BE2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  lottie: {
+    width: 100, // Make the Lottie animation larger than the button
+    height: 100, // This makes it feel more dynamic and alive
   },
 });
 

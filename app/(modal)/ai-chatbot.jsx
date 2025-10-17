@@ -160,12 +160,15 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
   },
-  sendContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-    height: '10%', // Your custom height
-  },
+
+sendContainer: {
+  // --- THE FINAL FIX IS HERE ---
+  justifyContent: 'center', // Vertically center the icon
+  alignItems: 'center',    // Horizontally center the icon
+  height: 44,              // Give it a fixed height
+  width: 44,               // Give it a fixed width
+  marginLeft: 5,           // A small margin from the text input
+},
   // --- ADD THIS NEW STYLE FOR THE AVATAR ---
   avatar: {
     width: 60, // You can change this value

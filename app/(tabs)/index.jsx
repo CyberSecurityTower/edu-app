@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+// app/(tabs)/index.jsx
+import React, { useState, useCallback } from 'react'; // Import useCallback
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../_layout';
 import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
-import SubjectCard from '../../components/SubjectCard'; // <-- Import the new component
+import SubjectCard from '../../components/SubjectCard';
+import { useFocusEffect } from 'expo-router'; // Import useFocusEffect
 
 const HomeScreen = () => {
   const { user } = useAppState();
@@ -12,26 +14,30 @@ const HomeScreen = () => {
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchPathData = async () => {
-      if (user && user.selectedPathId) {
-        // Fetch path details and user progress in parallel for better performance
-        const [details, progressDoc] = await Promise.all([
-          getEducationalPathById(user.selectedPathId),
-          getUserProgressDocument(user.uid)
-        ]);
-
-        setPathDetails(details);
-        setUserProgress(progressDoc?.pathProgress?.[user.selectedPathId] || {});
-      }
-      setIsLoading(false);
-    };
-    fetchPathData();
-  }, [user]);
+  // --- THE FIX IS HERE ---
+  useFocusEffect(
+    useCallback(() => {
+      const fetchPathData = async () => {
+        if (user && user.selectedPathId) {
+          setIsLoading(true);
+          const [details, progressDoc] = await Promise.all([
+            getEducationalPathById(user.selectedPathId),
+            getUserProgressDocument(user.uid)
+          ]);
+          setPathDetails(details);
+          setUserProgress(progressDoc?.pathProgress?.[user.selectedPathId] || {});
+        }
+        setIsLoading(false);
+      };
+      
+      fetchPathData();
+    }, [user])
+  );
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
+
 
   return (
     <SafeAreaView style={styles.container}>

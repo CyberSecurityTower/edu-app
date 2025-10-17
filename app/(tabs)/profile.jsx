@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react'; // Import useCallback
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../_layout';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router'; // Import useFocusEffect
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { getUserProgressDocument } from '../../services/firestoreService';
-import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-
 const SubscriptionCard = ({ subscription }) => {
   if (subscription && subscription.plan !== 'Trial' && subscription.status === 'active') {
     const renewalDate = subscription.renewsOn?.toDate();
@@ -60,31 +58,47 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState({ points: 0, lessonsCompleted: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.uid) {
-        setIsLoading(false);
-        return;
-      }
-      const progressDoc = await getUserProgressDocument(user.uid);
-      if (progressDoc) {
-        const userStats = progressDoc.stats || { points: 0 };
-        let completedCount = 0;
-        if (progressDoc.pathProgress) {
-          Object.values(progressDoc.pathProgress).forEach(path => {
-            Object.values(path.subjects).forEach(subject => {
-              if (subject.lessons) {
-                completedCount += Object.values(subject.lessons).filter(status => status === 'completed').length;
-              }
+  // --- THE FIX IS HERE ---
+  // We use useFocusEffect to re-fetch data every time the screen comes into view.
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUserStats = async () => {
+        if (!user?.uid) {
+          setIsLoading(false);
+          return;
+        }
+        
+        setIsLoading(true); // Show loader on each refresh
+        const progressDoc = await getUserProgressDocument(user.uid);
+        
+        if (progressDoc) {
+          const userStats = progressDoc.stats || { points: 0 };
+          let completedCount = 0;
+          if (progressDoc.pathProgress) {
+            Object.values(progressDoc.pathProgress).forEach(path => {
+              Object.values(path.subjects).forEach(subject => {
+                if (subject.lessons) {
+                  completedCount += Object.values(subject.lessons).filter(status => status === 'completed').length;
+                }
+              });
             });
+          }
+          setStats({
+            points: userStats.points,
+            lessonsCompleted: completedCount,
           });
         }
-        setStats({ points: userStats.points, lessonsCompleted: completedCount });
-      }
-      setIsLoading(false);
-    };
-    fetchData();
-  }, [user]);
+        setIsLoading(false);
+      };
+
+      fetchUserStats();
+
+      // Optional: return a cleanup function if needed
+      return () => {
+        // This can be useful for unsubscribing from real-time listeners, etc.
+      };
+    }, [user]) // Re-run if the user object itself changes (e.g., on logout)
+  );
 
   const handleLogout = () => {
     Alert.alert("Confirm Logout", "Are you sure you want to log out?", [
@@ -93,6 +107,7 @@ export default function ProfileScreen() {
     ]);
   };
 
+ 
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Guest';
   const avatarUrl = `https://ui-avatars.com/api/?name=${fullName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128&bold=true`;
 

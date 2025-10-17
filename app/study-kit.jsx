@@ -70,7 +70,12 @@ export default function StudyKitScreen() {
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
-        <MainHeader title="Study Kit" isCompact={true} points={currentPoints} />
+         <MainHeader 
+          title="Study Kit" 
+          isCompact={true} 
+          points={currentPoints} 
+          hideNotifications={true} // Tell the header to hide the bell icon
+        />
       </View>
       
       <Text style={styles.lessonTitle}>{lessonTitle}</Text>

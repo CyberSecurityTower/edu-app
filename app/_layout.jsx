@@ -35,11 +35,11 @@ function AppStateProvider({ children }) {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
+          // Initial fetch to set the user state
           const userProfile = await getUserProfile(currentUser.uid);
-          const fullUserProfile = userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' };
+          let fullUserProfile = userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' };
           setUser(fullUserProfile);
 
-          // --- ENHANCED DAILY STREAK LOGIC ---
           if (fullUserProfile.profileStatus === 'completed') {
             const progressDoc = await getUserProgressDocument(currentUser.uid);
             const lastLogin = progressDoc?.lastLogin?.toDate();
@@ -47,12 +47,12 @@ function AppStateProvider({ children }) {
             const now = new Date();
 
             if (!lastLogin) {
-              await updateUserDailyStreak(currentUser.uid, 1, 0); // First login, set date, no points
+              await updateUserDailyStreak(currentUser.uid, 1, 0);
               return;
             }
 
             const isSameDay = now.toDateString() === lastLogin.toDateString();
-            if (isSameDay) return; // Already logged in today
+            if (isSameDay) return;
 
             const yesterday = new Date();
             yesterday.setDate(now.getDate() - 1);
@@ -60,11 +60,8 @@ function AppStateProvider({ children }) {
             
             const newStreak = isConsecutive ? streakCount + 1 : 1;
             
-            // --- COMPOUNDING POINTS LOGIC ---
-            // Base points for day 1, then increases by 10% each consecutive day
             let pointsToAward = POINTS_CONFIG.DAILY_STREAK_BONUS;
             if (isConsecutive && streakCount > 0) {
-              // Calculate previous day's bonus and add 10%
               const previousBonus = POINTS_CONFIG.DAILY_STREAK_BONUS * Math.pow(1.1, streakCount - 1);
               pointsToAward = Math.floor(previousBonus * 1.1);
             }
@@ -77,6 +74,17 @@ function AppStateProvider({ children }) {
               position: 'bottom',
               visibilityTime: 3500,
             });
+            
+            // --- THE IMMEDIATE UPDATE FIX IS HERE ---
+            // After awarding points, we need to re-fetch the progress document
+            // and merge the new points into our existing user state.
+            const updatedProgressDoc = await getUserProgressDocument(currentUser.uid);
+            if (updatedProgressDoc?.stats) {
+              setUser(prevUser => ({
+                ...prevUser,
+                stats: { ...prevUser.stats, ...updatedProgressDoc.stats }
+              }));
+            }
           }
         } else {
           setUser(null);

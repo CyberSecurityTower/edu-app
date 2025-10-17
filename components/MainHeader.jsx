@@ -5,7 +5,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 
 // --- THE FIX IS HERE: This component is now "dumb" and doesn't fetch data ---
 // It only receives props and displays them.
-const MainHeader = ({ title, points = 0, isCompact = false }) => {
+const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = false }) => {
   return (
     <View style={[styles.headerContainer, isCompact && styles.compactHeaderContainer]}>
       <Text style={[styles.headerTitle, isCompact && styles.compactHeaderTitle]}>{title}</Text>
@@ -14,9 +14,14 @@ const MainHeader = ({ title, points = 0, isCompact = false }) => {
           <FontAwesome5 name="star" size={16} color="#FFD700" solid />
           <Text style={styles.pointsText}>{points}</Text>
         </View>
-        <Pressable style={styles.iconButton}>
-          <FontAwesome5 name="bell" size={22} color="#a7adb8ff" />
-        </Pressable>
+        
+        {/* --- THE FIX IS HERE (Part 2) --- */}
+        {/* Conditionally render the bell icon */}
+        {!hideNotifications && (
+          <Pressable style={styles.iconButton}>
+            <FontAwesome5 name="bell" size={22} color="#a7adb8ff" />
+          </Pressable>
+        )}
       </View>
     </View>
   );

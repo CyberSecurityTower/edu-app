@@ -12,7 +12,7 @@ import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 
 // --- THE FIX IS HERE: We now import BOTH from the new central file ---
-import AppStateContext, { useAppState } from '../context/AppStateContext';
+import AppStateContext from '../context/AppStateContext'; // Import only the context
 
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
@@ -67,11 +67,7 @@ function AppStateProvider({ children }) {
   }, []);
 
   const contextValue = useMemo(() => ({
-    user,
-    authLoading,
-    hasCompletedOnboarding,
-    setHasCompletedOnboarding,
-    setUser,
+    user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser,
   }), [user, authLoading, hasCompletedOnboarding]);
 
   return (

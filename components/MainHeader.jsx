@@ -1,5 +1,5 @@
 // components/MainHeader.jsx
-import React from 'react';
+import React, { useState, useCallback } from 'react'; // --- FIX #1: Imported useState and useCallback ---
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -10,16 +10,25 @@ const MainHeader = ({ title }) => {
   const { user } = useAppState();
   const [points, setPoints] = useState(0);
 
-  // We use useFocusEffect to keep the points always updated
+  // --- FIX #2: Using useFocusEffect to keep points always updated ---
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
+      let isMounted = true; // Prevent state updates if component is unmounted
+
       const fetchPoints = async () => {
         if (user?.uid) {
           const progressDoc = await getUserProgressDocument(user.uid);
-          setPoints(progressDoc?.stats?.points || 0);
+          if (isMounted) {
+            setPoints(progressDoc?.stats?.points || 0);
+          }
         }
       };
+
       fetchPoints();
+
+      return () => {
+        isMounted = false;
+      };
     }, [user])
   );
 
@@ -47,13 +56,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20, // Adjust this based on SafeAreaView
+    paddingTop: 20,
     paddingBottom: 10,
   },
   headerTitle: {
     color: 'white',
     fontSize: 32,
     fontWeight: 'bold',
+    flex: 1, // Allow title to take space but not push icons
+    marginRight: 10,
   },
   rightContainer: {
     flexDirection: 'row',

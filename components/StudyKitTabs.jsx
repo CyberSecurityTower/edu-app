@@ -6,7 +6,8 @@ import FlashcardView from './FlashcardView';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const StudyKitTabs = ({ data }) => {
+// --- THE FIX IS HERE (Part 1): Receive the new prop ---
+const StudyKitTabs = ({ data, onPointsUpdate }) => {
   const [activeTab, setActiveTab] = useState('summary');
   const [layouts, setLayouts] = useState([]);
   
@@ -40,7 +41,7 @@ const StudyKitTabs = ({ data }) => {
           </ScrollView>
         );
       case 'quiz':
-        return <QuizView quizData={data.quiz} />;
+       return <QuizView quizData={data.quiz} onPointsUpdate={onPointsUpdate} />;
       case 'flashcards':
         return <FlashcardView flashcardsData={data.flashcards} />;
       default:

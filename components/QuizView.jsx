@@ -9,7 +9,7 @@ import { updateUserPoints, getUserProgressDocument } from '../services/firestore
 import { POINTS_CONFIG } from '../config/points';
 import { useAppState } from '../context/AppStateContext'; // Correct import path
 
-const QuizView = ({ quizData }) => {
+const QuizView = ({ quizData, onPointsUpdate }) => {
   const { user } = useAppState();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -18,7 +18,7 @@ const QuizView = ({ quizData }) => {
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-  const handleAnswerPress = async (option) => {
+   const handleAnswerPress = async (option) => {
     if (isAnswered || !user) return;
     
     setSelectedAnswer(option);
@@ -28,21 +28,22 @@ const QuizView = ({ quizData }) => {
       setScore(prev => prev + 1);
       const points = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
       await updateUserPoints(user.uid, points);
-      
       Toast.show({
         type: 'points',
         text1: `+${points} Points!`,
         position: 'bottom',
         visibilityTime: 1500,
       });
-
-    } else {
+ } else {
       const points = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
       await updateUserPoints(user.uid, points);
-      console.log(`Deducted ${points} points.`);
     }
   };
-
+    // --- THE FIX IS HERE (Part 2): Call the function to update the UI ---
+    if (onPointsUpdate) {
+      onPointsUpdate();
+    }
+  };
   const handleNext = () => {
     setCurrentQuestionIndex(prev => prev + 1);
     setSelectedAnswer(null);

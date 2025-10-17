@@ -2,10 +2,8 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import QuizView from './QuizView'; // <-- Import our new component
-
-// A placeholder for Flashcards for now
-const FlashcardsPlaceholder = () => <View style={styles.contentContainer}><Text style={styles.contentText}>Flashcards will be here!</Text></View>;
+import QuizView from './QuizView';
+import FlashcardView from './FlashcardView'; // <-- Import our new Flashcard view
 
 const StudyKitTabs = ({ data }) => {
   const [activeTab, setActiveTab] = useState('summary');
@@ -15,10 +13,10 @@ const StudyKitTabs = ({ data }) => {
       case 'summary':
         return <View style={styles.contentContainer}><Markdown style={markdownStyles}>{data.summary}</Markdown></View>;
       case 'quiz':
-        // --- THE FIX IS HERE: Use the real QuizView component ---
         return <QuizView quizData={data.quiz} />;
       case 'flashcards':
-        return <FlashcardsPlaceholder />;
+        // --- THE FIX IS HERE: Use the real FlashcardView component ---
+        return <FlashcardView flashcardsData={data.flashcards} />;
       default:
         return null;
     }
@@ -51,7 +49,6 @@ const styles = StyleSheet.create({
   tabText: { color: '#a7adb8ff', fontWeight: 'bold' },
   activeTabText: { color: 'white' },
   contentContainer: { marginTop: 20, padding: 15, backgroundColor: '#1E293B', borderRadius: 16 },
-  contentText: { color: 'white', fontSize: 16 },
 });
 
 const markdownStyles = StyleSheet.create({

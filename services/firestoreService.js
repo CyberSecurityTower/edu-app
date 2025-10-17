@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove ,increment } from "firebase/firestore"; 
 import { db } from '../firebase';
 
 // --- User Profile Functions ---
@@ -116,5 +116,31 @@ export const getStudyKit = async (lessonId) => {
   } catch (error) {
     console.error("Error fetching study kit:", error);
     return null;
+  }
+};
+
+// --- NEW GAMIFICATION FUNCTION ---
+
+/**
+ * Updates the user's points by a given amount.
+ * Can be used for both adding and subtracting points.
+ * @param {string} userId The ID of the user.
+ * @param {number} amount The number of points to add (can be negative to subtract).
+ */
+export const updateUserPoints = async (userId, amount) => {
+  if (!userId || typeof amount !== 'number') return;
+  
+  const progressRef = doc(db, `userProgress/${userId}`);
+  
+  try {
+    // Using increment is atomic and safe for concurrent updates.
+    await setDoc(progressRef, {
+      stats: {
+        points: increment(amount)
+      }
+    }, { merge: true });
+    console.log(`Updated points for user ${userId} by ${amount}`);
+  } catch (error) {
+    console.error("Error updating user points:", error);
   }
 };

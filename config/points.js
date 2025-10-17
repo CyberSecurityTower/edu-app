@@ -1,0 +1,8 @@
+
+export const POINTS_CONFIG = {
+  LESSON_COMPLETE_FIRST_TIME: 20,
+  QUIZ_CORRECT_ANSWER: 5,
+  QUIZ_INCORRECT_ANSWER: -7, // Negative value for deduction
+  QUIZ_RETRY: -10,
+  DAILY_STREAK_BONUS: 30,
+};

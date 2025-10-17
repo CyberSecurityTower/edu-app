@@ -5,9 +5,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 
-import { getLessonContent, updateLessonProgress } from '../services/firestoreService';
+// --- UPDATED IMPORTS ---
+import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints } from '../services/firestoreService';
 import { useAppState } from './_layout';
-import GenerateKitButton from '../components/GenerateKitButton'; // Import the FAB
+import GenerateKitButton from '../components/GenerateKitButton';
+import { POINTS_CONFIG } from '../config/points';
 
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();
@@ -25,16 +27,37 @@ export default function LessonViewScreen() {
       setIsLoading(true);
       const contentData = await getLessonContent(lessonId);
       if (contentData) setLessonContent(contentData.content);
+      // We still mark it as 'current' when the user enters
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', parseInt(totalLessons, 10));
       setIsLoading(false);
     };
     loadLesson();
   }, [lessonId, user]);
 
+  // --- NEW AND IMPROVED GAMIFICATION LOGIC ---
   const handleCompleteLesson = async () => {
     if (isCompleted || !user) return;
-    setIsCompleted(true);
-    await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
+    setIsCompleted(true); // Prevent multiple triggers in the same session
+
+    try {
+      // 1. Fetch the latest progress to check the lesson's current status
+      const progressDoc = await getUserProgressDocument(user.uid);
+      const currentStatus = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
+
+      // 2. Update the lesson progress to 'completed'
+      await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
+
+      // 3. Award points ONLY if the lesson was not already completed in Firestore
+      if (currentStatus !== 'completed') {
+        await updateUserPoints(user.uid, POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME);
+        console.log(`Awarded ${POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME} points for completing lesson ${lessonId} for the first time!`);
+        // TODO: Trigger a fancy notification here
+      }
+    } catch (error) {
+      console.error("Error in handleCompleteLesson:", error);
+      // Revert isCompleted if there was an error to allow retrying
+      setIsCompleted(false);
+    }
   };
 
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
@@ -48,7 +71,6 @@ export default function LessonViewScreen() {
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
-        {/* The right side of the header is now empty for a cleaner look */}
         <View style={{ width: 50 }} />
       </View>
 
@@ -66,7 +88,6 @@ export default function LessonViewScreen() {
             </View>
           </ScrollView>
           
-          {/* --- THE FAB IS BACK AND FLOATING --- */}
           <GenerateKitButton 
             onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle }})}
           />
@@ -76,14 +97,13 @@ export default function LessonViewScreen() {
   );
 }
 
-// Styles are simplified as the FAB is now its own component
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
   headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', flex: 1, textAlign: 'center' },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  contentContainer: { padding: 20, paddingBottom: 120 }, // Padding to avoid content hiding behind FAB
+  contentContainer: { padding: 20, paddingBottom: 120 },
 });
 
 const markdownStyles = StyleSheet.create({

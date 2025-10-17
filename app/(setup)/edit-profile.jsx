@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppState } from '../_layout';
+import { useAppState } from '../../context/AppStateContext';
 import { useRouter } from 'expo-router';
 import { updateUserProfile } from '../../services/firestoreService';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';

@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppState } from '../_layout';
+import { useAppState } from '../../context/AppStateContext';
 import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 import SubjectCard from '../../components/SubjectCard';
 import { FontAwesome5 } from '@expo/vector-icons';

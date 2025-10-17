@@ -5,7 +5,7 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { useRouter } from 'expo-router';
 import { getEducationalPaths, updateUserProfile } from '../../services/firestoreService';
-import { useAppState } from '../_layout';
+import { useAppState } from '../../context/AppStateContext';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { translations } from '../../locales/setupTranslations';
 

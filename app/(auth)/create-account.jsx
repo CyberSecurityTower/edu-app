@@ -7,7 +7,7 @@ import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import * as Device from 'expo-device';
-import { useAppState } from '../_layout';
+import { useAppState } from '../../context/AppStateContext';
 import * as Application from 'expo-application';
 import { Platform } from 'react-native';
 export default function CreateAccountScreen() {

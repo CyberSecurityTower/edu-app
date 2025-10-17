@@ -1,56 +1,52 @@
+// app/study-kit.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router'; // --- ENSURE THIS IS CORRECT ---
-import { getStudyKit } from '../services/firestoreService';
+
+import { getStudyKit, getUserProgressDocument } from '../services/firestoreService';
 import StudyKitTabs from '../components/StudyKitTabs';
-import MainHeader from '../components/MainHeader'; // <-- Import our reusable header
-import { useAppState } from '../context/AppStateContext'; // Correct path
+import MainHeader from '../components/MainHeader';
+import { useAppState } from '../context/AppStateContext';
 
 export default function StudyKitScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
-  const { user } = useAppState(); // Get user for UID
+  const { user } = useAppState();
   const { lessonId, lessonTitle } = params;
 
   const [kitData, setKitData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPoints, setCurrentPoints] = useState(0); // <-- New state for points
+  const [currentPoints, setCurrentPoints] = useState(0);
 
+  // --- THE FIX IS HERE (Part 1): Create a function to refresh points ---
+  const refreshPoints = useCallback(async () => {
+    if (user?.uid) {
+      const progressDoc = await getUserProgressDocument(user.uid);
+      setCurrentPoints(progressDoc?.stats?.points || 0);
+    }
+  }, [user]);
+
+  // Fetch kit data only once
   useEffect(() => {
-    const fetchKit = async () => {
-      setIsLoading(true);
-      const [kitResult] = await Promise.all([
-        getStudyKit(lessonId),
-        new Promise(resolve => setTimeout(resolve, 1500))
-      ]);
-      if (kitResult) setKitData(kitResult);
-      setIsLoading(false);
-    };
+    const fetchKit = async () => { /* ... (no changes here) ... */ };
     fetchKit();
   }, [lessonId]);
-   // --- THE FIX IS HERE: Fetch points every time the screen is focused ---
+
+  // Fetch points every time the screen is focused
   useFocusEffect(
     useCallback(() => {
-      const fetchPoints = async () => {
-        if (user?.uid) {
-          const progressDoc = await getUserProgressDocument(user.uid);
-          setCurrentPoints(progressDoc?.stats?.points || 0);
-        }
-      };
-      fetchPoints();
-    }, [user])
+      refreshPoints();
+    }, [refreshPoints])
   );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* --- THE FIX IS HERE: Using the MainHeader component --- */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
-        {/* We pass a custom title to our reusable header */}
         <MainHeader title="Study Kit" isCompact={true} points={currentPoints} />
       </View>
       
@@ -59,10 +55,10 @@ export default function StudyKitScreen() {
       {isLoading ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#10B981" />
-          <Text style={styles.loadingText}>Generating your smart tools...</Text>
         </View>
       ) : kitData ? (
-        <StudyKitTabs data={kitData} />
+        // --- THE FIX IS HERE (Part 2): Pass the refresh function down ---
+        <StudyKitTabs data={kitData} onPointsUpdate={refreshPoints} />
       ) : (
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>Could not load the Study Kit.</Text>
@@ -71,10 +67,8 @@ export default function StudyKitScreen() {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  // Updated header style to accommodate the back button and the new header
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 

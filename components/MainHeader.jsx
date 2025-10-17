@@ -1,14 +1,11 @@
 // components/MainHeader.jsx
-// components/MainHeader.jsx
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router'; // --- THE FIX IS HERE ---
-import { useAppState } from '../context/AppStateContext';
-import { getUserProgressDocument } from '../services/firestoreService';
 
+// --- THE FIX IS HERE: This component is now "dumb" and doesn't fetch data ---
+// It only receives props and displays them.
 const MainHeader = ({ title, points = 0, isCompact = false }) => {
-  // This component is now "dumb" and just displays props
   return (
     <View style={[styles.headerContainer, isCompact && styles.compactHeaderContainer]}>
       <Text style={[styles.headerTitle, isCompact && styles.compactHeaderTitle]}>{title}</Text>
@@ -26,9 +23,8 @@ const MainHeader = ({ title, points = 0, isCompact = false }) => {
 };
 
 const styles = StyleSheet.create({
-  // Default (large) header styles
   headerContainer: {
-    flex: 1, // Take available space
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -42,14 +38,12 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
-  // Compact header styles
   compactHeaderContainer: {
     paddingVertical: 10,
   },
   compactHeaderTitle: {
     fontSize: 22,
   },
-  // Shared styles
   rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',

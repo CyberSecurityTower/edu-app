@@ -3,7 +3,7 @@ import React, { useState, useCallback } from 'react'; // --- FIX #1: Imported us
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useAppState } from '../../context/AppStateContext';
+import { useAppState } from '../context/AppStateContext';
 import { getUserProgressDocument } from '../services/firestoreService';
 
 const MainHeader = ({ title }) => {

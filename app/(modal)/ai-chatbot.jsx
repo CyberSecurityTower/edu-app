@@ -18,45 +18,74 @@ export default function AiChatbotScreen() {
     avatar: require('../../assets/images/owl.png'),
   };
 
-  useEffect(() => { /* ... (no changes here) ... */ }, []);
-  const onSend = useCallback((messages = []) => { /* ... (no changes here) ... */ }, []);
+  useEffect(() => {
+    setMessages([
+      {
+        _id: 1,
+        text: `Hello ${user?.firstName}! I'm your personal AI study assistant. How can I help you today?`,
+        createdAt: new Date(),
+        user: BOT,
+      },
+    ]);
+  }, []);
 
-  const renderBubble = (props) => ( <Bubble {...props} wrapperStyle={{ right: styles.userBubble, left: styles.botBubble }} textStyle={{ right: styles.userText, left: styles.botText }} /> );
+  const onSend = useCallback((messages = []) => {
+    setMessages(previousMessages => GiftedChat.append(previousMessages, messages));
+    setIsBotTyping(true);
+
+    const userMessage = messages[0].text.toLowerCase();
+    
+    setTimeout(() => {
+      let botResponse = "I'm still learning! Soon I'll be able to answer your questions about any lesson.";
+      if (userMessage.includes('summary')) {
+        botResponse = "I can help with that! Which lesson would you like me to summarize?";
+      } else if (userMessage.includes('quiz')) {
+        botResponse = "Quizzes are a great way to study! Tell me the topic, and I'll create one for you soon.";
+      }
+
+      const botMessage = {
+        _id: Math.random().toString(36).substring(7),
+        text: botResponse,
+        createdAt: new Date(),
+        user: BOT,
+      };
+      
+      setIsBotTyping(false);
+      setMessages(previousMessages => GiftedChat.append(previousMessages, [botMessage]));
+    }, 2000);
+  }, []);
+
+  const renderBubble = (props) => ( <Bubble {...props} wrapperStyle={{ right: styles.userBubble, left: styles.botBubble }} textStyle={{ right: styles.userText, left: styles.botText }} timeTextStyle={{ right: { color: '#a7adb8ff' }, left: { color: '#a7adb8ff' } }} /> );
   const renderInputToolbar = (props) => ( <InputToolbar {...props} containerStyle={styles.inputToolbar} primaryStyle={{ alignItems: 'center' }} /> );
   const renderComposer = (props) => ( <Composer {...props} textInputStyle={styles.composer} /> );
   const renderSend = (props) => ( <Send {...props} containerStyle={styles.sendContainer}><FontAwesome5 name="paper-plane" size={22} color="#10B981" solid /></Send> );
 
-  // --- THE FIX IS HERE (Part 1): Create a custom avatar renderer ---
+  // --- THE FIX IS HERE ---
+  // Create a custom avatar renderer
   const renderAvatar = (props) => {
-    // We don't want to show an avatar for the user's messages
-    if (props.currentMessage.user._id === (user?.uid || 1)) {
-      return null;
+    // We only want to customize the bot's avatar, not the user's (which is hidden by default)
+    if (props.currentMessage.user._id === BOT._id) {
+      return (
+        <Image 
+          source={props.currentMessage.user.avatar}
+          style={styles.avatar} // Apply our custom size
+        />
+      );
     }
-    // For the bot, we render the Avatar component with a custom size
-    return (
-      <Avatar
-        {...props}
-        imageStyle={{
-          left: {
-            width: 44,  // New width (default is 36)
-            height: 44, // New height (default is 36)
-            borderRadius: 22, // Half of the width/height
-          }
-        }}
-      />
-    );
+    // Return null for the user's avatar to keep it hidden
+    return null;
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>AI Assistant</Text>
+        <Pressable onPress={() => router.back()} style={styles.closeButton}>
+          <FontAwesome5 name="times" size={24} color="#a7adb8ff" />
+        </Pressable>
+      </View>
+      
       <View style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>AI Assistant</Text>
-          <Pressable onPress={() => router.back()} style={styles.closeButton}>
-            <FontAwesome5 name="times" size={24} color="#a7adb8ff" />
-          </Pressable>
-        </View>
-        
         <GiftedChat
           messages={messages}
           onSend={onSend}
@@ -65,15 +94,15 @@ export default function AiChatbotScreen() {
           renderInputToolbar={renderInputToolbar}
           renderComposer={renderComposer}
           renderSend={renderSend}
+          // --- APPLY THE CUSTOM AVATAR RENDERER ---
+          renderAvatar={renderAvatar}
+          // Show the avatar on the left side
+          showAvatarForEveryMessage={true}
           placeholder="Ask me anything..."
           alwaysShowSend
           isTyping={isBotTyping}
           messagesContainerStyle={styles.messagesContainer}
-          bottomOffset={0}
-          // --- THE FIX IS HERE (Part 2): Pass the custom renderer ---
-          renderAvatar={renderAvatar}
-          // Align the bot's message bubble with the top of the avatar
-          alignTop
+          bottomOffset={0} 
         />
         
         {Platform.OS === 'ios' && <KeyboardAvoidingView behavior="padding" />}
@@ -135,6 +164,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
-    height: '10%',
+    height: '10%', // Your custom height
+  },
+  // --- ADD THIS NEW STYLE FOR THE AVATAR ---
+  avatar: {
+    width: 60, // You can change this value
+    height: 60, // You can change this value
+    borderRadius: 22, // Should be half of width/height
+    marginBottom: 5,
   },
 });

@@ -144,3 +144,29 @@ export const updateUserPoints = async (userId, amount) => {
     console.error("Error updating user points:", error);
   }
 };
+// --- NEW DAILY STREAK FUNCTION ---
+
+/**
+ * Updates the user's daily streak, awards points, and sets the new login time.
+ * @param {string} userId The ID of the user.
+ * @param {number} newStreakCount The new streak count (e.g., 1, 2, 3...).
+ * @param {number} pointsToAdd The amount of points for the daily bonus.
+ */
+export const updateUserDailyStreak = async (userId, newStreakCount, pointsToAdd) => {
+  if (!userId) return;
+  
+  const progressRef = doc(db, `userProgress/${userId}`);
+  
+  try {
+    await setDoc(progressRef, {
+      lastLogin: new Date(), // Set login time to now
+      streakCount: newStreakCount,
+      stats: {
+        points: increment(pointsToAdd)
+      }
+    }, { merge: true });
+    console.log(`Daily streak updated for user ${userId}. New streak: ${newStreakCount}. Awarded ${pointsToAdd} points.`);
+  } catch (error) {
+    console.error("Error updating daily streak:", error);
+  }
+};

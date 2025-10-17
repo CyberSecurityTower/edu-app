@@ -1,5 +1,4 @@
-// app/_layout.jsx
-import React, { useState, useEffect, useMemo, useCallback , useContext} from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
 import { ActivityIndicator, View, StyleSheet, LogBox, Text } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -9,9 +8,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { auth } from '../firebase';
-import { getUserProfile } from '../services/firestoreService';
+import { getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 import AppStateContext from '../context/AppStateContext';
+import { POINTS_CONFIG } from '../config/points';
+import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
+import OnboardingScreen from '../components/OnboardingScreen';
+import AppStateContext from '../context/AppStateContext';
+import { POINTS_CONFIG } from '../config/points';
 
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
@@ -36,7 +40,48 @@ function AppStateProvider({ children }) {
       try {
         if (currentUser) {
           const userProfile = await getUserProfile(currentUser.uid);
-          setUser(userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' });
+          const fullUserProfile = userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' };
+          setUser(fullUserProfile);
+
+          // --- ENHANCED DAILY STREAK LOGIC ---
+          if (fullUserProfile.profileStatus === 'completed') {
+            const progressDoc = await getUserProgressDocument(currentUser.uid);
+            const lastLogin = progressDoc?.lastLogin?.toDate();
+            const streakCount = progressDoc?.streakCount || 0;
+            const now = new Date();
+
+            if (!lastLogin) {
+              await updateUserDailyStreak(currentUser.uid, 1, 0); // First login, set date, no points
+              return;
+            }
+
+            const isSameDay = now.toDateString() === lastLogin.toDateString();
+            if (isSameDay) return; // Already logged in today
+
+            const yesterday = new Date();
+            yesterday.setDate(now.getDate() - 1);
+            const isConsecutive = yesterday.toDateString() === lastLogin.toDateString();
+            
+            const newStreak = isConsecutive ? streakCount + 1 : 1;
+            
+            // --- COMPOUNDING POINTS LOGIC ---
+            // Base points for day 1, then increases by 10% each consecutive day
+            let pointsToAward = POINTS_CONFIG.DAILY_STREAK_BONUS;
+            if (isConsecutive && streakCount > 0) {
+              // Calculate previous day's bonus and add 10%
+              const previousBonus = POINTS_CONFIG.DAILY_STREAK_BONUS * Math.pow(1.1, streakCount - 1);
+              pointsToAward = Math.floor(previousBonus * 1.1);
+            }
+
+            await updateUserDailyStreak(currentUser.uid, newStreak, pointsToAward);
+            
+            Toast.show({
+              type: 'points',
+              text1: `Day ${newStreak} Streak! +${pointsToAward} Points`,
+              position: 'bottom',
+              visibilityTime: 3500,
+            });
+          }
         } else {
           setUser(null);
         }

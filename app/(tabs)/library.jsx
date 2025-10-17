@@ -14,6 +14,8 @@ const LibraryScreen = () => {
   const [favoriteSubjects, setFavoriteSubjects] = useState([]);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPoints, setCurrentPoints] = useState(0); // <-- New state for points
+
 
   useFocusEffect(
     useCallback(() => {
@@ -22,7 +24,8 @@ const LibraryScreen = () => {
           setIsLoading(true);
           const [pathDetails, progressDoc] = await Promise.all([
             getEducationalPathById(user.selectedPathId),
-            getUserProgressDocument(user.uid)
+            getUserProgressDocument(user.uid),
+            setCurrentPoints(progressDoc?.stats?.points || 0) // <-- Update points state
           ]);
           if (pathDetails && progressDoc) {
             const favoriteIds = progressDoc.favorites?.subjects || [];
@@ -48,7 +51,9 @@ const LibraryScreen = () => {
         renderItem={({ item }) => <SubjectCard item={item} userProgress={userProgress} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        ListHeaderComponent={<MainHeader title="My Library" />} // <-- Using the new header
+        ListHeaderComponent={
+          <MainHeader title="My Library" points={currentPoints} /> // <-- Pass points as a prop
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <FontAwesome5 name="star" size={60} color="#4B5563" />
@@ -57,6 +62,7 @@ const LibraryScreen = () => {
           </View>
         }
         contentContainerStyle={{ paddingHorizontal: 8 }}
+
       />
     </SafeAreaView>
   );

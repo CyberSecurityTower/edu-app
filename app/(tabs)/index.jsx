@@ -6,14 +6,14 @@ import { useAppState } from '../../context/AppStateContext';
 import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 import { FontAwesome5 } from '@expo/vector-icons';
 import SubjectCard from '../../components/SubjectCard';
-import { useFocusEffect } from 'expo-router';
 import MainHeader from '../../components/MainHeader'; // <-- Import our new header
-
+import { useFocusEffect } from 'expo-router';
 const HomeScreen = () => {
   const { user } = useAppState();
   const [pathDetails, setPathDetails] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPoints, setCurrentPoints] = useState(0); // <-- New state for points
 
   useFocusEffect(
     useCallback(() => {
@@ -27,6 +27,7 @@ const HomeScreen = () => {
           if (isMounted) {
             setPathDetails(details);
             setUserProgress(progressDoc?.pathProgress?.[user.selectedPathId] || {});
+            setCurrentPoints(progressDoc?.stats?.points || 0); // <-- Update points state
             setIsLoading(false);
           }
         } else if (isMounted) {
@@ -37,6 +38,7 @@ const HomeScreen = () => {
       return () => { isMounted = false; };
     }, [user])
   );
+
 
   if (isLoading && !pathDetails) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
@@ -52,7 +54,7 @@ const HomeScreen = () => {
         ListHeaderComponent={
           <>
             {/* --- THE FIX IS HERE: Using the new MainHeader --- */}
-            <MainHeader title={`Hello, ${user?.firstName}!`} />
+             <MainHeader title={`Hello, ${user?.firstName}!`} points={currentPoints} />
             
             <View style={styles.listHeaderContent}>
               <View style={styles.searchContainer}>

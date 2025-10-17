@@ -48,7 +48,7 @@ const StudyKitTabs = ({ data }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { marginTop: 20, marginBottom: 20 ,marginHorizontal:10},
+  container: { marginTop: 20, marginBottom: 20 ,marginHorizontal:15},
   // New container for the scroll view
   tabBarContainer: {
     backgroundColor: '#1E293B',

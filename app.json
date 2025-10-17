@@ -1,33 +1,39 @@
-   {
-      "expo": {
-        "name": "EduApp",
-        "slug": "edu-app",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "icon": "./assets/images/icon.png",
-        "scheme": "edu-app",
-        "userInterfaceStyle": "dark",
-        "splash": {
-          "image": "./assets/images/splash.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#0C0F27"
-        },
-        "ios": {
-          "supportsTablet": true,
-          "bundleIdentifier": "com.islamzn.eduapp"
-        },
-        "android": {
-          "adaptiveIcon": {
-            "foregroundImage": "./assets/images/adaptive-icon.png",
-            "backgroundColor": "#0C0F27"
-          },
-          "package": "com.islamzn.eduapp"
-        },
-        "web": {
-          "favicon": "./assets/images/favicon.png"
-        },
-        "plugins": [
-          "expo-router"
-        ]
+{
+  "expo": {
+    "name": "EduApp",
+    "slug": "edu-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "edu-app",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0C0F27"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.islamzn.eduapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0C0F27"
+      },
+      "package": "com.islamzn.eduapp"
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fd0b4adb-5484-458c-a251-886ac17efb51"
       }
     }
+  }
+}

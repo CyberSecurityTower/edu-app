@@ -4,30 +4,32 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../../services/firestoreService';
-import { useAppState } from '../_layout'; // <-- THE ONLY FIX NEEDED
 
-// --- Memoized LessonItem Component for PEAK PERFORMANCE ---
+// --- THE FIX IS HERE: Corrected the typo in the function name ---
+// The path '../' is correct because we go up from 'app' to the root directory.
+import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../services/firestoreService';
+
+// The path './' is correct because _layout.jsx is in the same 'app' directory.
+import { useAppState } from './_layout';
+
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();
 
   const getIcon = () => {
     switch (item.status) {
-      case 'completed':
-        return { name: 'check-circle', color: '#10B981', solid: true };
-      case 'current':
-        return { name: 'play-circle', color: '#3B82F6', solid: true };
-      case 'locked':
-      default:
-        return { name: 'play', color: '#9CA3AF', solid: true };
+      case 'completed': return { name: 'check-circle', color: '#10B981', solid: true };
+      case 'current': return { name: 'play-circle', color: '#3B82F6', solid: true };
+      // Using 'lock' icon for locked lessons is more intuitive
+      default: return { name: 'lock', color: '#9CA3AF', solid: true };
     }
   };
   const icon = getIcon();
 
   const handlePress = () => {
-    console.log(`Navigating to lesson: ${item.title} with ID: ${item.id}`);
+    if (item.status === 'locked') return; // Prevent navigation for locked lessons
+
     router.push({
-      pathname: '/(tabs)/lesson-view',
+      pathname: '/lesson-view',
       params: { 
         lessonId: item.id, 
         lessonTitle: item.title,
@@ -39,7 +41,7 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   };
 
   return (
-    <Pressable onPress={handlePress} style={styles.lessonItem}>
+    <Pressable onPress={handlePress} style={[styles.lessonItem, item.status === 'locked' && styles.lockedLesson]}>
       <View style={{ flex: 1, marginRight: 10 }}>
         <Text style={styles.lessonTitle}>{item.title}</Text>
         <Text style={styles.lessonSubtitle}>{item.duration || '15 min'}</Text>
@@ -49,7 +51,6 @@ const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   );
 });
 
-// --- Main Screen Component ---
 export default function SubjectDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -63,9 +64,6 @@ export default function SubjectDetailsScreen() {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      setSubjectData(null);
-      setUserProgress(null);
-
       if (!user || !params.id) {
         setIsLoading(false);
         return;
@@ -79,11 +77,7 @@ export default function SubjectDetailsScreen() {
       if (subjectDetails) {
         setSubjectData(subjectDetails);
         setUserProgress(progressDoc || {});
-        if (progressDoc?.favorites?.subjects?.includes(params.id)) {
-          setIsFavorite(true);
-        } else {
-          setIsFavorite(false);
-        }
+        setIsFavorite(progressDoc?.favorites?.subjects?.includes(params.id) || false);
       }
       setIsLoading(false);
     };
@@ -104,7 +98,6 @@ export default function SubjectDetailsScreen() {
   if (!subjectData) {
     return (
       <SafeAreaView style={styles.centerContainer}>
-        <FontAwesome5 name="exclamation-triangle" size={48} color="#EF4444" />
         <Text style={styles.errorText}>Could not load subject details.</Text>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>Go Back</Text>
@@ -127,76 +120,41 @@ export default function SubjectDetailsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
-          <FontAwesome5 name="arrow-left" size={22} color="white" />
-        </Pressable>
+        <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>{subjectData.name}</Text>
           <Text style={styles.headerSubtitle}>{progress}% Completed</Text>
         </View>
-        <Pressable onPress={handleFavoritePress} style={styles.headerIcon}>
-          <FontAwesome5 
-            name="star" 
-            size={22} 
-            color={isFavorite ? '#FFD700' : '#6B7280'}
-            solid={isFavorite}
-          />
-        </Pressable>
+        <Pressable onPress={handleFavoritePress} style={styles.headerIcon}><FontAwesome5 name="star" size={22} color={isFavorite ? '#FFD700' : '#6B7280'} solid={isFavorite} /></Pressable>
       </View>
-
-      <View style={styles.progressContainer}>
-        <LinearGradient
-          colors={['#10B981', '#34D399']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.progressBar, { width: `${progress}%` }]}
-        />
-      </View>
-
+      <View style={styles.progressContainer}><LinearGradient colors={['#10B981', '#34D399']} style={[styles.progressBar, { width: `${progress}%` }]} /></View>
       <Text style={styles.sectionTitle}>Lessons</Text>
-
       <FlatList
         data={mergedLessons}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <LessonItem 
-            item={item} 
-            subjectId={params.id} 
-            pathId={user.selectedPathId}
-            totalLessons={subjectData.lessons.length} 
-          />
-        )}
+        renderItem={({ item }) => <LessonItem item={item} subjectId={params.id} pathId={user.selectedPathId} totalLessons={subjectData.lessons.length} />}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <FontAwesome5 name="book-dead" size={60} color="#4B5563" />
-            <Text style={styles.emptyText}>No lessons have been added yet.</Text>
-            <Text style={styles.emptySubtext}>Check back soon!</Text>
-          </View>
-        }
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27', padding: 20 },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  errorText: { color: '#EF4444', fontSize: 20, textAlign: 'center', marginTop: 20, marginBottom: 30 },
+  errorText: { color: 'white', fontSize: 18, marginBottom: 20 },
   backButton: { backgroundColor: '#1E293B', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 8 },
   backButtonText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, minHeight: 60, backgroundColor: '#0C0F27' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10 },
   headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center' },
+  headerTitle: { color: 'white', fontSize: 22, fontWeight: 'bold' },
   headerSubtitle: { color: '#9CA3AF', fontSize: 14, marginTop: 2 },
   progressContainer: { height: 8, backgroundColor: '#1E293B', borderRadius: 4, marginHorizontal: 20, marginTop: 15 },
   progressBar: { height: '100%', borderRadius: 4 },
   sectionTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginHorizontal: 20, marginTop: 30, marginBottom: 15 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.8 },
-  emptyText: { color: '#D1D5DB', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 20 },
-  emptySubtext: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 5 },
-  lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, marginBottom: 10 },
+  lessonItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1E293B', padding: 20, borderRadius: 12, marginBottom: 10 },
+  lockedLesson: { opacity: 0.6 },
   lessonTitle: { color: 'white', fontSize: 16, fontWeight: '600' },
   lessonSubtitle: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
 });

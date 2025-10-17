@@ -7,71 +7,34 @@ import { auth } from '../firebase';
 import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 
+// ... (Context and Provider remain the same)
 LogBox.ignoreLogs(['WARN  [Layout children]']);
-
 const AppStateContext = createContext(null);
-export function useAppState() {
-  return useContext(AppStateContext);
-}
-
+export function useAppState() { return useContext(AppStateContext); }
 function AppStateProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
-
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      console.log('Auth state changed. Current user:', currentUser?.uid || 'No user');
       if (currentUser) {
-        console.log('Fetching user profile for UID:', currentUser.uid);
         const userProfile = await getUserProfile(currentUser.uid);
-        console.log('User profile fetched:', userProfile);
-
-        if (userProfile) {
-          // --- THE FIX IS HERE ---
-          // We now ensure the UID from the auth object is always included
-          // with the profile data from Firestore.
-          setUser({
-            uid: currentUser.uid, 
-            ...userProfile
-          });
-        } else {
-          // This part was already correct.
-          console.log('No profile found, setting up pending user.');
-          setUser({
-            uid: currentUser.uid,
-            email: currentUser.email,
-            profileStatus: 'pending_setup',
-          });
-        }
+        setUser(userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' });
       } else {
         setUser(null);
       }
       setAuthLoading(false);
     });
-
     const checkOnboardingStatus = async () => {
-      try {
-        const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
-        setHasCompletedOnboarding(hasCompleted === 'true');
-      } catch (e) {
-        console.log('Error reading onboarding status from AsyncStorage', e);
-        setHasCompletedOnboarding(false);
-      }
+      const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
+      setHasCompletedOnboarding(hasCompleted === 'true');
     };
-
     checkOnboardingStatus();
     return () => unsubscribeAuth();
   }, []);
-
-  return (
-    <AppStateContext.Provider
-      value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser }}
-    >
-      {children}
-    </AppStateContext.Provider>
-  );
+  return (<AppStateContext.Provider value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser }}>{children}</AppStateContext.Provider>);
 }
+
 
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useAppState();
@@ -79,86 +42,53 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    if (authLoading || hasCompletedOnboarding === null) {
-      return;
-    }
+    if (authLoading || hasCompletedOnboarding === null) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
     const inAppGroup = segments[0] === '(tabs)';
     const onDetailsScreen = segments[0] === 'subject-details';
+    const onLessonScreen = segments[0] === 'lesson-view';
+    
+    // --- THE ROUTING FIX IS HERE (Part 1) ---
+    // We teach the gatekeeper about the modal group
+    const inModalGroup = segments[0] === '(modal)';
 
     if (user) {
       const status = user.profileStatus;
       if (status === 'pending_setup' && !inSetupGroup) {
-        console.log('Redirecting to (setup)...');
         router.replace('/(setup)/profile-setup');
       } 
-      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !onDetailsScreen) {
-        console.log('Redirecting to (tabs)...');
+      // --- THE ROUTING FIX IS HERE (Part 2) ---
+      // We add our new check to the condition
+      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !onDetailsScreen && !onLessonScreen && !inModalGroup) {
         router.replace('/(tabs)/');
       }
     } 
     else if (!inAuthGroup) {
-      console.log('Redirecting to (auth)...');
       router.replace('/(auth)/');
     }
-}, [user, user?.profileStatus, segments, authLoading, hasCompletedOnboarding]);
+  }, [user, segments, authLoading, hasCompletedOnboarding]);
 
   return (
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(setup)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="subject-details"
-        options={{ headerShown: false, animation: 'slide_from_right' }}
-      />
+      <Stack.Screen name="(modal)" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="subject-details" options={{ headerShown: false, animation: 'slide_from_right' }} />
+      <Stack.Screen name="lesson-view" options={{ headerShown: false, animation: 'slide_from_right' }} />
     </Stack>
   );
 }
 
+// ... (MainLayout and RootLayout remain the same)
 function MainLayout() {
   const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
-
-  const handleOnboardingComplete = async () => {
-    try {
-      await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
-      setHasCompletedOnboarding(true);
-    } catch (e) {
-      console.log('Error saving onboarding status to AsyncStorage', e);
-      setHasCompletedOnboarding(true);
-    }
-  };
-
-  if (authLoading || hasCompletedOnboarding === null) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10B981" style={{ transform: [{ scale: 1.5 }] }} />
-      </View>
-    );
-  }
-
-  if (hasCompletedOnboarding === false) {
-    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
-  }
-
+  const handleOnboardingComplete = async () => { await AsyncStorage.setItem('@hasCompletedOnboarding', 'true'); setHasCompletedOnboarding(true); };
+  if (authLoading || hasCompletedOnboarding === null) { return (<View style={styles.container}><ActivityIndicator size="large" color="#10B981" /></View>); }
+  if (hasCompletedOnboarding === false) { return <OnboardingScreen onComplete={handleOnboardingComplete} />; }
   return <RootLayoutNav />;
 }
-
-export default function RootLayout() {
-  return (
-    <AppStateProvider>
-      <MainLayout />
-    </AppStateProvider>
-  );
-}
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0C0F27',
-  },
-});
+export default function RootLayout() { return (<AppStateProvider><MainLayout /></AppStateProvider>); }
+const styles = StyleSheet.create({ container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' } });

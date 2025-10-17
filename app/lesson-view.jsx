@@ -4,8 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
-import { getLessonContent, updateLessonProgress } from '../../services/firestoreService';
-import { useAppState } from '../_layout';
+import { getLessonContent, updateLessonProgress } from '../services/firestoreService';
+import { useAppState } from './_layout';
 
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();

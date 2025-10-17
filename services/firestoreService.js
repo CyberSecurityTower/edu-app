@@ -101,3 +101,20 @@ export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, 
     await updateDoc(progressRef, { [progressKey]: newProgress });
   }
 };
+
+/**
+ * Fetches the study kit (summary, quiz, flashcards) for a specific lesson.
+ * @param {string} lessonId The ID of the lesson.
+ * @returns {Promise<object|null>} The study kit data or null if not found.
+ */
+export const getStudyKit = async (lessonId) => {
+  if (!lessonId) return null;
+  try {
+    const kitDocRef = doc(db, 'studyKits', lessonId);
+    const kitDocSnap = await getDoc(kitDocRef);
+    return kitDocSnap.exists() ? kitDocSnap.data() : null;
+  } catch (error) {
+    console.error("Error fetching study kit:", error);
+    return null;
+  }
+};

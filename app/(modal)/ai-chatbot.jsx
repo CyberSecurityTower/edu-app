@@ -15,7 +15,7 @@ export default function AiChatbotScreen() {
   const BOT = {
     _id: 2,
     name: 'EduAI',
-    avatar: 'https://ui-avatars.com/api/?name=AI&background=8A2BE2&color=FFFFFF&size=128',
+    avatar: require('../../assets/images/owl.png'),
   };
 
   useEffect(() => {

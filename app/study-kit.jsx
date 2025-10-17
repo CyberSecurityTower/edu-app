@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { getStudyKit } from '../services/firestoreService';
-import StudyKitTabs from '../components/StudyKitTabs'; // We will reuse this component
+import StudyKitTabs from '../components/StudyKitTabs';
 
 export default function StudyKitScreen() {
   const params = useLocalSearchParams();
@@ -19,18 +19,13 @@ export default function StudyKitScreen() {
   useEffect(() => {
     const fetchKit = async () => {
       setIsLoading(true);
-      // We can add the fake loading here as well if we want
       const [kitResult] = await Promise.all([
         getStudyKit(lessonId),
-        new Promise(resolve => setTimeout(resolve, 1500)) // A shorter delay
+        new Promise(resolve => setTimeout(resolve, 1500))
       ]);
-
-      if (kitResult) {
-        setKitData(kitResult);
-      }
+      if (kitResult) setKitData(kitResult);
       setIsLoading(false);
     };
-
     fetchKit();
   }, [lessonId]);
 
@@ -48,18 +43,21 @@ export default function StudyKitScreen() {
       </View>
       <Text style={styles.lessonTitle}>{lessonTitle}</Text>
 
-      {isLoading ? (
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#10B981" />
-          <Text style={styles.loadingText}>Generating your smart tools...</Text>
-        </View>
-      ) : kitData ? (
-        <StudyKitTabs data={kitData} />
-      ) : (
-        <View style={styles.centerContent}>
-          <Text style={styles.errorText}>Could not load the Study Kit.</Text>
-        </View>
-      )}
+      {/* --- FIX #3: Vertically centering the content --- */}
+      <View style={styles.contentWrapper}>
+        {isLoading ? (
+          <View style={styles.centerContent}>
+            <ActivityIndicator size="large" color="#10B981" />
+            <Text style={styles.loadingText}>Generating your smart tools...</Text>
+          </View>
+        ) : kitData ? (
+          <StudyKitTabs data={kitData} />
+        ) : (
+          <View style={styles.centerContent}>
+            <Text style={styles.errorText}>Could not load the Study Kit.</Text>
+          </View>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -71,7 +69,13 @@ const styles = StyleSheet.create({
   headerTitleContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
   lessonTitle: { color: '#a7adb8ff', fontSize: 16, textAlign: 'center', marginTop: 10, paddingHorizontal: 20 },
-  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  // New wrapper for the main content
+  contentWrapper: {
+    flex: 1,
+    justifyContent: 'center', // This pushes the content to the vertical center
+    paddingHorizontal: 20,
+  },
+  centerContent: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#a7adb8ff', marginTop: 15 },
   errorText: { color: '#EF4444' },
 });

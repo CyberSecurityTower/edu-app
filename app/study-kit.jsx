@@ -1,20 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-
+import { useFocusEffect } from 'expo-router'; // --- ENSURE THIS IS CORRECT ---
 import { getStudyKit } from '../services/firestoreService';
 import StudyKitTabs from '../components/StudyKitTabs';
 import MainHeader from '../components/MainHeader'; // <-- Import our reusable header
+import { useAppState } from '../context/AppStateContext'; // Correct path
 
 export default function StudyKitScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAppState(); // Get user for UID
   const { lessonId, lessonTitle } = params;
 
   const [kitData, setKitData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPoints, setCurrentPoints] = useState(0); // <-- New state for points
 
   useEffect(() => {
     const fetchKit = async () => {
@@ -28,7 +31,18 @@ export default function StudyKitScreen() {
     };
     fetchKit();
   }, [lessonId]);
-
+   // --- THE FIX IS HERE: Fetch points every time the screen is focused ---
+  useFocusEffect(
+    useCallback(() => {
+      const fetchPoints = async () => {
+        if (user?.uid) {
+          const progressDoc = await getUserProgressDocument(user.uid);
+          setCurrentPoints(progressDoc?.stats?.points || 0);
+        }
+      };
+      fetchPoints();
+    }, [user])
+  );
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* --- THE FIX IS HERE: Using the MainHeader component --- */}
@@ -37,7 +51,7 @@ export default function StudyKitScreen() {
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
         {/* We pass a custom title to our reusable header */}
-        <MainHeader isCompact={true} title="Study Kit" />
+        <MainHeader title="Study Kit" isCompact={true} points={currentPoints} />
       </View>
       
       <Text style={styles.lessonTitle}>{lessonTitle}</Text>

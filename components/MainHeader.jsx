@@ -1,10 +1,14 @@
 // components/MainHeader.jsx
-import React from 'react';
+// components/MainHeader.jsx
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router'; // --- THE FIX IS HERE ---
+import { useAppState } from '../context/AppStateContext';
+import { getUserProgressDocument } from '../services/firestoreService';
 
-// The component now receives 'points' as a prop
 const MainHeader = ({ title, points = 0, isCompact = false }) => {
+  // This component is now "dumb" and just displays props
   return (
     <View style={[styles.headerContainer, isCompact && styles.compactHeaderContainer]}>
       <Text style={[styles.headerTitle, isCompact && styles.compactHeaderTitle]}>{title}</Text>

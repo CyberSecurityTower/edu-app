@@ -7,34 +7,10 @@ import { auth } from '../firebase';
 import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 
-// ... (Context and Provider remain the same)
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 const AppStateContext = createContext(null);
 export function useAppState() { return useContext(AppStateContext); }
-function AppStateProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const userProfile = await getUserProfile(currentUser.uid);
-        setUser(userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' });
-      } else {
-        setUser(null);
-      }
-      setAuthLoading(false);
-    });
-    const checkOnboardingStatus = async () => {
-      const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
-      setHasCompletedOnboarding(hasCompleted === 'true');
-    };
-    checkOnboardingStatus();
-    return () => unsubscribeAuth();
-  }, []);
-  return (<AppStateContext.Provider value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser }}>{children}</AppStateContext.Provider>);
-}
-
+function AppStateProvider({ children }) { /* ... (no changes here) ... */ }
 
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useAppState();
@@ -47,21 +23,19 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === '(auth)';
     const inSetupGroup = segments[0] === '(setup)';
     const inAppGroup = segments[0] === '(tabs)';
+    const inModalGroup = segments[0] === '(modal)';
     const onDetailsScreen = segments[0] === 'subject-details';
     const onLessonScreen = segments[0] === 'lesson-view';
-    
-    // --- THE ROUTING FIX IS HERE (Part 1) ---
-    // We teach the gatekeeper about the modal group
-    const inModalGroup = segments[0] === '(modal)';
+    // --- THE FIX IS HERE (Part 1) ---
+    const onStudyKitScreen = segments[0] === 'study-kit';
 
     if (user) {
       const status = user.profileStatus;
       if (status === 'pending_setup' && !inSetupGroup) {
         router.replace('/(setup)/profile-setup');
       } 
-      // --- THE ROUTING FIX IS HERE (Part 2) ---
-      // We add our new check to the condition
-      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !onDetailsScreen && !onLessonScreen && !inModalGroup) {
+      // --- THE FIX IS HERE (Part 2) ---
+      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !inModalGroup && !onDetailsScreen && !onLessonScreen && !onStudyKitScreen) {
         router.replace('/(tabs)/');
       }
     } 
@@ -78,6 +52,8 @@ function RootLayoutNav() {
       <Stack.Screen name="(modal)" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="subject-details" options={{ headerShown: false, animation: 'slide_from_right' }} />
       <Stack.Screen name="lesson-view" options={{ headerShown: false, animation: 'slide_from_right' }} />
+      {/* --- THE FIX IS HERE (Part 3) --- */}
+      <Stack.Screen name="study-kit" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

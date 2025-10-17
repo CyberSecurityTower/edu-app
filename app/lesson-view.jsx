@@ -4,8 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
+import Toast from 'react-native-toast-message'; // --- FIX #2: Import Toast ---
 
-// --- UPDATED IMPORTS ---
 import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints } from '../services/firestoreService';
 import { useAppState } from './_layout';
 import GenerateKitButton from '../components/GenerateKitButton';
@@ -27,36 +27,37 @@ export default function LessonViewScreen() {
       setIsLoading(true);
       const contentData = await getLessonContent(lessonId);
       if (contentData) setLessonContent(contentData.content);
-      // We still mark it as 'current' when the user enters
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', parseInt(totalLessons, 10));
       setIsLoading(false);
     };
     loadLesson();
   }, [lessonId, user]);
 
-  // --- NEW AND IMPROVED GAMIFICATION LOGIC ---
   const handleCompleteLesson = async () => {
     if (isCompleted || !user) return;
-    setIsCompleted(true); // Prevent multiple triggers in the same session
+    setIsCompleted(true);
 
+    // --- FIX #1: Added the missing catch block ---
     try {
-      // 1. Fetch the latest progress to check the lesson's current status
       const progressDoc = await getUserProgressDocument(user.uid);
       const currentStatus = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
 
-      // 2. Update the lesson progress to 'completed'
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
 
-      // 3. Award points ONLY if the lesson was not already completed in Firestore
       if (currentStatus !== 'completed') {
-        await updateUserPoints(user.uid, POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME);
-        console.log(`Awarded ${POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME} points for completing lesson ${lessonId} for the first time!`);
-        // TODO: Trigger a fancy notification here
+        const points = POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME;
+        await updateUserPoints(user.uid, points);
+        
+        Toast.show({
+          type: 'points',
+          text1: `+${points} Points!`,
+          position: 'bottom',
+          visibilityTime: 2000,
+        });
       }
     } catch (error) {
       console.error("Error in handleCompleteLesson:", error);
-      // Revert isCompleted if there was an error to allow retrying
-      setIsCompleted(false);
+      setIsCompleted(false); // Allow user to try again if something fails
     }
   };
 

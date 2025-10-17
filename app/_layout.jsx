@@ -1,46 +1,85 @@
-import { Stack, useSegments, useRouter } from 'expo-router';
-import { useState, useEffect, createContext, useContext } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import React, { useState, useEffect, createContext, useContext, useMemo, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
+import { Stack, useSegments, useRouter } from 'expo-router';
+import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
+import { LinearGradient } from 'expo-linear-gradient';
+import { FontAwesome5 } from '@expo/vector-icons';
+
 import { auth } from '../firebase';
 import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
-import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message'; // <-- Import Toast
-LogBox.ignoreLogs(['WARN  [Layout children]']);
-const AppStateContext = createContext(null);
-export function useAppState() { return useContext(AppStateContext); }
 
-// --- THE FIX IS HERE: Restoring the full, correct function ---
+LogBox.ignoreLogs(['WARN  [Layout children]']);
+
+// --- Custom Toast Design ---
+const toastConfig = {
+  points: ({ text1 }) => (
+    <View style={styles.toastContainer}>
+      <LinearGradient colors={['#10B981', '#34D399']} style={styles.toastGradient}>
+        <FontAwesome5 name="star" size={18} color="white" solid />
+        <Text style={styles.toastText}>{text1}</Text>
+      </LinearGradient>
+    </View>
+  ),
+};
+
+// --- App State Context ---
+const AppStateContext = createContext(null);
+export function useAppState() {
+  return useContext(AppStateContext);
+}
+
 function AppStateProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
 
   useEffect(() => {
+    // Auth state listener
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const userProfile = await getUserProfile(currentUser.uid);
-        if (userProfile) {
-          setUser({ uid: currentUser.uid, ...userProfile });
+      try {
+        if (currentUser) {
+          const userProfile = await getUserProfile(currentUser.uid);
+          setUser(userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' });
         } else {
-          setUser({ uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' });
+          setUser(null);
         }
-      } else {
+      } catch (error) {
+        console.error("Auth state change error:", error);
         setUser(null);
+      } finally {
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
+
+    // Onboarding status check
     const checkOnboardingStatus = async () => {
-      const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
-      setHasCompletedOnboarding(hasCompleted === 'true');
+      try {
+        const hasCompleted = await AsyncStorage.getItem('@hasCompletedOnboarding');
+        setHasCompletedOnboarding(hasCompleted === 'true');
+      } catch (e) {
+        console.log('Error reading onboarding status:', e);
+        setHasCompletedOnboarding(false); // Default to false on error
+      }
     };
+
     checkOnboardingStatus();
+    
     return () => unsubscribeAuth();
   }, []);
 
+  const contextValue = useMemo(() => ({
+    user,
+    authLoading,
+    hasCompletedOnboarding,
+    setHasCompletedOnboarding,
+    setUser,
+  }), [user, authLoading, hasCompletedOnboarding]);
+
   return (
-    <AppStateContext.Provider value={{ user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser }}>
+    <AppStateContext.Provider value={contextValue}>
       {children}
     </AppStateContext.Provider>
   );
@@ -52,29 +91,28 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    if (authLoading || hasCompletedOnboarding === null) return;
+    const isReady = !authLoading && hasCompletedOnboarding !== null;
+    if (!isReady) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const inSetupGroup = segments[0] === '(setup)';
-    const inAppGroup = segments[0] === '(tabs)';
-    const inModalGroup = segments[0] === '(modal)';
-    const onDetailsScreen = segments[0] === 'subject-details';
-    const onLessonScreen = segments[0] === 'lesson-view';
-    const onStudyKitScreen = segments[0] === 'study-kit';
+    const currentSegment = segments[0] || null;
+    const isUserAuthenticated = !!user;
+    const profileStatus = user?.profileStatus;
 
-    if (user) {
-      const status = user.profileStatus;
-      if (status === 'pending_setup' && !inSetupGroup) {
+    const isProtectedRoute = (seg) => 
+      ['(tabs)', '(modal)', 'subject-details', 'lesson-view', 'study-kit'].includes(seg);
+
+    if (isUserAuthenticated) {
+      if (profileStatus === 'pending_setup' && currentSegment !== '(setup)') {
         router.replace('/(setup)/profile-setup');
-      } 
-      else if (status === 'completed' && !inAppGroup && !inSetupGroup && !inModalGroup && !onDetailsScreen && !onLessonScreen && !onStudyKitScreen) {
+      } else if (profileStatus === 'completed' && !isProtectedRoute(currentSegment)) {
         router.replace('/(tabs)/');
       }
-    } 
-    else if (!inAuthGroup) {
-      router.replace('/(auth)/');
+    } else {
+      if (currentSegment !== '(auth)') {
+        router.replace('/(auth)/');
+      }
     }
-  }, [user, segments, authLoading, hasCompletedOnboarding]);
+  }, [user, segments, authLoading, hasCompletedOnboarding, router]);
 
   return (
     <Stack>
@@ -91,12 +129,67 @@ function RootLayoutNav() {
 
 function MainLayout() {
   const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
-  const handleOnboardingComplete = async () => { await AsyncStorage.setItem('@hasCompletedOnboarding', 'true'); setHasCompletedOnboarding(true); };
-  if (authLoading || hasCompletedOnboarding === null) { return (<View style={styles.container}><ActivityIndicator size="large" color="#10B91" /></View>); }
-  if (hasCompletedOnboarding === false) { return <OnboardingScreen onComplete={handleOnboardingComplete} />; }
+
+  const handleOnboardingComplete = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
+    } catch (e) {
+      console.log('Error saving onboarding status:', e);
+    }
+    setHasCompletedOnboarding(true);
+  }, [setHasCompletedOnboarding]);
+
+  const isLoading = authLoading || hasCompletedOnboarding === null;
+
+  if (isLoading) {
+    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
+  }
+
+  if (!hasCompletedOnboarding) {
+    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+  }
+
   return <RootLayoutNav />;
 }
 
-export default function RootLayout() { return (<AppStateProvider><MainLayout /></AppStateProvider>); }
+export default function RootLayout() {
+  return (
+    <AppStateProvider>
+      <MainLayout />
+      <Toast config={toastConfig} />
+    </AppStateProvider>
+  );
+}
 
-const styles = StyleSheet.create({ container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' } });
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0C0F27',
+  },
+  toastContainer: {
+    width: 'auto', // Auto width based on content
+    maxWidth: '80%',
+    alignItems: 'center',
+    marginBottom: 50, // Position it a bit higher from the bottom
+  },
+  toastGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    gap: 10,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  toastText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});

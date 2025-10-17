@@ -3,7 +3,7 @@ import React, { useState, useContext } from 'react'; // Import useContext
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import AnimatedGradientButton from './AnimatedGradientButton';
-
+import Toast from 'react-native-toast-message'; // <-- Import Toast at the top
 // Import our gamification tools
 import { updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { POINTS_CONFIG } from '../config/points';
@@ -18,25 +18,34 @@ const QuizView = ({ quizData }) => {
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-  const handleAnswerPress = async (option) => {
-    if (isAnswered || !user) return;
-    
-    setSelectedAnswer(option);
-    setIsAnswered(true);
+const handleAnswerPress = async (option) => {
+  if (isAnswered || !user) return;
+  
+  setSelectedAnswer(option);
+  setIsAnswered(true);
 
-    if (option === currentQuestion.correctAnswer) {
-      setScore(prev => prev + 1);
-      // Award points for correct answer
-      await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_CORRECT_ANSWER);
-      console.log(`Awarded ${POINTS_CONFIG.QUIZ_CORRECT_ANSWER} points for correct answer.`);
-      // TODO: Trigger a small "+5" notification
-    } else {
-      // Deduct points for incorrect answer
-      await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_INCORRECT_ANSWER);
-      console.log(`Deducted ${POINTS_CONFIG.QUIZ_INCORRECT_ANSWER} points for incorrect answer.`);
-      // TODO: Trigger a red "-7" notification
-    }
-  };
+  if (option === currentQuestion.correctAnswer) {
+    setScore(prev => prev + 1);
+    const points = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
+    await updateUserPoints(user.uid, points);
+    
+    // --- TRIGGER THE NOTIFICATION ---
+    Toast.show({
+      type: 'points',
+      text1: `+${points} Points!`,
+      position: 'bottom',
+      visibilityTime: 1500, // Shorter time for quick feedback
+    });
+
+  } else {
+    const points = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
+    await updateUserPoints(user.uid, points);
+    
+    // We can create a custom "error" points toast later if we want
+    // For now, we'll just log it.
+    console.log(`Deducted ${points} points.`);
+  }
+};
 
   const handleNext = () => {
     setCurrentQuestionIndex(prev => prev + 1);

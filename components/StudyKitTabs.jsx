@@ -11,7 +11,14 @@ const StudyKitTabs = ({ data }) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'summary':
-        return <ScrollView style={styles.contentScrollView}><Markdown style={markdownStyles}>{data.summary}</Markdown></ScrollView>;
+        // --- FIX #1: Added RTL wrapper for Markdown ---
+        return (
+          <ScrollView style={styles.contentScrollView}>
+            <View style={{ writingDirection: 'rtl' }}>
+              <Markdown style={markdownStyles}>{data.summary}</Markdown>
+            </View>
+          </ScrollView>
+        );
       case 'quiz':
         return <QuizView quizData={data.quiz} />;
       case 'flashcards':
@@ -23,59 +30,84 @@ const StudyKitTabs = ({ data }) => {
 
   return (
     <View style={styles.container}>
-      {/* --- THE RESPONSIVE FIX IS HERE --- */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        contentContainerStyle={styles.tabBarContainer}
-      >
-        <View style={styles.tabBar}>
-          <Pressable style={[styles.tabButton, activeTab === 'summary' && styles.activeTabButton]} onPress={() => setActiveTab('summary')}>
-            <Text style={[styles.tabText, activeTab === 'summary' && styles.activeTabText]}>Smart Summary</Text>
-          </Pressable>
-          <Pressable style={[styles.tabButton, activeTab === 'quiz' && styles.activeTabButton]} onPress={() => setActiveTab('quiz')}>
-            <Text style={[styles.tabText, activeTab === 'quiz' && styles.activeTabText]}>Short Quiz</Text>
-          </Pressable>
-          <Pressable style={[styles.tabButton, activeTab === 'flashcards' && styles.activeTabButton]} onPress={() => setActiveTab('flashcards')}>
-            <Text style={[styles.tabText, activeTab === 'flashcards' && styles.activeTabText]}>Flashcards</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+      {/* 1. The Tab Bar (Fixed at the top) */}
+      <View style={styles.tabWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={styles.tabBarContainer}
+        >
+          <View style={styles.tabBar}>
+            <Pressable style={[styles.tabButton, activeTab === 'summary' && styles.activeTabButton]} onPress={() => setActiveTab('summary')}>
+              <Text style={[styles.tabText, activeTab === 'summary' && styles.activeTabText]}>Smart Summary</Text>
+            </Pressable>
+            <Pressable style={[styles.tabButton, activeTab === 'quiz' && styles.activeTabButton]} onPress={() => setActiveTab('quiz')}>
+              <Text style={[styles.tabText, activeTab === 'quiz' && styles.activeTabText]}>Short Quiz</Text>
+            </Pressable>
+            <Pressable style={[styles.tabButton, activeTab === 'flashcards' && styles.activeTabButton]} onPress={() => setActiveTab('flashcards')}>
+              <Text style={[styles.tabText, activeTab === 'flashcards' && styles.activeTabText]}>Flashcards</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
 
-      {renderContent()}
+      {/* 2. The Content Area (Centered) */}
+      <View style={styles.contentWrapper}>
+        {renderContent()}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { marginTop: 20, marginBottom: 20 ,marginHorizontal:15},
-  // New container for the scroll view
+  container: { 
+    flex: 1,
+  },
+  tabWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 10, // Reduced padding for better fit
+  },
   tabBarContainer: {
     backgroundColor: '#1E293B',
     borderRadius: 30,
-    padding: 10,
+    padding: 3,
+    marginBottom:5 // Reduced padding for a tighter look
   },
-  // The bar itself now just holds the items
   tabBar: { 
     flexDirection: 'row', 
     alignItems: 'center',
   },
   tabButton: { 
-    // We removed flex: 1 and added horizontal padding
-    paddingVertical: 10,
-    paddingHorizontal: 20, // This gives space to each tab
+    paddingVertical: 8, // Reduced vertical padding
+    paddingHorizontal: 15, // Reduced horizontal padding
     borderRadius: 25, 
     alignItems: 'center',
   },
   activeTabButton: { backgroundColor: '#10B981' },
-  tabText: { color: '#a7adb8ff', fontWeight: 'bold', whiteSpace: 'nowrap' }, // Prevent text wrapping
+  tabText: { 
+    color: '#a7adb8ff', 
+    fontWeight: 'bold', 
+    fontSize: 14, // Slightly smaller font size for better fit
+    whiteSpace: 'nowrap' 
+  },
   activeTabText: { color: 'white' },
-  contentContainer: { marginTop: 20, padding: 15, backgroundColor: '#1E293B', borderRadius: 16 },
+  
+  contentWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  contentScrollView: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 15,
+  },
 });
 
-
 const markdownStyles = StyleSheet.create({
-    body: { color: '#D1D5DB', fontSize: 16, lineHeight: 26 },
+    body: { color: '#D1D5DB', fontSize: 16, lineHeight: 26, textAlign: 'right' },
     strong: { fontWeight: 'bold', color: '#10B981' },
     list_item: { color: '#D1D5DB', fontSize: 16, lineHeight: 26, marginBottom: 8, flexDirection: 'row-reverse', textAlign: 'right' },
 });

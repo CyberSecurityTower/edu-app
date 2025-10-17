@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 25,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 1, // Ensure text is above the pill
   },
   tabText: {
@@ -130,24 +130,23 @@ const styles = StyleSheet.create({
   activeTabText: { color: 'white' },
   animatedPill: {
     position: 'absolute',
-    height: '100%',
-    top: 0,
-    left: 0,
+    height: '120%',
     borderRadius: 25,
-    overflow: 'hidden',
+    overflow:"hidden"
   },
   contentWrapper: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingBottom: 20,
-    marginTop: 20,
+    marginTop: "-20%",
   },
   // --- FIX #2: Separated Style for Summary ---
   summaryScrollView: {
     backgroundColor: '#1E293B',
     borderRadius: 16,
     padding: 15,
+    marginTop:"30%",
   },
 });
 

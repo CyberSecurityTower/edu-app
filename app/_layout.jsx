@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
-
+import AppStateContext from '../context/AppStateContext';
 import { auth } from '../firebase';
 import { getUserProfile } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
@@ -37,7 +37,6 @@ function AppStateProvider({ children }) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
 
   useEffect(() => {
-    // Auth state listener
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
@@ -70,14 +69,11 @@ function AppStateProvider({ children }) {
     return () => unsubscribeAuth();
   }, []);
 
-  const contextValue = useMemo(() => ({
-    user,
-    authLoading,
-    hasCompletedOnboarding,
-    setHasCompletedOnboarding,
-    setUser,
+ const contextValue = useMemo(() => ({
+    user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser,
   }), [user, authLoading, hasCompletedOnboarding]);
 
+  // Use the imported context here
   return (
     <AppStateContext.Provider value={contextValue}>
       {children}

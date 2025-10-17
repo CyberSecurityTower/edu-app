@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useAppState } from '../_layout';
+import { useAppState } from '../../context/AppStateContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';

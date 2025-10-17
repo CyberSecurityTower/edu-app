@@ -7,7 +7,7 @@ import Markdown from 'react-native-markdown-display';
 import Toast from 'react-native-toast-message'; // --- FIX #2: Import Toast ---
 
 import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints } from '../services/firestoreService';
-import { useAppState } from './_layout';
+import { useAppState } from '../../context/AppStateContext';
 import GenerateKitButton from '../components/GenerateKitButton';
 import { POINTS_CONFIG } from '../config/points';
 

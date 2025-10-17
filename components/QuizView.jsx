@@ -7,7 +7,7 @@ import Toast from 'react-native-toast-message'; // --- THE FIX IS HERE: Import T
 
 import { updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { POINTS_CONFIG } from '../config/points';
-import { useAppState } from '../app/_layout';
+import { useAppState } from '../context/AppStateContext';
 
 const QuizView = ({ quizData }) => {
   const { user } = useAppState();

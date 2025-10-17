@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getSubjectDetails, getUserProgressDocument, updateUserFavoriteSubject } from '../services/firestoreService';
 
 // The path './' is correct because _layout.jsx is in the same 'app' directory.
-import { useAppState } from './_layout';
+import { useAppState } from '../../context/AppStateContext';
 
 const LessonItem = memo(({ item, subjectId, pathId, totalLessons }) => {
   const router = useRouter();

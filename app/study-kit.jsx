@@ -1,4 +1,3 @@
-// app/study-kit.jsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,6 +6,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 
 import { getStudyKit } from '../services/firestoreService';
 import StudyKitTabs from '../components/StudyKitTabs';
+import MainHeader from '../components/MainHeader'; // <-- Import our reusable header
 
 export default function StudyKitScreen() {
   const params = useLocalSearchParams();
@@ -31,18 +31,15 @@ export default function StudyKitScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* --- THE FIX IS HERE: Using the MainHeader component --- */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
-        <View style={styles.headerTitleContainer}>
-          <FontAwesome5 name="magic" size={16} color="#10B981" />
-          <Text style={styles.headerTitle}>Study Kit</Text>
-        </View>
-        <View style={{ width: 50 }} />
+        {/* We pass a custom title to our reusable header */}
+        <MainHeader title="Study Kit" />
       </View>
       
-      {/* --- FIX #3: Applied new style for lesson title --- */}
       <Text style={styles.lessonTitle}>{lessonTitle}</Text>
 
       {isLoading ? (
@@ -63,18 +60,25 @@ export default function StudyKitScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-  headerIcon: { width: 50, justifyContent: 'center', alignItems: 'center' },
-  headerTitleContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  // Updated header style to accommodate the back button and the new header
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 10, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#1E293B' 
+  },
+  backButton: {
+    padding: 10,
+  },
   lessonTitle: { 
-    color: 'white', // Changed to white
-    fontWeight: 'bold', // Made it bold
-    fontSize: 18, // Slightly larger font
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 18,
     textAlign: 'center', 
     marginTop: 10, 
     paddingHorizontal: 20, 
-    marginBottom: 10 // Added space below the title
+    marginBottom: 20
   },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#a7adb8ff', marginTop: 15 },

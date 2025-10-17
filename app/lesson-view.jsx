@@ -1,16 +1,16 @@
+// app/lesson-view.jsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
-import Toast from 'react-native-toast-message'; // --- FIX #2: Import Toast ---
+import Toast from 'react-native-toast-message';
 
 import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints } from '../services/firestoreService';
-import { useAppState } from '../context/AppStateContext';
+import { useAppState } from '../context/AppStateContext'; // Correct import path
 import GenerateKitButton from '../components/GenerateKitButton';
 import { POINTS_CONFIG } from '../config/points';
-
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();

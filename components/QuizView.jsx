@@ -2,12 +2,12 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import AnimatedGradientButton from './AnimatedGradientButton';
-import Toast from 'react-native-toast-message'; // --- THE FIX IS HERE: Import Toast ---
+import Toast from 'react-native-toast-message';
 
+import AnimatedGradientButton from './AnimatedGradientButton';
 import { updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { POINTS_CONFIG } from '../config/points';
-import { useAppState } from '../context/AppStateContext';
+import { useAppState } from '../context/AppStateContext'; // Correct import path
 
 const QuizView = ({ quizData }) => {
   const { user } = useAppState();

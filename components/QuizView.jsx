@@ -1,16 +1,16 @@
 // components/QuizView.jsx
-import React, { useState, useContext } from 'react'; // Import useContext
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import AnimatedGradientButton from './AnimatedGradientButton';
-import Toast from 'react-native-toast-message'; // <-- Import Toast at the top
-// Import our gamification tools
+import Toast from 'react-native-toast-message'; // --- THE FIX IS HERE: Import Toast ---
+
 import { updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { POINTS_CONFIG } from '../config/points';
-import { useAppState } from '../app/_layout'; // We need the user's UID
+import { useAppState } from '../app/_layout';
 
 const QuizView = ({ quizData }) => {
-  const { user } = useAppState(); // Get the current user
+  const { user } = useAppState();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -18,34 +18,30 @@ const QuizView = ({ quizData }) => {
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-const handleAnswerPress = async (option) => {
-  if (isAnswered || !user) return;
-  
-  setSelectedAnswer(option);
-  setIsAnswered(true);
-
-  if (option === currentQuestion.correctAnswer) {
-    setScore(prev => prev + 1);
-    const points = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
-    await updateUserPoints(user.uid, points);
+  const handleAnswerPress = async (option) => {
+    if (isAnswered || !user) return;
     
-    // --- TRIGGER THE NOTIFICATION ---
-    Toast.show({
-      type: 'points',
-      text1: `+${points} Points!`,
-      position: 'bottom',
-      visibilityTime: 1500, // Shorter time for quick feedback
-    });
+    setSelectedAnswer(option);
+    setIsAnswered(true);
 
-  } else {
-    const points = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
-    await updateUserPoints(user.uid, points);
-    
-    // We can create a custom "error" points toast later if we want
-    // For now, we'll just log it.
-    console.log(`Deducted ${points} points.`);
-  }
-};
+    if (option === currentQuestion.correctAnswer) {
+      setScore(prev => prev + 1);
+      const points = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
+      await updateUserPoints(user.uid, points);
+      
+      Toast.show({
+        type: 'points',
+        text1: `+${points} Points!`,
+        position: 'bottom',
+        visibilityTime: 1500,
+      });
+
+    } else {
+      const points = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
+      await updateUserPoints(user.uid, points);
+      console.log(`Deducted ${points} points.`);
+    }
+  };
 
   const handleNext = () => {
     setCurrentQuestionIndex(prev => prev + 1);
@@ -56,10 +52,9 @@ const handleAnswerPress = async (option) => {
   const handleRestart = async () => {
     if (!user) return;
 
-    // 1. Check if the user has enough points
     const progressDoc = await getUserProgressDocument(user.uid);
     const currentPoints = progressDoc?.stats?.points || 0;
-    const cost = Math.abs(POINTS_CONFIG.QUIZ_RETRY); // Get the positive cost
+    const cost = Math.abs(POINTS_CONFIG.QUIZ_RETRY);
 
     if (currentPoints < cost) {
       Alert.alert(
@@ -69,9 +64,7 @@ const handleAnswerPress = async (option) => {
       return;
     }
 
-    // 2. Deduct points and restart the quiz
     await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_RETRY);
-    console.log(`Deducted ${cost} points for retrying the quiz.`);
     
     setCurrentQuestionIndex(0);
     setSelectedAnswer(null);
@@ -79,7 +72,6 @@ const handleAnswerPress = async (option) => {
     setScore(0);
   };
 
-  // End of Quiz View
   if (currentQuestionIndex >= quizData.length) {
     return (
       <View style={styles.container}>
@@ -89,7 +81,7 @@ const handleAnswerPress = async (option) => {
             You scored <Text style={{ color: '#10B981', fontWeight: 'bold' }}>{score}</Text> out of <Text style={{ fontWeight: 'bold' }}>{quizData.length}</Text>.
           </Text>
           <AnimatedGradientButton
-            text="Try Again (-10 pts)"
+            text={`Try Again (-${Math.abs(POINTS_CONFIG.QUIZ_RETRY)} pts)`}
             onPress={handleRestart}
             buttonWidth={200}
             buttonHeight={50}
@@ -100,7 +92,6 @@ const handleAnswerPress = async (option) => {
     );
   }
 
-  // Main Quiz View
   return (
     <View style={styles.container}>
       <Text style={styles.progressText}>
@@ -146,7 +137,6 @@ const styles = StyleSheet.create({
   questionText: { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 25 },
   optionsContainer: { marginBottom: 20 },
   optionButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#334155', padding: 18, borderRadius: 12, marginBottom: 10, borderWidth: 2, borderColor: 'transparent' },
-  selectedOption: { borderColor: '#3B82F6' },
   correctOption: { backgroundColor: '#10B981', borderColor: '#34D399' },
   incorrectOption: { backgroundColor: '#EF4444', borderColor: '#F87171' },
   optionText: { color: 'white', fontSize: 16, flex: 1 },

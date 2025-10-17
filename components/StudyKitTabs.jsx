@@ -1,9 +1,9 @@
 // components/StudyKitTabs.jsx
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet,ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import QuizView from './QuizView';
-import FlashcardView from './FlashcardView'; // <-- Import our new Flashcard view
+import FlashcardView from './FlashcardView';
 
 const StudyKitTabs = ({ data }) => {
   const [activeTab, setActiveTab] = useState('summary');
@@ -11,69 +11,91 @@ const StudyKitTabs = ({ data }) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'summary':
-        return <View style={styles.contentContainer}><Markdown style={markdownStyles}>{data.summary}</Markdown></View>;
+        return <ScrollView style={styles.contentScrollView}><Markdown style={markdownStyles}>{data.summary}</Markdown></ScrollView>;
       case 'quiz':
         return <QuizView quizData={data.quiz} />;
       case 'flashcards':
-        // --- THE FIX IS HERE: Use the real FlashcardView component ---
         return <FlashcardView flashcardsData={data.flashcards} />;
       default:
         return null;
     }
   };
 
-  
   return (
+    // --- THE NEW STRUCTURE ---
     <View style={styles.container}>
-      {/* --- THE RESPONSIVE FIX IS HERE --- */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        contentContainerStyle={styles.tabBarContainer}
-      >
-        <View style={styles.tabBar}>
-          <Pressable style={[styles.tabButton, activeTab === 'summary' && styles.activeTabButton]} onPress={() => setActiveTab('summary')}>
-            <Text style={[styles.tabText, activeTab === 'summary' && styles.activeTabText]}>Smart Summary</Text>
-          </Pressable>
-          <Pressable style={[styles.tabButton, activeTab === 'quiz' && styles.activeTabButton]} onPress={() => setActiveTab('quiz')}>
-            <Text style={[styles.tabText, activeTab === 'quiz' && styles.activeTabText]}>Short Quiz</Text>
-          </Pressable>
-          <Pressable style={[styles.tabButton, activeTab === 'flashcards' && styles.activeTabButton]} onPress={() => setActiveTab('flashcards')}>
-            <Text style={[styles.tabText, activeTab === 'flashcards' && styles.activeTabText]}>Flashcards</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+      {/* 1. The Tab Bar (Fixed at the top) */}
+      <View style={styles.tabWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={styles.tabBarContainer}
+        >
+          <View style={styles.tabBar}>
+            <Pressable style={[styles.tabButton, activeTab === 'summary' && styles.activeTabButton]} onPress={() => setActiveTab('summary')}>
+              <Text style={[styles.tabText, activeTab === 'summary' && styles.activeTabText]}>Smart Summary</Text>
+            </Pressable>
+            <Pressable style={[styles.tabButton, activeTab === 'quiz' && styles.activeTabButton]} onPress={() => setActiveTab('quiz')}>
+              <Text style={[styles.tabText, activeTab === 'quiz' && styles.activeTabText]}>Short Quiz</Text>
+            </Pressable>
+            <Pressable style={[styles.tabButton, activeTab === 'flashcards' && styles.activeTabButton]} onPress={() => setActiveTab('flashcards')}>
+              <Text style={[styles.tabText, activeTab === 'flashcards' && styles.activeTabText]}>Flashcards</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
 
-      {renderContent()}
+      {/* 2. The Content Area (Centered) */}
+      <View style={styles.contentWrapper}>
+        {renderContent()}
+      </View>
     </View>
   );
 };
 
-
 const styles = StyleSheet.create({
-  container: { marginTop: 20, marginBottom: 20 },
-  // New container for the scroll view
+  // Main container now uses flex to separate children
+  container: { 
+    flex: 1,
+  },
+  // Tab styles remain the same
+  tabWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 20, // Add padding to the wrapper
+  },
   tabBarContainer: {
     backgroundColor: '#1E293B',
     borderRadius: 30,
     padding: 5,
   },
-  // The bar itself now just holds the items
   tabBar: { 
     flexDirection: 'row', 
     alignItems: 'center',
   },
   tabButton: { 
-    // We removed flex: 1 and added horizontal padding
     paddingVertical: 10,
-    paddingHorizontal: 20, // This gives space to each tab
+    paddingHorizontal: 20,
     borderRadius: 25, 
     alignItems: 'center',
   },
   activeTabButton: { backgroundColor: '#10B981' },
-  tabText: { color: '#a7adb8ff', fontWeight: 'bold', whiteSpace: 'nowrap' }, // Prevent text wrapping
+  tabText: { color: '#a7adb8ff', fontWeight: 'bold', whiteSpace: 'nowrap' },
   activeTabText: { color: 'white' },
-  contentContainer: { marginTop: 20, padding: 15, backgroundColor: '#1E293B', borderRadius: 16 },
+  
+  // New wrapper for content to center it
+  contentWrapper: {
+    flex: 1, // Takes up all remaining space
+    justifyContent: 'center', // Centers the content vertically
+    paddingHorizontal: 20,
+    paddingBottom: 20, // Some space at the bottom
+  },
+  // ScrollView for summary content if it's long
+  contentScrollView: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 15,
+  },
 });
 
 const markdownStyles = StyleSheet.create({

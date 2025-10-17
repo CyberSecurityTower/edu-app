@@ -31,6 +31,7 @@ export default function StudyKitScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* --- HEADER (Remains the same) --- */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}>
           <FontAwesome5 name="arrow-left" size={22} color="white" />
@@ -43,21 +44,20 @@ export default function StudyKitScreen() {
       </View>
       <Text style={styles.lessonTitle}>{lessonTitle}</Text>
 
-      {/* --- FIX #3: Vertically centering the content --- */}
-      <View style={styles.contentWrapper}>
-        {isLoading ? (
-          <View style={styles.centerContent}>
-            <ActivityIndicator size="large" color="#10B981" />
-            <Text style={styles.loadingText}>Generating your smart tools...</Text>
-          </View>
-        ) : kitData ? (
-          <StudyKitTabs data={kitData} />
-        ) : (
-          <View style={styles.centerContent}>
-            <Text style={styles.errorText}>Could not load the Study Kit.</Text>
-          </View>
-        )}
-      </View>
+      {/* --- THE FIX IS HERE: We separate the Tabs from the content --- */}
+      {isLoading ? (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Generating your smart tools...</Text>
+        </View>
+      ) : kitData ? (
+        // StudyKitTabs now handles both the tabs and the content rendering
+        <StudyKitTabs data={kitData} />
+      ) : (
+        <View style={styles.centerContent}>
+          <Text style={styles.errorText}>Could not load the Study Kit.</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -68,14 +68,8 @@ const styles = StyleSheet.create({
   headerIcon: { width: 50, justifyContent: 'center', alignItems: 'center' },
   headerTitleContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  lessonTitle: { color: '#a7adb8ff', fontSize: 16, textAlign: 'center', marginTop: 10, paddingHorizontal: 20 },
-  // New wrapper for the main content
-  contentWrapper: {
-    flex: 1,
-    justifyContent: 'center', // This pushes the content to the vertical center
-    paddingHorizontal: 20,
-  },
-  centerContent: { justifyContent: 'center', alignItems: 'center' },
+  lessonTitle: { color: '#a7adb8ff', fontSize: 16, textAlign: 'center', marginTop: 10, paddingHorizontal: 20, marginBottom: 20 },
+  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#a7adb8ff', marginTop: 15 },
   errorText: { color: '#EF4444' },
 });

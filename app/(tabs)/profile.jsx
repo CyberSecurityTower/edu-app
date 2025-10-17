@@ -1,12 +1,14 @@
-import React, { useState, useCallback } from 'react'; // Import useCallback
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../_layout';
-import { useRouter, useFocusEffect } from 'expo-router'; // Import useFocusEffect
+import { useRouter, useFocusEffect } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { getUserProgressDocument } from '../../services/firestoreService';
+import AnimatedGradientButton from '../../components/AnimatedGradientButton'; // Make sure this is imported
+
 const SubscriptionCard = ({ subscription }) => {
   if (subscription && subscription.plan !== 'Trial' && subscription.status === 'active') {
     const renewalDate = subscription.renewsOn?.toDate();
@@ -52,23 +54,19 @@ const StatItem = ({ icon, value, label }) => (
   </View>
 );
 
+
 export default function ProfileScreen() {
   const { user, setUser } = useAppState();
   const router = useRouter();
   const [stats, setStats] = useState({ points: 0, lessonsCompleted: 0 });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // --- THE FIX IS HERE ---
-  // We use useFocusEffect to re-fetch data every time the screen comes into view.
   useFocusEffect(
     useCallback(() => {
       const fetchUserStats = async () => {
-        if (!user?.uid) {
-          setIsLoading(false);
-          return;
-        }
+        if (!user?.uid) return;
         
-        setIsLoading(true); // Show loader on each refresh
+        setIsRefreshing(true);
         const progressDoc = await getUserProgressDocument(user.uid);
         
         if (progressDoc) {
@@ -88,16 +86,11 @@ export default function ProfileScreen() {
             lessonsCompleted: completedCount,
           });
         }
-        setIsLoading(false);
+        setIsRefreshing(false);
       };
 
       fetchUserStats();
-
-      // Optional: return a cleanup function if needed
-      return () => {
-        // This can be useful for unsubscribing from real-time listeners, etc.
-      };
-    }, [user]) // Re-run if the user object itself changes (e.g., on logout)
+    }, [user])
   );
 
   const handleLogout = () => {
@@ -108,13 +101,13 @@ export default function ProfileScreen() {
   };
 
  
-  const fullName = user ? `${user.firstName} ${user.lastName}` : 'Guest';
+   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Guest';
   const avatarUrl = `https://ui-avatars.com/api/?name=${fullName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128&bold=true`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>My Profile</Text>
         <View style={styles.userInfoContainer}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           <View style={styles.userInfoTextContainer}>
@@ -125,17 +118,17 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Subscription</Text>
         <SubscriptionCard subscription={user?.subscription} />
 
-        {/* --- THE FIX IS HERE: Re-added the Statistics section --- */}
         <Text style={styles.sectionTitle}>Statistics</Text>
-        {isLoading ? (
-          <ActivityIndicator color="#10B981" />
-        ) : (
-          <View style={styles.statsRow}>
-            <StatItem icon="star" value={stats.points} label="Points" />
-            <StatItem icon="check-circle" value={stats.lessonsCompleted} label="Lessons Done" />
-          </View>
-        )}
-
+        
+        {/* --- THE FIX IS HERE --- */}
+        {/* We removed the `isLoading` check and now just display the stats directly */}
+        <View style={styles.statsRow}>
+          <StatItem icon="star" value={stats.points} label="Points" />
+          <StatItem icon="check-circle" value={stats.lessonsCompleted} label="Lessons Done" />
+        </View>
+        {/* We show a subtle loading indicator when refreshing in the background */}
+        {isRefreshing && <ActivityIndicator size="small" color="#a7adb8ff" style={{ marginTop: 10 }} />}
+        
         <View style={styles.menuGroup}>
           <MenuItem icon="user-cog" name="Settings" onPress={() => router.push('/(setup)/edit-profile')} />
           <MenuItem icon="question-circle" name="Help & Support" onPress={() => {}} />
@@ -160,11 +153,11 @@ const styles = StyleSheet.create({
   subscriptionText: { color: '#a7adb8ff', fontSize: 16, textAlign: 'center', marginBottom: 20 },
   subscriptionTextBold: { color: '#E5E7EB', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 5 },
   manageLink: { color: '#3B82F6', fontSize: 15, fontWeight: 'bold' },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 30 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around' }, // Removed marginBottom
   statBox: { flex: 1, backgroundColor: '#1E293B', borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginHorizontal: 5 },
   statValue: { color: 'white', fontSize: 22, fontWeight: 'bold', marginVertical: 5 },
   statLabel: { color: '#a7adb8ff', fontSize: 12 },
-  menuGroup: { backgroundColor: '#1E293B', borderRadius: 12, overflow: 'hidden' },
+  menuGroup: { marginTop: 30, backgroundColor: '#1E293B', borderRadius: 12, overflow: 'hidden' },
   menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155' },
   menuItemContent: { flexDirection: 'row', alignItems: 'center' },
   menuIcon: { width: 25 },

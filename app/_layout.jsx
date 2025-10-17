@@ -8,10 +8,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 
 import { auth } from '../firebase';
-import { getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
-import OnboardingScreen from '../components/OnboardingScreen';
-import AppStateContext from '../context/AppStateContext';
-import { POINTS_CONFIG } from '../config/points';
 import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 import AppStateContext from '../context/AppStateContext';

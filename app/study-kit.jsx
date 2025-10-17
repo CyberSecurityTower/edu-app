@@ -1,6 +1,5 @@
-// app/study-kit.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native'; // Import Alert
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -20,7 +19,6 @@ export default function StudyKitScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPoints, setCurrentPoints] = useState(0);
 
-  // --- THE FIX IS HERE (Part 1): Create a function to refresh points ---
   const refreshPoints = useCallback(async () => {
     if (user?.uid) {
       const progressDoc = await getUserProgressDocument(user.uid);
@@ -28,13 +26,38 @@ export default function StudyKitScreen() {
     }
   }, [user]);
 
-  // Fetch kit data only once
+  // --- THE FIX IS HERE: Restoring the full, correct useEffect logic ---
   useEffect(() => {
-    const fetchKit = async () => { /* ... (no changes here) ... */ };
-    fetchKit();
+    const fetchKit = async () => {
+      setIsLoading(true);
+      try {
+        console.log("Fetching kit for lesson ID:", lessonId); // For debugging
+        const [kitResult] = await Promise.all([
+          getStudyKit(lessonId),
+          new Promise(resolve => setTimeout(resolve, 1500))
+        ]);
+
+        if (kitResult) {
+          setKitData(kitResult);
+        } else {
+          Alert.alert("Not Found", "No Study Kit is available for this lesson yet.");
+        }
+      } catch (error) {
+        console.error("Detailed error fetching study kit:", error);
+        Alert.alert("An Error Occurred", `Could not fetch the study kit. \n\nDetails: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (lessonId) {
+      fetchKit();
+    } else {
+      Alert.alert("Error", "Lesson ID is missing.");
+      setIsLoading(false);
+    }
   }, [lessonId]);
 
-  // Fetch points every time the screen is focused
   useFocusEffect(
     useCallback(() => {
       refreshPoints();
@@ -55,9 +78,9 @@ export default function StudyKitScreen() {
       {isLoading ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Generating your smart tools...</Text>
         </View>
       ) : kitData ? (
-        // --- THE FIX IS HERE (Part 2): Pass the refresh function down ---
         <StudyKitTabs data={kitData} onPointsUpdate={refreshPoints} />
       ) : (
         <View style={styles.centerContent}>
@@ -67,6 +90,7 @@ export default function StudyKitScreen() {
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   header: { 
@@ -90,5 +114,5 @@ const styles = StyleSheet.create({
   },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#a7adb8ff', marginTop: 15 },
-  errorText: { color: '#EF4444' },
+  errorText: { color: '#EF4444', fontSize: 16, fontWeight: 'bold' },
 });

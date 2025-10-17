@@ -1,4 +1,3 @@
-// components/QuizView.jsx
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -7,7 +6,7 @@ import Toast from 'react-native-toast-message';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { POINTS_CONFIG } from '../config/points';
-import { useAppState } from '../context/AppStateContext'; // Correct import path
+import { useAppState } from '../context/AppStateContext';
 
 const QuizView = ({ quizData, onPointsUpdate }) => {
   const { user } = useAppState();
@@ -18,7 +17,7 @@ const QuizView = ({ quizData, onPointsUpdate }) => {
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-   const handleAnswerPress = async (option) => {
+  const handleAnswerPress = async (option) => {
     if (isAnswered || !user) return;
     
     setSelectedAnswer(option);
@@ -34,16 +33,17 @@ const QuizView = ({ quizData, onPointsUpdate }) => {
         position: 'bottom',
         visibilityTime: 1500,
       });
- } else {
+    } else {
       const points = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
       await updateUserPoints(user.uid, points);
     }
-  };
-    // --- THE FIX IS HERE (Part 2): Call the function to update the UI ---
+
+    // --- THE FIX IS HERE: Moved this block inside the function ---
     if (onPointsUpdate) {
       onPointsUpdate();
     }
-  };
+  }; // <-- The function now correctly ends here
+
   const handleNext = () => {
     setCurrentQuestionIndex(prev => prev + 1);
     setSelectedAnswer(null);
@@ -66,6 +66,11 @@ const QuizView = ({ quizData, onPointsUpdate }) => {
     }
 
     await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_RETRY);
+    
+    // Also update the UI immediately after deducting points for retry
+    if (onPointsUpdate) {
+      onPointsUpdate();
+    }
     
     setCurrentQuestionIndex(0);
     setSelectedAnswer(null);

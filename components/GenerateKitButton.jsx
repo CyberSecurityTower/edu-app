@@ -1,22 +1,20 @@
+// components/GenerateKitButton.jsx
 import React from 'react';
 import { Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 
-const GenerateKitButton = ({ onPress, isGenerating }) => {
+// This component is now simplified. Its only job is to be a button.
+const GenerateKitButton = ({ onPress }) => {
   return (
-    <Pressable style={styles.container} onPress={onPress} disabled={isGenerating}>
+    <Pressable style={styles.container} onPress={onPress}>
       <LinearGradient
         colors={['#10B981', '#34D399']}
         start={{ x: 0.2, y: 0.8 }}
         end={{ x: 0.8, y: 0.2 }}
         style={styles.button}
       >
-        {isGenerating ? (
-          <ActivityIndicator color="white" size="large" />
-        ) : (
-          <FontAwesome5 name="magic" size={28} color="white" />
-        )}
+        <FontAwesome5 name="magic" size={28} color="white" />
       </LinearGradient>
     </Pressable>
   );

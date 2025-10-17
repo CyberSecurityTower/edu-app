@@ -7,6 +7,7 @@ import Markdown from 'react-native-markdown-display';
 
 import { getLessonContent, updateLessonProgress } from '../services/firestoreService';
 import { useAppState } from './_layout';
+import GenerateKitButton from '../components/GenerateKitButton'; // Import the FAB
 
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();
@@ -47,39 +48,42 @@ export default function LessonViewScreen() {
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
-        {/* --- THE NEW BUTTON IS HERE --- */}
-        <Pressable 
-          style={styles.headerIcon} 
-          onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle }})}
-        >
-          <FontAwesome5 name="magic" size={22} color="#10B981" />
-        </Pressable>
+        {/* The right side of the header is now empty for a cleaner look */}
+        <View style={{ width: 50 }} />
       </View>
 
       {isLoading ? (
         <View style={styles.centerContent}><ActivityIndicator size="large" color="#10B981" /></View>
       ) : (
-        <ScrollView 
-          contentContainerStyle={styles.contentContainer}
-          onScroll={({ nativeEvent }) => { if (isCloseToBottom(nativeEvent)) handleCompleteLesson(); }}
-          scrollEventThrottle={400}
-        >
-          <View style={{ writingDirection: 'rtl' }}>
-            <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
-          </View>
-        </ScrollView>
+        <>
+          <ScrollView 
+            contentContainerStyle={styles.contentContainer}
+            onScroll={({ nativeEvent }) => { if (isCloseToBottom(nativeEvent)) handleCompleteLesson(); }}
+            scrollEventThrottle={400}
+          >
+            <View style={{ writingDirection: 'rtl' }}>
+              <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
+            </View>
+          </ScrollView>
+          
+          {/* --- THE FAB IS BACK AND FLOATING --- */}
+          <GenerateKitButton 
+            onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle }})}
+          />
+        </>
       )}
     </SafeAreaView>
   );
 }
 
+// Styles are simplified as the FAB is now its own component
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
   headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', flex: 1, textAlign: 'center' },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  contentContainer: { padding: 20 },
+  contentContainer: { padding: 20, paddingBottom: 120 }, // Padding to avoid content hiding behind FAB
 });
 
 const markdownStyles = StyleSheet.create({

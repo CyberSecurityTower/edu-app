@@ -37,7 +37,7 @@ export default function StudyKitScreen() {
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
         {/* We pass a custom title to our reusable header */}
-        <MainHeader title="Study Kit" />
+        <MainHeader isCompact={true} title="Study Kit" />
       </View>
       
       <Text style={styles.lessonTitle}>{lessonTitle}</Text>

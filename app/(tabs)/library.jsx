@@ -1,4 +1,3 @@
-// app/(tabs)/library.jsx
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,31 +6,36 @@ import { getEducationalPathById, getUserProgressDocument } from '../../services/
 import SubjectCard from '../../components/SubjectCard';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import MainHeader from '../../components/MainHeader'; // <-- Import our new header
+import MainHeader from '../../components/MainHeader';
 
 const LibraryScreen = () => {
   const { user } = useAppState();
   const [favoriteSubjects, setFavoriteSubjects] = useState([]);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPoints, setCurrentPoints] = useState(0); // <-- New state for points
-
+  const [currentPoints, setCurrentPoints] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       const fetchData = async () => {
         if (user && user.selectedPathId) {
           setIsLoading(true);
+          
+          // --- THE FIX IS HERE ---
+          // 1. Fetch all data first
           const [pathDetails, progressDoc] = await Promise.all([
             getEducationalPathById(user.selectedPathId),
             getUserProgressDocument(user.uid),
-            setCurrentPoints(progressDoc?.stats?.points || 0) // <-- Update points state
           ]);
+
+          // 2. Now that we have the data, update all states
           if (pathDetails && progressDoc) {
             const favoriteIds = progressDoc.favorites?.subjects || [];
             const filteredFavorites = (pathDetails.subjects || []).filter(subject => favoriteIds.includes(subject.id));
+            
             setFavoriteSubjects(filteredFavorites);
             setUserProgress(progressDoc.pathProgress?.[user.selectedPathId] || {});
+            setCurrentPoints(progressDoc.stats?.points || 0); // Update points here
           }
         }
         setIsLoading(false);
@@ -52,7 +56,7 @@ const LibraryScreen = () => {
         keyExtractor={(item) => item.id}
         numColumns={2}
         ListHeaderComponent={
-          <MainHeader title="My Library" points={currentPoints} /> // <-- Pass points as a prop
+          <MainHeader title="My Library" points={currentPoints} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -62,7 +66,6 @@ const LibraryScreen = () => {
           </View>
         }
         contentContainerStyle={{ paddingHorizontal: 8 }}
-
       />
     </SafeAreaView>
   );

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // Import from here
 import { useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { GiftedChat, Bubble, InputToolbar, Send, Composer } from 'react-native-gifted-chat';
@@ -30,7 +31,7 @@ export default function AiChatbotScreen() {
 
   const onSend = useCallback((messages = []) => {
     setMessages(previousMessages => GiftedChat.append(previousMessages, messages));
-    setIsBotTyping(true); // Show typing indicator
+    setIsBotTyping(true);
 
     const userMessage = messages[0].text.toLowerCase();
     
@@ -49,48 +50,20 @@ export default function AiChatbotScreen() {
         user: BOT,
       };
       
-      setIsBotTyping(false); // Hide typing indicator
+      setIsBotTyping(false);
       setMessages(previousMessages => GiftedChat.append(previousMessages, [botMessage]));
     }, 2000);
   }, []);
 
-  // --- NEW MODERN BUBBLE DESIGN ---
-  const renderBubble = (props) => (
-    <Bubble
-      {...props}
-      wrapperStyle={{
-        right: styles.userBubble,
-        left: styles.botBubble,
-      }}
-      textStyle={{
-        right: styles.userText,
-        left: styles.botText,
-      }}
-      timeTextStyle={{
-        right: { color: '#a7adb8ff' },
-        left: { color: '#a7adb8ff' },
-      }}
-    />
-  );
-
-  // --- NEW MODERN INPUT TOOLBAR DESIGN ---
-  const renderInputToolbar = (props) => (
-    <InputToolbar {...props} containerStyle={styles.inputToolbar} primaryStyle={{ alignItems: 'center' }} />
-  );
-
-  const renderComposer = (props) => (
-    <Composer {...props} textInputStyle={styles.composer} />
-  );
-
-  const renderSend = (props) => (
-    <Send {...props} containerStyle={styles.sendContainer}>
-      <FontAwesome5 name="paper-plane" size={22} color="#10B981" solid />
-    </Send>
-  );
+  const renderBubble = (props) => ( <Bubble {...props} wrapperStyle={{ right: styles.userBubble, left: styles.botBubble }} textStyle={{ right: styles.userText, left: styles.botText }} timeTextStyle={{ right: { color: '#a7adb8ff' }, left: { color: '#a7adb8ff' } }} /> );
+  const renderInputToolbar = (props) => ( <InputToolbar {...props} containerStyle={styles.inputToolbar} primaryStyle={{ alignItems: 'center' }} /> );
+  const renderComposer = (props) => ( <Composer {...props} textInputStyle={styles.composer} /> );
+  const renderSend = (props) => ( <Send {...props} containerStyle={styles.sendContainer}><FontAwesome5 name="paper-plane" size={22} color="#10B981" solid /></Send> );
 
   return (
-    // --- FIX #1: Using SafeAreaView correctly ---
-    <View style={styles.container}>
+    // --- THE FINAL FIX IS HERE ---
+    // 1. Use SafeAreaView with flex: 1 and ignore the bottom edge
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>AI Assistant</Text>
         <Pressable onPress={() => router.back()} style={styles.closeButton}>
@@ -98,23 +71,28 @@ export default function AiChatbotScreen() {
         </Pressable>
       </View>
       
-      <GiftedChat
-        messages={messages}
-        onSend={onSend}
-        user={{ _id: user?.uid || 1 }}
-        renderBubble={renderBubble}
-        renderInputToolbar={renderInputToolbar}
-        renderComposer={renderComposer}
-        renderSend={renderSend}
-        placeholder="Ask me anything..."
-        alwaysShowSend
-        isTyping={isBotTyping}
-        messagesContainerStyle={styles.messagesContainer}
-      />
-      
-      {/* --- FIX #2: Proper KeyboardAvoidingView for iOS --- */}
-      {Platform.OS === 'ios' && <KeyboardAvoidingView behavior="padding" />}
-    </View>
+      {/* 2. Wrap GiftedChat in a simple View with flex: 1 */}
+      <View style={{ flex: 1 }}>
+        <GiftedChat
+          messages={messages}
+          onSend={onSend}
+          user={{ _id: user?.uid || 1 }}
+          renderBubble={renderBubble}
+          renderInputToolbar={renderInputToolbar}
+          renderComposer={renderComposer}
+          renderSend={renderSend}
+          placeholder="Ask me anything..."
+          alwaysShowSend
+          isTyping={isBotTyping}
+          messagesContainerStyle={styles.messagesContainer}
+          // This tells GiftedChat not to add its own bottom offset
+          bottomOffset={0} 
+        />
+        
+        {/* 3. Let KeyboardAvoidingView handle the bottom padding */}
+        {Platform.OS === 'ios' && <KeyboardAvoidingView behavior="padding" />}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -124,16 +102,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    padding: 20, 
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     borderBottomWidth: 1, 
     borderBottomColor: '#1E293B',
-    // This is needed for SafeAreaView on Android
-    marginTop: Platform.OS === 'android' ? 25 : 0,
   },
   headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   closeButton: { padding: 5 },
   
-  // --- NEW STYLES FOR A MODERN LOOK ---
   messagesContainer: {
     paddingBottom: 10,
   },
@@ -151,16 +127,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
-  userText: {
-    color: 'white',
-    fontSize: 16,
-  },
-  botText: {
-    color: 'white',
-    fontSize: 16,
-    // --- FIX #3: Support for Arabic text alignment ---
-    writingDirection: 'auto',
-  },
+  userText: { color: 'white', fontSize: 16 },
+  botText: { color: 'white', fontSize: 16, writingDirection: 'auto' },
   inputToolbar: {
     backgroundColor: '#0C0F27',
     borderTopWidth: 1,
@@ -172,7 +140,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderRadius: 25,
     paddingHorizontal: 15,
-    paddingTop: 10,
+    paddingTop: Platform.OS === 'ios' ? 10 : 5,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 5,
     color: 'white',
     fontSize: 16,
   },
@@ -180,6 +149,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
-    height: '100%',
+    height: '10%',
   },
 });

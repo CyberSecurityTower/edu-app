@@ -6,6 +6,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { LinearGradient } from 'expo-linear-gradient';
 import FloatingActionButton from '../../components/FloatingActionButton';
 
+// MyCustomTabBar component remains unchanged, it's correct.
 function MyCustomTabBar({ state, descriptors, navigation }) {
     const [layouts, setLayouts] = React.useState([]);
     const translateX = useSharedValue(0);
@@ -57,71 +58,72 @@ export default function TabsLayout() {
   const router = useRouter();
   const segments = useSegments();
   const lastSegment = segments[segments.length - 1];
+  
+  // We hide the Floating Action Button on these screens
   const hideFab = lastSegment === 'profile' || lastSegment === 'leaderboard';
 
   return (
     <View style={{ flex: 1, position: 'relative' }}>
-        <Tabs
-      tabBar={(props) => <MyCustomTabBar {...props} />}
-      // screenOptions has been REMOVED from here
-    >
-      <Tabs.Screen 
-        name="index" 
-        options={{ 
-          title: 'Home', 
-          tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />,
-          headerShown: false, // Hide header for Home
-        }} 
-      />
-      
-      <Tabs.Screen 
-        name="leaderboard"
-        options={{ 
-          title: 'Ranking', // This title is for the tab bar, we will override it
-          tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} />,
-          // We DO NOT hide the header here. We let it show.
-        }} 
-      />
-      
-      <Tabs.Screen 
-        name="search" 
-        options={{ 
-          title: 'Search', 
-          tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} />,
-          headerShown: false, // Hide header for Search
-        }} 
-      />
-      <Tabs.Screen 
-        name="profile" 
-        options={{ 
-          title: 'Profile', 
-          tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
-          headerShown: false, // Hide header for Profile
-        }} 
-      />
+      {/* --- THE FIX: Only ONE <Tabs> component that wraps all screens --- */}
       <Tabs
-  tabBar={(props) => <MyCustomTabBar {...props} />}
-  screenOptions={{ headerShown: false }}
->
-  <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} /> }} />
-  <Tabs.Screen name="leaderboard" options={{ title: 'Ranking', tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} /> }} />
-  
-  {/* --- ADD THIS TEMPORARY LINE FOR PREVIEW --- */}
-  <Tabs.Screen name="path-preview" options={{ title: 'Preview', tabBarIcon: ({ color }) => <FontAwesome5 name="compass" size={24} color={color} /> }} />
-  
-  <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} /> }} />
-  <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} /> }} />
-</Tabs>
-    </Tabs>
+        tabBar={(props) => <MyCustomTabBar {...props} />}
+      >
+        <Tabs.Screen 
+          name="index" 
+          options={{ 
+            title: 'Home', 
+            tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />,
+            headerShown: false, // Hide header for Home
+          }} 
+        />
+        
+        <Tabs.Screen 
+          name="leaderboard"
+          options={{ 
+            title: 'Ranking', 
+            tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} />,
+            // IMPORTANT: We let the header show for leaderboard, so the screen itself can customize it.
+            headerShown: true, 
+          }} 
+        />
+
+        {/* --- The temporary preview screen is added here correctly --- */}
+        <Tabs.Screen 
+          name="path-preview" 
+          options={{ 
+            title: 'Preview', 
+            tabBarIcon: ({ color }) => <FontAwesome5 name="compass" size={24} color={color} />,
+            headerShown: false, // Hide header for the preview
+          }} 
+        />
+        
+        <Tabs.Screen 
+          name="search" 
+          options={{ 
+            title: 'Search', 
+            tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} />,
+            headerShown: false, // Hide header for Search
+          }} 
+        />
+
+        <Tabs.Screen 
+          name="profile" 
+          options={{ 
+            title: 'Profile', 
+            tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
+            headerShown: false, // Hide header for Profile
+          }} 
+        />
+      </Tabs>
       
-      {!hideFab && <FloatingActionButton onPress={() => router.push('/(modal)/ai-chatbot')} />,}
+      {!hideFab && <FloatingActionButton onPress={() => router.push('/(modal)/ai-chatbot')} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
     tabBarContainer: { position: 'absolute', bottom: 25, left: 20, right: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 5 },
-    tabBar: { flexDirection: 'row', height: 70, backgroundColor: '#2a384ebc', borderRadius: 35, alignItems: 'center', justifyContent: 'space-around', overflow: 'hidden' },
+    tabBar: { flexDirection: 'row', height: 70, backgroundColor: 'rgba(42, 56, 78, 0.75)', borderRadius: 35, alignItems: 'center', justifyContent: 'space-around', overflow: 'hidden' },
     tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%', zIndex: 1 },
     tabLabel: { fontSize: 11, marginTop: 4, fontWeight: '600' },
     animatedPill: { position: 'absolute', height: '80%', top: '10%', left: 0, borderRadius: 25, overflow: 'hidden' },

@@ -94,45 +94,61 @@ export default function ProfileScreen() {
   };
 
   useFocusEffect(
-    useCallback(() => {
-      const fetchData = async () => {
-        if (!user?.uid) {
-          setIsLoading(false);
-          return;
-        }
-        
-        const [progressDoc, pathDetails] = await Promise.all([
-          getUserProgressDocument(user.uid),
-          getEducationalPathById(user.selectedPathId)
-        ]);
-        
-        if (progressDoc) {
-          const userStats = progressDoc.stats || { points: 0 };
-          let completedCount = 0;
-          if (progressDoc.pathProgress) {
-            Object.values(progressDoc.pathProgress).forEach(path => {
-              Object.values(path.subjects).forEach(subject => {
-                if (subject.lessons) {
-                  completedCount += Object.values(subject.lessons).filter(status => status === 'completed').length;
-                }
-              });
-            });
-          }
-          setStats({ points: userStats.points, lessonsCompleted: completedCount });
-
-          if (pathDetails) {
-            const favoriteIds = progressDoc.favorites?.subjects || [];
-            const filteredFavorites = (pathDetails.subjects || []).filter(subject => favoriteIds.includes(subject.id));
-            setSavedSubjects(filteredFavorites);
-            setUserProgress(progressDoc.pathProgress?.[user.selectedPathId] || {});
-          }
-        }
+  useCallback(() => {
+    const fetchData = async () => {
+      if (!user?.uid) {
         setIsLoading(false);
-      };
+        return;
+      }
+      
+      // --- UPDATE: Fetch leaderboard data at the same time ---
+      const [progressDoc, pathDetails, leaderboardData] = await Promise.all([
+        getUserProgressDocument(user.uid),
+        getEducationalPathById(user.selectedPathId),
+        getLeaderboard(), // Fetch the leaderboard to find the user's rank
+      ]);
+      
+      if (progressDoc) {
+        // --- UPDATE: Calculate all stats together ---
+        const userStats = progressDoc.stats || { points: 0 };
+        const streak = progressDoc.streakCount || 0;
+        
+        const userRankIndex = leaderboardData.findIndex(item => item.id === user.uid);
+        const rank = userRankIndex !== -1 ? userRankIndex + 1 : '50+';
 
-      fetchData();
-    }, [user])
-  );
+        let completedCount = 0;
+        if (progressDoc.pathProgress) {
+          Object.values(progressDoc.pathProgress).forEach(path => {
+            Object.values(path.subjects).forEach(subject => {
+              if (subject.lessons) {
+                completedCount += Object.values(subject.lessons).filter(status => status === 'completed').length;
+              }
+            });
+          });
+        }
+        
+        // --- UPDATE: Set all stats in one go ---
+        setStats({ 
+          points: userStats.points, 
+          lessonsCompleted: completedCount,
+          streak: streak,
+          rank: rank,
+        });
+
+        // (Saved Subjects logic remains the same)
+        if (pathDetails) {
+          const favoriteIds = progressDoc.favorites?.subjects || [];
+          const filteredFavorites = (pathDetails.subjects || []).filter(subject => favoriteIds.includes(subject.id));
+          setSavedSubjects(filteredFavorites);
+          setUserProgress(progressDoc.pathProgress?.[user.selectedPathId] || {});
+        }
+      }
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, [user])
+);
 
   const handleLogout = () => {
     Alert.alert(

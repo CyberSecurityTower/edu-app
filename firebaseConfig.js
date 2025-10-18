@@ -1,10 +1,11 @@
+// firebaseConfig.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { initializeAuth, getReactNativePersistence } from "firebase/auth";
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-// إعدادات Firebase
+// ⚡ إعدادات Firebase من ملف .env أو expo config
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -15,25 +16,25 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// تهيئة التطبيق
+// 🔥 تهيئة التطبيق
 const app = initializeApp(firebaseConfig);
 
-// تهيئة المصادقة مع AsyncStorage (مهم في React Native)
+// 👤 تهيئة المصادقة (Auth) مع AsyncStorage
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(ReactNativeAsyncStorage),
 });
 
-// تهيئة قاعدة البيانات
+// 📚 تهيئة قاعدة البيانات Firestore
 const db = getFirestore(app);
 
-// تهيئة الدوال السحابية
+// ⚙️ تهيئة الدوال السحابية Functions
 const functions = getFunctions(app);
 
-// الاتصال بالمحاكي في بيئة التطوير
+// 🧩 الاتصال بالمحاكيات أثناء التطوير فقط
 if (__DEV__) {
-  console.log("Connecting to local Firebase emulators...");
+  console.log("✅ Connected to Firebase local emulators...");
   connectFunctionsEmulator(functions, "localhost", 5001);
 }
 
-// تصدير الموديولات
+// 🚀 تصدير الموديولات
 export { app, auth, db, functions };

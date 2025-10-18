@@ -1,24 +1,56 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../../context/AppStateContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { auth, db } from '../../firebase';
-import { doc, writeBatch } from 'firebase/firestore';
+import { auth } from '../../firebase';
 
 import { getUserProgressDocument, getEducationalPathById, getLeaderboard } from '../../services/firestoreService';
 import SubjectCard from '../../components/SubjectCard';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 
-// --- No changes to these sub-components ---
-const SmartSubscriptionCard = ({ subscription }) => { /* ... same as before ... */ };
-const EmptySavedSubjects = () => { /* ... same as before ... */ };
-const MenuItem = ({ icon, name, onPress, isLogout = false }) => { /* ... same as before ... */ };
+// --- SUB-COMPONENTS (DEFINED HERE FOR STABILITY) ---
 
-// --- StatsGrid and StatItem are here for completeness ---
+const SmartSubscriptionCard = ({ subscription }) => {
+  if (!subscription) return null;
+
+  const isTrial = subscription.plan === 'Trial';
+  let daysRemaining = 0;
+  let progress = 0;
+
+  if (isTrial && subscription.expiresOn) {
+    const expiryDate = subscription.expiresOn.toDate();
+    const today = new Date();
+    const createdAtDate = subscription.createdAt ? subscription.createdAt.toDate() : new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000); // fallback
+    const totalTrialMs = expiryDate.getTime() - createdAtDate.getTime();
+    const totalTrialDays = Math.ceil(totalTrialMs / (1000 * 60 * 60 * 24));
+    
+    daysRemaining = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+    daysRemaining = Math.max(0, daysRemaining);
+    progress = totalTrialDays > 0 ? ((totalTrialDays - daysRemaining) / totalTrialDays) * 100 : 0;
+  }
+
+  return (
+    <View style={styles.subscriptionCard}>
+      <Text style={styles.subscriptionPlan}>{subscription.plan}</Text>
+      {isTrial ? (
+        <>
+          <Text style={styles.subscriptionStatus}>{daysRemaining} days remaining in your trial</Text>
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: `${progress}%` }]} />
+          </View>
+        </>
+      ) : (
+        <Text style={styles.subscriptionStatus}>Renews on: {subscription.renewsOn?.toDate().toLocaleDateString() || 'N/A'}</Text>
+      )}
+      <AnimatedGradientButton text="Upgrade to Pro" buttonWidth={220} buttonHeight={45} fontSize={16} />
+    </View>
+  );
+};
+
 const StatsGrid = ({ stats }) => (
   <View style={styles.statsGrid}>
     <StatItem icon="star" value={stats.points} label="Points" />
@@ -36,7 +68,29 @@ const StatItem = ({ icon, value, label }) => (
   </View>
 );
 
-// --- Main Profile Screen Component ---
+const EmptySavedSubjects = () => {
+  const router = useRouter();
+  return (
+    <View style={styles.emptySavedContainer}>
+      <FontAwesome5 name="bookmark" size={40} color="#4B5563" />
+      <Text style={styles.emptySavedTitle}>No Saved Subjects</Text>
+      <Text style={styles.emptySavedText}>Tap the star on a subject to save it here for quick access.</Text>
+      <AnimatedGradientButton text="Browse Subjects" onPress={() => router.push('/(tabs)/')} buttonWidth={200} buttonHeight={45} fontSize={15} />
+    </View>
+  );
+};
+
+const MenuItem = ({ icon, name, onPress, isLogout = false }) => (
+  <Pressable style={styles.menuItem} onPress={onPress}>
+    <View style={styles.menuItemContent}>
+      <FontAwesome5 name={icon} size={18} color={isLogout ? '#EF4444' : '#a7adb8ff'} style={styles.menuIcon} />
+      <Text style={[styles.menuText, isLogout && styles.logoutText]}>{name}</Text>
+    </View>
+    {!isLogout && <FontAwesome5 name="chevron-right" size={16} color="#6B7280" />}
+  </Pressable>
+);
+
+// --- MAIN PROFILE SCREEN COMPONENT ---
 export default function ProfileScreen() {
   const { user, setUser } = useAppState();
   const router = useRouter();
@@ -45,14 +99,12 @@ export default function ProfileScreen() {
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- NEW: "Stale-While-Revalidate" Data Fetching Logic ---
   const fetchData = useCallback(async () => {
     if (!user?.uid) {
       setIsLoading(false);
       return;
     }
     
-    // Fetch all data in parallel for maximum efficiency
     const [progressDoc, pathDetails, leaderboard] = await Promise.all([
       getUserProgressDocument(user.uid),
       getEducationalPathById(user.selectedPathId),
@@ -60,7 +112,6 @@ export default function ProfileScreen() {
     ]);
     
     if (progressDoc) {
-      // Stats Logic
       const userStats = progressDoc.stats || { points: 0 };
       const streak = progressDoc.streakCount || 0;
       let completedCount = 0;
@@ -77,7 +128,6 @@ export default function ProfileScreen() {
       const rank = rankIndex !== -1 ? `#${rankIndex + 1}` : '50+';
       setStats({ points: userStats.points, lessonsCompleted: completedCount, rank, streak });
 
-      // Saved Subjects Logic
       if (pathDetails) {
         const favoriteIds = progressDoc.favorites?.subjects || [];
         const filteredFavorites = (pathDetails.subjects || []).filter(subject => favoriteIds.includes(subject.id));
@@ -87,19 +137,32 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  // This effect runs the fetch logic whenever the screen comes into focus.
   useFocusEffect(
     useCallback(() => {
       fetchData().finally(() => {
-        // We only set loading to false, we never set it to true here.
-        // This ensures subsequent focuses don't show a spinner.
         if (isLoading) setIsLoading(false);
       });
     }, [fetchData])
   );
 
-  const handleLogout = () => { /* ... same as before ... */ };
-  const addDummyUser = async () => { /* ... same as before ... */ };
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Log Out", style: "destructive", onPress: async () => {
+            try {
+              await signOut(auth);
+              setUser(null);
+            } catch (error) {
+              console.error("Error signing out: ", error);
+            }
+          } 
+        }
+      ]
+    );
+  };
  
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Guest';
   const avatarUrl = `https://ui-avatars.com/api/?name=${fullName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128&bold=true`;
@@ -111,7 +174,6 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* ... The rest of the JSX is the same as the previous version ... */}
         <View style={styles.header}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           <Text style={styles.userName}>{fullName}</Text>
@@ -122,6 +184,7 @@ export default function ProfileScreen() {
         <StatsGrid stats={stats} />
 
         <Text style={styles.sectionTitle}>Subscription</Text>
+        {/* The subscription object passed here should now be correct from the global user state */}
         <SmartSubscriptionCard subscription={user?.subscription} />
         
         <Text style={styles.sectionTitle}>Saved Subjects</Text>
@@ -143,18 +206,12 @@ export default function ProfileScreen() {
           <MenuItem icon="question-circle" name="Help & Support" onPress={() => {}} />
           <MenuItem icon="sign-out-alt" name="Log Out" onPress={handleLogout} isLogout={true} />
         </View>
-
-        <Pressable onPress={addDummyUser} style={styles.dummyButton}>
-          <Text style={styles.dummyButtonText}>ADD DUMMY USER (FOR TESTING)</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// --- UPDATED STYLES ---
 const styles = StyleSheet.create({
-  // ... other styles are the same ...
   container: { flex: 1, backgroundColor: '#0C0F27' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
@@ -164,29 +221,25 @@ const styles = StyleSheet.create({
   userEmail: { color: '#a7adb8ff', fontSize: 15, marginTop: 4 },
   sectionTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginTop: 25 },
   
-  // Stats Grid Styles
+  subscriptionCard: { backgroundColor: '#1E293B', borderRadius: 16, padding: 20, alignItems: 'center' },
+  subscriptionPlan: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  subscriptionStatus: { color: '#a7adb8ff', fontSize: 14, marginVertical: 10 },
+  progressBarContainer: { height: 6, width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 3, marginBottom: 15 },
+  progressBar: { height: '100%', backgroundColor: '#10B981', borderRadius: 3 },
+
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
-  statBox: { 
-    width: '50%', 
-    padding: 15, // Increased padding for better spacing
-    // --- FIX IS HERE ---
-    alignItems: 'center', // This centers the content horizontally
-    // --- END OF FIX ---
-  },
+  statBox: { width: '50%', padding: 15, alignItems: 'center' },
   statValue: { color: 'white', fontSize: 24, fontWeight: 'bold', marginTop: 8 },
-  statLabel: { color: '#a7adb8ff', fontSize: 12, marginTop: 2, textTransform: 'uppercase' }, // Added uppercase for style
-  // Empty Saved Subjects Styles
+  statLabel: { color: '#a7adb8ff', fontSize: 12, marginTop: 2, textTransform: 'uppercase' },
+
   emptySavedContainer: { backgroundColor: '#1E293B', borderRadius: 16, padding: 30, alignItems: 'center' },
   emptySavedTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 15 },
   emptySavedText: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginVertical: 10, lineHeight: 22, maxWidth: '90%' },
 
-  // Menu & Other Styles
   menuGroup: { marginTop: 30, backgroundColor: '#1E293B', borderRadius: 12, overflow: 'hidden' },
-  menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155'  },
   menuItemContent: { flexDirection: 'row', alignItems: 'center' },
   menuIcon: { width: 25, textAlign: 'center' },
   menuText: { color: 'white', fontSize: 16, marginLeft: 15 },
-  logoutText: { color: '#EF4444' },
-  dummyButton: { backgroundColor: 'darkred', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 20 },
-  dummyButtonText: { color: 'white', fontWeight: 'bold' },
+  logoutText: { color: '#EF4444'},
 });

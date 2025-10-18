@@ -21,7 +21,45 @@ export default function ProfileScreen() {
   const [savedSubjects, setSavedSubjects] = useState([]);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true); // Use isLoading for initial load
+  const addDummyUser = async () => {
+        console.log("Adding a dummy user...");
+        try {
+          const batch = writeBatch(db);
+          const randomId = Math.random().toString(36).substring(7);
+          const dummyUID = `dummy_${randomId}`;
+          const firstName = "Bot";
+          const lastName = `User ${randomId}`;
+          const displayName = `${firstName} ${lastName}`;
+          const points = Math.floor(Math.random() * 500) + 50; // Random points between 50 and 550
 
+          // 1. Create user document
+          const userRef = doc(db, "users", dummyUID);
+          batch.set(userRef, {
+            uid: dummyUID,
+            firstName: firstName,
+            lastName: lastName,
+            email: `${dummyUID}@test.com`,
+            profileStatus: "completed",
+          });
+
+          // 2. Create userProgress document
+          const progressRef = doc(db, "userProgress", dummyUID);
+          batch.set(progressRef, {
+            stats: {
+              points: points,
+              displayName: displayName,
+              avatarUrl: `https://ui-avatars.com/api/?name=${displayName.replace(" ", "+")}`,
+            }
+          });
+
+          await batch.commit(); // Commit both operations at once
+          Alert.alert("Success", `Dummy user "${displayName}" added with ${points} points!`);
+
+        } catch (error) {
+          console.error("Error adding dummy user:", error);
+          Alert.alert("Error", "Could not add dummy user.");
+        }
+      };
   useFocusEffect(
     useCallback(() => {
       const fetchData = async () => {
@@ -109,7 +147,11 @@ export default function ProfileScreen() {
             <Text style={styles.emptySavedText}>Your saved subjects will appear here.</Text>
           </View>
         )}
-        
+         {/* --- ADD THIS TEMPORARY BUTTON --- */}
+            <Pressable onPress={addDummyUser} style={{ backgroundColor: 'darkred', padding: 15, borderRadius: 10, alignItems: 'center', marginVertical: 20 }}>
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>ADD DUMMY USER (FOR TESTING)</Text>
+            </Pressable>
+            {/* --- END OF BUTTON --- */}
         <View style={styles.menuGroup}>
           <MenuItem icon="user-cog" name="Settings" onPress={() => router.push('/(setup)/edit-profile')} />
           <MenuItem icon="question-circle" name="Help & Support" onPress={() => {}} />

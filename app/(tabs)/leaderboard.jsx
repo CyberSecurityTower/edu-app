@@ -1,42 +1,57 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppState } from '../../context/AppStateContext';
-import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
-import SubjectCard from '../../components/SubjectCard';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import MainHeader from '../../components/MainHeader';
+import { FontAwesome5 } from '@expo/vector-icons';
 
-const LibraryScreen = () => {
+import MainHeader from '../../components/MainHeader';
+import { useAppState } from '../../context/AppStateContext';
+import { getLeaderboard, getUserProgressDocument } from '../../services/firestoreService';
+
+const UserRankItem = ({ user, rank }) => {
+  const avatarUrl = `https://ui-avatars.com/api/?name=${user.name.replace(' ', '+')}&background=1E293B&color=FFFFFF&size=128`;
+  
+  let rankColor = '#a7adb8ff';
+  if (rank === 1) rankColor = '#FFD700'; // Gold
+  if (rank === 2) rankColor = '#C0C0C0'; // Silver
+  if (rank === 3) rankColor = '#CD7F32'; // Bronze
+
+  return (
+    <View style={styles.rankItem}>
+      <Text style={[styles.rankPosition, { color: rankColor }]}>{rank}</Text>
+      <Image source={{ uri: avatarUrl }} style={styles.rankAvatar} />
+      <View style={styles.rankUserDetails}>
+        <Text style={styles.rankUserName}>{user.name}</Text>
+        <Text style={styles.rankUserPoints}>{user.points} pts</Text>
+      </View>
+      {rank <= 3 && <FontAwesome5 name="medal" size={24} color={rankColor} />}
+    </View>
+  );
+};
+
+export default function LeaderboardScreen() {
   const { user } = useAppState();
-  const [favoriteSubjects, setFavoriteSubjects] = useState([]);
-  const [userProgress, setUserProgress] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [currentUserRank, setCurrentUserRank] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPoints, setCurrentPoints] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       const fetchData = async () => {
-        if (user && user.selectedPathId) {
-          setIsLoading(true);
-          
-          // --- THE FIX IS HERE ---
-          // 1. Fetch all data first
-          const [pathDetails, progressDoc] = await Promise.all([
-            getEducationalPathById(user.selectedPathId),
+        setIsLoading(true);
+        if (user?.uid) {
+          const [leaderboardData, progressDoc] = await Promise.all([
+            getLeaderboard(),
             getUserProgressDocument(user.uid),
           ]);
+          
+          setLeaderboard(leaderboardData);
+          setCurrentPoints(progressDoc?.stats?.points || 0);
 
-          // 2. Now that we have the data, update all states
-          if (pathDetails && progressDoc) {
-            const favoriteIds = progressDoc.favorites?.subjects || [];
-            const filteredFavorites = (pathDetails.subjects || []).filter(subject => favoriteIds.includes(subject.id));
-            
-            setFavoriteSubjects(filteredFavorites);
-            setUserProgress(progressDoc.pathProgress?.[user.selectedPathId] || {});
-            setCurrentPoints(progressDoc.stats?.points || 0); // Update points here
-          }
+          // Find current user's rank
+          const userRank = leaderboardData.findIndex(item => item.id === user.uid);
+          setCurrentUserRank(userRank !== -1 ? userRank + 1 : null);
         }
         setIsLoading(false);
       };
@@ -44,39 +59,85 @@ const LibraryScreen = () => {
     }, [user])
   );
 
-  if (isLoading) {
-    return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        data={favoriteSubjects}
-        renderItem={({ item }) => <SubjectCard item={item} userProgress={userProgress} />}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        ListHeaderComponent={
-          <MainHeader title="My Library" points={currentPoints} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <FontAwesome5 name="star" size={60} color="#4B5563" />
-            <Text style={styles.emptyText}>Your favorite subjects will appear here.</Text>
-            <Text style={styles.emptySubtext}>Tap the star icon on a subject to add it.</Text>
-          </View>
-        }
-        contentContainerStyle={{ paddingHorizontal: 8 }}
-      />
+      <MainHeader title="Ranking" points={currentPoints} />
+      
+      {isLoading ? (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#10B981" />
+        </View>
+      ) : (
+        <FlatList
+          data={leaderboard}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => <UserRankItem user={item} rank={index + 1} />}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.centerContent}>
+              <Text style={styles.emptyText}>The leaderboard is empty. Be the first to score!</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* Current User's Rank Card */}
+      {!isLoading && currentUserRank && (
+        <View style={styles.currentUserCard}>
+          <UserRankItem 
+            user={{ name: `${user.firstName} ${user.lastName}`, points: currentPoints }} 
+            rank={currentUserRank} 
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: '30%' },
-  emptyText: { color: '#D1D5DB', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginTop: 20 },
-  emptySubtext: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 8, width: '70%' },
+  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  listContent: { padding: 20 },
+  emptyText: { color: '#a7adb8ff', fontSize: 16 },
+  
+  rankItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
+  },
+  rankPosition: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    width: 40,
+    textAlign: 'center',
+  },
+  rankAvatar: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    marginLeft: 5,
+  },
+  rankUserDetails: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  rankUserName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  rankUserPoints: {
+    color: '#a7adb8ff',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  currentUserCard: {
+    padding: 20,
+    backgroundColor: '#0C0F27',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
 });
-
-export default LibraryScreen;

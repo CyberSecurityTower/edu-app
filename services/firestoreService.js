@@ -170,3 +170,50 @@ export const updateUserDailyStreak = async (userId, newStreakCount, pointsToAdd)
     console.error("Error updating daily streak:", error);
   }
 };
+// --- NEW LEADERBOARD FUNCTION ---
+export const getLeaderboard = async () => {
+  try {
+    // We need to query TWO collections: userProgress for points, and users for names.
+    
+    // 1. Get top users from userProgress based on points
+    const progressQuery = query(
+      collection(db, 'userProgress'), 
+      orderBy('stats.points', 'desc'), 
+      limit(20) // Get the top 20 users
+    );
+    const progressSnapshot = await getDocs(progressQuery);
+    
+    if (progressSnapshot.empty) {
+      return [];
+    }
+
+    // 2. Get the user profiles for the top users
+    const userIds = progressSnapshot.docs.map(doc => doc.id);
+    const usersQuery = query(collection(db, 'users'), where('uid', 'in', userIds));
+    const usersSnapshot = await getDocs(usersQuery);
+
+    const usersData = {};
+    usersSnapshot.forEach(doc => {
+      usersData[doc.id] = doc.data();
+    });
+
+    // 3. Combine the data
+    const leaderboard = progressSnapshot.docs.map(doc => {
+      const progressData = doc.data();
+      const userData = usersData[doc.id];
+      return {
+        id: doc.id,
+        points: progressData.stats?.points || 0,
+        name: userData ? `${userData.firstName} ${userData.lastName}` : 'Anonymous',
+      };
+    });
+
+    return leaderboard;
+
+  } catch (error) {
+    console.error("Error fetching leaderboard:", error);
+    // This error often means you need to create a Firestore index.
+    // The error message in the console will give you a direct link to create it.
+    return [];
+  }
+};

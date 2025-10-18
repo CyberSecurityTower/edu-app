@@ -17,7 +17,7 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
           const pillScale = 0.7; 
           const newWidth = activeLayout.width * pillScale;
           const padding = (activeLayout.width - newWidth) / 2;
-          const animationDuration = 250;
+          const animationDuration = 200;
           translateX.value = withTiming(activeLayout.x + padding, { duration: animationDuration });
           pillWidth.value = withTiming(newWidth, { duration: animationDuration });
         }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, {useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -8,8 +8,8 @@ import MainHeader from '../../components/MainHeader';
 import { useAppState } from '../../context/AppStateContext';
 import { getLeaderboard, getUserProgressDocument } from '../../services/firestoreService';
 
-const UserRankItem = ({ user, rank }) => {
-  const avatarUrl = `https://ui-avatars.com/api/?name=${user.name.replace(' ', '+')}&background=1E293B&color=FFFFFF&size=128`;
+const UserRankItem = ({ user, rank, isCurrentUser = false }) => {
+  const avatarUrl = `https://ui-avatars.com/api/?name=${user.name.replace(' ', '+')}&background=334155&color=FFFFFF&size=128`;
   
   let rankColor = '#a7adb8ff';
   if (rank === 1) rankColor = '#FFD700'; // Gold
@@ -17,7 +17,7 @@ const UserRankItem = ({ user, rank }) => {
   if (rank === 3) rankColor = '#CD7F32'; // Bronze
 
   return (
-    <View style={styles.rankItem}>
+    <View style={[styles.rankItem, isCurrentUser && styles.currentUserItem]}>
       <Text style={[styles.rankPosition, { color: rankColor }]}>{rank}</Text>
       <Image source={{ uri: avatarUrl }} style={styles.rankAvatar} />
       <View style={styles.rankUserDetails}>
@@ -32,7 +32,7 @@ const UserRankItem = ({ user, rank }) => {
 export default function LeaderboardScreen() {
   const { user } = useAppState();
   const [leaderboard, setLeaderboard] = useState([]);
-  const [currentUserRank, setCurrentUserRank] = useState(null);
+  const [currentUserData, setCurrentUserData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPoints, setCurrentPoints] = useState(0);
 
@@ -47,11 +47,15 @@ export default function LeaderboardScreen() {
           ]);
           
           setLeaderboard(leaderboardData);
-          setCurrentPoints(progressDoc?.stats?.points || 0);
+          const userPoints = progressDoc?.stats?.points || 0;
+          setCurrentPoints(userPoints);
 
-          // Find current user's rank
-          const userRank = leaderboardData.findIndex(item => item.id === user.uid);
-          setCurrentUserRank(userRank !== -1 ? userRank + 1 : null);
+          const userRankIndex = leaderboardData.findIndex(item => item.id === user.uid);
+          setCurrentUserData({
+            rank: userRankIndex !== -1 ? userRankIndex + 1 : 'N/A',
+            points: userPoints,
+            name: `${user.firstName} ${user.lastName}`
+          });
         }
         setIsLoading(false);
       };
@@ -61,7 +65,10 @@ export default function LeaderboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <MainHeader title="Ranking" points={currentPoints} />
+      {/* --- THE FIX IS HERE: Header is now outside the list --- */}
+      <View style={styles.headerWrapper}>
+        <MainHeader title="Ranking" points={currentPoints} />
+      </View>
       
       {isLoading ? (
         <View style={styles.centerContent}>
@@ -81,12 +88,12 @@ export default function LeaderboardScreen() {
         />
       )}
 
-      {/* Current User's Rank Card */}
-      {!isLoading && currentUserRank && (
+      {!isLoading && currentUserData && (
         <View style={styles.currentUserCard}>
           <UserRankItem 
-            user={{ name: `${user.firstName} ${user.lastName}`, points: currentPoints }} 
-            rank={currentUserRank} 
+            user={currentUserData} 
+            rank={currentUserData.rank}
+            isCurrentUser={true}
           />
         </View>
       )}
@@ -96,8 +103,11 @@ export default function LeaderboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
+  headerWrapper: {
+    paddingHorizontal: 20, // Add padding to align with list content
+  },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 20 },
+  listContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 100 }, // Add paddingBottom for current user card
   emptyText: { color: '#a7adb8ff', fontSize: 16 },
   
   rankItem: {
@@ -107,6 +117,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 15,
     marginBottom: 10,
+  },
+  currentUserItem: {
+    backgroundColor: '#3B82F6', // Highlight the current user
+    borderWidth: 2,
+    borderColor: '#60A5FA',
   },
   rankPosition: {
     fontSize: 20,
@@ -130,11 +145,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   rankUserPoints: {
-    color: '#a7adb8ff',
+    color: '#E5E7EB',
     fontSize: 14,
     marginTop: 2,
   },
   currentUserCard: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     padding: 20,
     backgroundColor: '#0C0F27',
     borderTopWidth: 1,

@@ -1,32 +1,42 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+ // functions/index.js
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+    const functions = require("firebase-functions");
+    const admin = require("firebase-admin");
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+    // --- THIS IS THE LOCAL DEVELOPMENT SETUP ---
+    // Load environment variables from .env file
+    require('dotenv').config();
+    // --- END OF LOCAL SETUP ---
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+    admin.initializeApp();
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    // For local testing, we read directly from the .env file.
+    // The deployed version will use secrets (which we will configure later).
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+
+    exports.askEduAI = functions.https.onCall(async (data, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "You must be logged in.");
+      }
+
+      const userMessage = data.message;
+      if (!userMessage || typeof userMessage !== "string" || userMessage.trim().length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "Please provide a valid message.");
+      }
+
+      try {
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+        const result = await model.generateContent(userMessage);
+        const response = await result.response;
+        const botResponse = response.text();
+
+        return { reply: botResponse };
+
+      } catch (error) {
+        console.error("Error calling Gemini API:", error);
+        throw new functions.https.HttpsError("internal", "Failed to get a response from the AI model.");
+      }
+    });

@@ -28,20 +28,19 @@ const styles = StyleSheet.create({
   fab: {
     width: 70, // Increased size for the animation
     height: 70, // Increased size for the animation
-    borderRadius: 35,
-    backgroundColor: '#8A2BE2', // A solid background color from your previous gradient
+    borderRadius: 35, // A solid background color from your previous gradient
     justifyContent: 'center',
     alignItems: 'center',
     // Shadow styles
     shadowColor: '#8A2BE2',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
     elevation: 12,
   },
   lottie: {
-    width: 100, // Make the Lottie animation larger than the button
-    height: 100, // This makes it feel more dynamic and alive
+    width: 120, // Make the Lottie animation larger than the button
+    height: 110, // This makes it feel more dynamic and alive
   },
 });
 

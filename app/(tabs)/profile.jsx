@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, FlatList } from 'react-native'; // Import FlatList
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../../context/AppStateContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
-import { getUserProgressDocument } from '../../services/firestoreService';
-import AnimatedGradientButton from '../../components/AnimatedGradientButton'; // Make sure this is imported
+import { getUserProgressDocument, getEducationalPathById } from '../../services/firestoreService'; // Import getEducationalPathById
+import SubjectCard from '../../components/SubjectCard'; // Reuse our beautiful card
 
 const SubscriptionCard = ({ subscription }) => {
   if (subscription && subscription.plan !== 'Trial' && subscription.status === 'active') {
@@ -59,17 +59,21 @@ export default function ProfileScreen() {
   const { user, setUser } = useAppState();
   const router = useRouter();
   const [stats, setStats] = useState({ points: 0, lessonsCompleted: 0 });
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [savedSubjects, setSavedSubjects] = useState([]); // New state for saved subjects
+  const [userProgress, setUserProgress] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
-      const fetchUserStats = async () => {
+      const fetchData = async () => {
         if (!user?.uid) return;
         
-        setIsRefreshing(true);
-        const progressDoc = await getUserProgressDocument(user.uid);
+        const [progressDoc, pathDetails] = await Promise.all([
+          getUserProgressDocument(user.uid),
+          getEducationalPathById(user.selectedPathId)
+        ]);
         
         if (progressDoc) {
+          // Stats logic
           const userStats = progressDoc.stats || { points: 0 };
           let completedCount = 0;
           if (progressDoc.pathProgress) {

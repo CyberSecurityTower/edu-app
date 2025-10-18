@@ -44,7 +44,11 @@ export default function EditProfileScreen() {
       };
 
       await updateUserProfile(user.uid, updatedData);
-      
+        // This ensures the displayName in userProgress is always up-to-date
+    await updateUserProgressProfileData(user.uid, { 
+      firstName: firstName, 
+      lastName: lastName 
+    });
       // IMPORTANT: Update the global state so the changes reflect everywhere
       setUser(prevUser => ({ ...prevUser, ...updatedData }));
       

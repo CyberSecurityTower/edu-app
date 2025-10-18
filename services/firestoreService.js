@@ -220,3 +220,28 @@ export const getLeaderboard = async () => {
     return [];
   }
 };
+/**
+ * Updates the denormalized user profile data within the userProgress document.
+ * @param {string} userId The ID of the user.
+ * @param {object} profileData An object containing data like firstName and lastName.
+ */
+export const updateUserProgressProfileData = async (userId, profileData) => {
+  if (!userId || !profileData.firstName || !profileData.lastName) return;
+
+  const progressRef = doc(db, `userProgress/${userId}`);
+  const displayName = `${profileData.firstName} ${profileData.lastName}`;
+  // You can customize the avatar URL generation here
+  const avatarUrl = `https://ui-avatars.com/api/?name=${displayName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128`;
+
+  try {
+    await setDoc(progressRef, {
+      stats: {
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+      }
+    }, { merge: true });
+    console.log(`Denormalized profile data updated for user ${userId}`);
+  } catch (error) {
+    console.error("Error updating denormalized profile data:", error);
+  }
+};

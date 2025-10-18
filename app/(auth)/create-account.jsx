@@ -109,7 +109,12 @@ const newUserProfile = {
                     points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME // Give them points as if they completed one lesson
 }};
         await setDoc(doc(db, "users", user.uid), newUserProfile);
-
+            // --- ADD THIS LINE ---
+        // This will create the displayName in userProgress at the same time
+        await updateUserProgressProfileData(user.uid, { 
+        firstName: firstName.trim(), 
+        lastName: lastName.trim() 
+        });
         // We use the new robust deviceId here
         await setDoc(trialRef, {
             activatedAt: new Date(),

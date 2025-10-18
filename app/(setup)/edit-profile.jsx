@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../../context/AppStateContext';
 import { useRouter } from 'expo-router';
-import { updateUserProfile } from '../../services/firestoreService';
+// --- FIX #1: ADD THE MISSING IMPORT ---
+import { updateUserProfile, updateUserProgressProfileData } from '../../services/firestoreService';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -16,7 +18,6 @@ export default function EditProfileScreen() {
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [placeOfBirth, setPlaceOfBirth] = useState(user?.placeOfBirth || '');
   
-  // Date handling
   const [date, setDate] = useState(user?.dateOfBirth ? new Date(user.dateOfBirth) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -40,16 +41,17 @@ export default function EditProfileScreen() {
         firstName,
         lastName,
         placeOfBirth,
-        dateOfBirth: date.toISOString(), // Store date in a standard format
+        dateOfBirth: date.toISOString(),
       };
 
       await updateUserProfile(user.uid, updatedData);
-        // This ensures the displayName in userProgress is always up-to-date
-    await updateUserProgressProfileData(user.uid, { 
-      firstName: firstName, 
-      lastName: lastName 
-    });
-      // IMPORTANT: Update the global state so the changes reflect everywhere
+      
+      // This function will now be recognized
+      await updateUserProgressProfileData(user.uid, { 
+        firstName: firstName, 
+        lastName: lastName 
+      });
+      
       setUser(prevUser => ({ ...prevUser, ...updatedData }));
       
       Alert.alert("Success", "Your profile has been updated.", [
@@ -61,8 +63,7 @@ export default function EditProfileScreen() {
       Alert.alert("Error", "Could not update your profile. Please try again.");
     } finally {
       setIsSaving(false);
-    }
-  };
+    }};
 
   return (
     <SafeAreaView style={styles.container}>

@@ -134,12 +134,17 @@ function RootLayoutNav() {
     const isUserAuthenticated = !!user;
     const profileStatus = user?.profileStatus;
 
-    const isProtectedRoute = (seg) => ['(tabs)', '(modal)', 'subject-details', 'lesson-view', 'study-kit'].includes(seg);
+    // --- THE FIX IS HERE ---
+    // We are adding '(setup)' to the list of protected routes.
+    // This tells the gatekeeper not to redirect a completed user if they are in the setup flow (e.g., editing their profile).
+    const isProtectedRoute = (seg) => ['(tabs)', '(modal)', '(setup)', 'subject-details', 'lesson-view', 'study-kit'].includes(seg);
 
     if (isUserAuthenticated) {
       if (profileStatus === 'pending_setup' && currentSegment !== '(setup)') {
         router.replace('/(setup)/profile-setup');
       } else if (profileStatus === 'completed' && !isProtectedRoute(currentSegment)) {
+        // This condition will now be FALSE when the user is on the edit-profile screen,
+        // preventing the unwanted redirect.
         router.replace('/(tabs)/');
       }
     } else {

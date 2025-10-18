@@ -1,16 +1,13 @@
-// app/(tabs)/leaderboard.jsx
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, FlatList, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, Image, Pressable } from 'react-native';
+import { useFocusEffect, useNavigation } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import MainHeader from '../../components/MainHeader';
 import { useAppState } from '../../context/AppStateContext';
 import { getLeaderboard, getUserProgressDocument } from '../../services/firestoreService';
 
-// --- Podium Item Component (Refined Style) ---
+// --- Podium Item Component ---
 const PodiumItem = ({ user, rank }) => {
   const rankStyles = {
     1: { container: styles.podiumFirst, avatar: styles.podiumAvatarFirst, name: styles.podiumNameFirst, iconColor: '#FFD700' },
@@ -32,7 +29,7 @@ const PodiumItem = ({ user, rank }) => {
   );
 };
 
-// --- User Rank Item (Refined Layout to prevent overlap issues) ---
+// --- User Rank Item Component ---
 const UserRankItem = ({ user, rank, isCurrentUser = false }) => {
   const gradientColors = isCurrentUser 
     ? ['#3B82F6', '#4F46E5'] 
@@ -52,6 +49,7 @@ const UserRankItem = ({ user, rank, isCurrentUser = false }) => {
 
 export default function LeaderboardScreen() {
   const { user } = useAppState();
+  const navigation = useNavigation();
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentUserRank, setCurrentUserRank] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,9 +62,9 @@ export default function LeaderboardScreen() {
         if (user?.uid) {
           const [leaderboardData, progressDoc] = await Promise.all([ getLeaderboard(), getUserProgressDocument(user.uid) ]);
           
-          setLeaderboard(leaderboardData);
           const userPoints = progressDoc?.stats?.points || 0;
           setCurrentPoints(userPoints);
+          setLeaderboard(leaderboardData);
 
           const userRankIndex = leaderboardData.findIndex(item => item.id === user.uid);
           if (userRankIndex !== -1) {
@@ -87,6 +85,27 @@ export default function LeaderboardScreen() {
     }, [user])
   );
 
+  // This effect dynamically configures the header using the navigator's options
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: true,
+      headerTitleAlign: 'left',
+      headerTitle: () => <Text style={styles.headerTitle}>Ranking</Text>,
+      headerRight: () => (
+        <View style={styles.headerRightContainer}>
+          <View style={styles.pointsBadge}>
+            <FontAwesome5 name="star" size={16} color="#FFD700" solid />
+            <Text style={styles.pointsText}>{currentPoints}</Text>
+          </View>
+          <Pressable style={styles.iconButton}>
+            <FontAwesome5 name="bell" size={22} color="#a7adb8ff" />
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [navigation, currentPoints]);
+
   const topThree = leaderboard.slice(0, 3);
   const restOfLeaderboard = leaderboard.slice(3);
 
@@ -102,11 +121,7 @@ export default function LeaderboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.headerWrapper}>
-        <MainHeader title="Ranking" points={currentPoints} />
-      </View>
-      
+    <View style={styles.container}>
       {isLoading ? (
         <View style={styles.centerContent}><ActivityIndicator size="large" color="#10B981" /></View>
       ) : (
@@ -135,19 +150,27 @@ export default function LeaderboardScreen() {
           />
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  headerWrapper: { paddingHorizontal: 20 },
+  // --- Header Styles ---
+  headerTitle: { color: 'white', fontSize: 28, fontWeight: 'bold' },
+  headerRightContainer: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  pointsBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12, gap: 8 },
+  pointsText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  iconButton: { padding: 5 },
+  
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },
-  emptyComponentContainer: { alignItems: 'center', marginTop: '30%' },
+  // Add paddingTop to push content below the transparent header
+  listContent: { paddingHorizontal: 20, paddingTop: 120, paddingBottom: 120 },
+  emptyComponentContainer: { alignItems: 'center', marginTop: '20%' },
   emptyText: { color: '#a7adb8ff', fontSize: 16 },
 
-  podiumContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingTop: 20, borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 20, marginBottom: 20 },
+  // --- Podium Styles ---
+  podiumContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 20, marginBottom: 20 },
   podiumItemContainer: { alignItems: 'center', width: '33%' },
   podiumAvatarBase: { borderRadius: 50, borderWidth: 3 },
   podiumAvatarFirst: { width: 90, height: 90, borderColor: '#FFD700' },
@@ -163,14 +186,15 @@ const styles = StyleSheet.create({
   podiumSecond: { transform: [{ translateY: 20 }] },
   podiumThird: { transform: [{ translateY: 20 }] },
   
-  // --- Refined Rank List Styles ---
+  // --- Rank List Styles ---
   rankItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 15, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3 },
   rankPosition: { color: 'white', opacity: 0.8, fontSize: 16, fontWeight: 'bold', width: 35, textAlign: 'center' },
   rankAvatar: { width: 45, height: 45, borderRadius: 22.5, marginHorizontal: 10 },
-  rankUserDetails: { flex: 1, justifyContent: 'center' }, // Use flexbox to group name and points
+  rankUserDetails: { flex: 1, justifyContent: 'center' },
   rankUserName: { color: 'white', fontSize: 16, fontWeight: '600' },
-  rankUserPoints: { color: '#10B981', fontSize: 14, fontWeight: 'bold', marginTop: 2 }, // Points below the name
+  rankUserPoints: { color: '#10B981', fontSize: 14, fontWeight: 'bold', marginTop: 2 },
   
+  // --- Current User Sticky Card ---
   currentUserStickyCard: { position: 'absolute', bottom: 100, left: 20, right: 20, shadowColor: '#60A5FA', shadowOpacity: 0.5, shadowRadius: 10, elevation: 20 },
   currentUserItem: { borderWidth: 2, borderColor: '#60A5FA' },
 });

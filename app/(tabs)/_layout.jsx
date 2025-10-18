@@ -61,24 +61,45 @@ export default function TabsLayout() {
 
   return (
     <View style={{ flex: 1, position: 'relative' }}>
-      <Tabs
-        tabBar={(props) => <MyCustomTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
-      >
-        <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} /> }} />
-        
-        {/* --- THE FIX IS HERE --- */}
-        <Tabs.Screen 
-          name="leaderboard" // Correct name matching the file
-          options={{ 
-            title: 'Ranking', 
-            tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} /> 
-          }} 
-        />
-        
-        <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} /> }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} /> }} />
-      </Tabs>
+        <Tabs
+      tabBar={(props) => <MyCustomTabBar {...props} />}
+      // screenOptions has been REMOVED from here
+    >
+      <Tabs.Screen 
+        name="index" 
+        options={{ 
+          title: 'Home', 
+          tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />,
+          headerShown: false, // Hide header for Home
+        }} 
+      />
+      
+      <Tabs.Screen 
+        name="leaderboard"
+        options={{ 
+          title: 'Ranking', // This title is for the tab bar, we will override it
+          tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} />,
+          // We DO NOT hide the header here. We let it show.
+        }} 
+      />
+      
+      <Tabs.Screen 
+        name="search" 
+        options={{ 
+          title: 'Search', 
+          tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} />,
+          headerShown: false, // Hide header for Search
+        }} 
+      />
+      <Tabs.Screen 
+        name="profile" 
+        options={{ 
+          title: 'Profile', 
+          tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
+          headerShown: false, // Hide header for Profile
+        }} 
+      />
+    </Tabs>
       
       {!hideFab && <FloatingActionButton onPress={() => router.push('/(modal)/ai-chatbot')} />}
     </View>

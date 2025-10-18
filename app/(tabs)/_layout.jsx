@@ -1,12 +1,11 @@
-import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Tabs, useRouter, useSegments } from 'expo-router'; // Import useSegments
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { View, Pressable, StyleSheet, Text } from 'react-native';
+import { Tabs, useRouter, useSegments } from 'expo-router';
+import { FontAwesome5 } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import FloatingActionButton from '../../components/FloatingActionButton';
 
-// MyCustomTabBar component remains the same
 function MyCustomTabBar({ state, descriptors, navigation }) {
     const [layouts, setLayouts] = React.useState([]);
     const translateX = useSharedValue(0);
@@ -56,11 +55,9 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
 
 export default function TabsLayout() {
   const router = useRouter();
-  // --- THE HIDING LOGIC IS HERE ---
   const segments = useSegments();
-  // The last segment for a tab screen is its name (e.g., 'index', 'profile')
   const lastSegment = segments[segments.length - 1];
-  const hideFab = lastSegment === 'profile'; // Hide if we are on the profile tab
+  const hideFab = lastSegment === 'profile';
 
   return (
     <View style={{ flex: 1, position: 'relative' }}>
@@ -69,18 +66,25 @@ export default function TabsLayout() {
         screenOptions={{ headerShown: false }}
       >
         <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} /> }} />
+        
+        {/* --- THE FIX IS HERE --- */}
+        <Tabs.Screen 
+          name="leaderboard" // Correct name matching the file
+          options={{ 
+            title: 'Ranking', 
+            tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} /> 
+          }} 
+        />
+        
         <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} /> }} />
-        <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: ({ color }) => <FontAwesome5 name="book" size={24} color={color} /> }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} /> }} />
       </Tabs>
       
-      {/* Conditionally render the FAB */}
       {!hideFab && <FloatingActionButton onPress={() => router.push('/(modal)/ai-chatbot')} />}
     </View>
   );
 }
 
-// Styles remain the same
 const styles = StyleSheet.create({
     tabBarContainer: { position: 'absolute', bottom: 25, left: 20, right: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 5 },
     tabBar: { flexDirection: 'row', height: 70, backgroundColor: '#2a384ebc', borderRadius: 35, alignItems: 'center', justifyContent: 'space-around', overflow: 'hidden' },

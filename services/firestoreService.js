@@ -1,6 +1,9 @@
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove ,increment } from "firebase/firestore"; 
-import { db } from '../firebase';
-
+import { 
+  doc, getDoc, setDoc, updateDoc, collection, getDocs, 
+  arrayUnion, arrayRemove, increment, query, orderBy, 
+  limit, where 
+} from "firebase/firestore"; 
+import {db} from '../firebase'
 // --- User Profile Functions ---
 export const getUserProfile = async (uid) => {
   if (!uid) return null;

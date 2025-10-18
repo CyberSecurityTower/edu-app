@@ -12,7 +12,7 @@ import { getUserProgressDocument, getEducationalPathById, getLeaderboard } from 
 import SubjectCard from '../../components/SubjectCard';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 
-// --- SUB-COMPONENTS (DEFINED HERE FOR STABILITY) ---
+// --- SUB-COMPONENTS ---
 
 const SmartSubscriptionCard = ({ subscription }) => {
   if (!subscription) return null;
@@ -24,7 +24,7 @@ const SmartSubscriptionCard = ({ subscription }) => {
   if (isTrial && subscription.expiresOn) {
     const expiryDate = subscription.expiresOn.toDate();
     const today = new Date();
-    const createdAtDate = subscription.createdAt ? subscription.createdAt.toDate() : new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000); // fallback
+    const createdAtDate = subscription.createdAt ? subscription.createdAt.toDate() : new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000);
     const totalTrialMs = expiryDate.getTime() - createdAtDate.getTime();
     const totalTrialDays = Math.ceil(totalTrialMs / (1000 * 60 * 60 * 24));
     
@@ -184,7 +184,6 @@ export default function ProfileScreen() {
         <StatsGrid stats={stats} />
 
         <Text style={styles.sectionTitle}>Subscription</Text>
-        {/* The subscription object passed here should now be correct from the global user state */}
         <SmartSubscriptionCard subscription={user?.subscription} />
         
         <Text style={styles.sectionTitle}>Saved Subjects</Text>
@@ -214,7 +213,12 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  // --- FIX IS HERE ---
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 120 // Increased padding to avoid overlap with floating tab bar
+  },
+  // --- END OF FIX ---
   header: { alignItems: 'center', marginVertical: 20 },
   avatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 15 },
   userName: { color: 'white', fontSize: 24, fontWeight: 'bold' },
@@ -237,9 +241,9 @@ const styles = StyleSheet.create({
   emptySavedText: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginVertical: 10, lineHeight: 22, maxWidth: '90%' },
 
   menuGroup: { marginTop: 30, backgroundColor: '#1E293B', borderRadius: 12, overflow: 'hidden' },
-  menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155'  },
+  menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155' },
   menuItemContent: { flexDirection: 'row', alignItems: 'center' },
   menuIcon: { width: 25, textAlign: 'center' },
   menuText: { color: 'white', fontSize: 16, marginLeft: 15 },
-  logoutText: { color: '#EF4444'},
+  logoutText: { color: '#EF4444' },
 });

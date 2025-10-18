@@ -99,9 +99,22 @@ export default function TabsLayout() {
           headerShown: false, // Hide header for Profile
         }} 
       />
+      <Tabs
+  tabBar={(props) => <MyCustomTabBar {...props} />}
+  screenOptions={{ headerShown: false }}
+>
+  <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} /> }} />
+  <Tabs.Screen name="leaderboard" options={{ title: 'Ranking', tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} /> }} />
+  
+  {/* --- ADD THIS TEMPORARY LINE FOR PREVIEW --- */}
+  <Tabs.Screen name="path-preview" options={{ title: 'Preview', tabBarIcon: ({ color }) => <FontAwesome5 name="compass" size={24} color={color} /> }} />
+  
+  <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} /> }} />
+  <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} /> }} />
+</Tabs>
     </Tabs>
       
-      {!hideFab && <FloatingActionButton onPress={() => router.push('/(modal)/ai-chatbot')} />}
+      {!hideFab && <FloatingActionButton onPress={() => router.push('/(modal)/ai-chatbot')} />,}
     </View>
   );
 }

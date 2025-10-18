@@ -57,7 +57,7 @@ export default function TabsLayout() {
   const router = useRouter();
   const segments = useSegments();
   const lastSegment = segments[segments.length - 1];
-  const hideFab = lastSegment === 'profile';
+  const hideFab = lastSegment === 'profile' || lastSegment === 'leaderboard';
 
   return (
     <View style={{ flex: 1, position: 'relative' }}>

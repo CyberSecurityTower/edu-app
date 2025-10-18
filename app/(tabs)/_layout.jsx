@@ -64,7 +64,6 @@ export default function TabsLayout() {
 
   return (
     <View style={{ flex: 1, position: 'relative' }}>
-      {/* --- THE FIX: Only ONE <Tabs> component that wraps all screens --- */}
       <Tabs
         tabBar={(props) => <MyCustomTabBar {...props} />}
       >
@@ -73,7 +72,7 @@ export default function TabsLayout() {
           options={{ 
             title: 'Home', 
             tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />,
-            headerShown: false, // Hide header for Home
+            headerShown: false,
           }} 
         />
         
@@ -82,27 +81,18 @@ export default function TabsLayout() {
           options={{ 
             title: 'Ranking', 
             tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} />,
-            // IMPORTANT: We let the header show for leaderboard, so the screen itself can customize it.
-            headerShown: true, 
+            headerShown: true, // Let the screen itself customize the header
           }} 
         />
-
-        {/* --- The temporary preview screen is added here correctly --- */}
-        <Tabs.Screen 
-          name="path-preview" 
-          options={{ 
-            title: 'Preview', 
-            tabBarIcon: ({ color }) => <FontAwesome5 name="compass" size={24} color={color} />,
-            headerShown: false, // Hide header for the preview
-          }} 
-        />
+        
+        {/* --- THE FIX: The extra "path-preview" screen has been removed --- */}
         
         <Tabs.Screen 
           name="search" 
           options={{ 
             title: 'Search', 
             tabBarIcon: ({ color }) => <FontAwesome5 name="search" size={24} color={color} />,
-            headerShown: false, // Hide header for Search
+            headerShown: false,
           }} 
         />
 
@@ -111,7 +101,7 @@ export default function TabsLayout() {
           options={{ 
             title: 'Profile', 
             tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
-            headerShown: false, // Hide header for Profile
+            headerShown: false,
           }} 
         />
       </Tabs>

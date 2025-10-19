@@ -16,7 +16,7 @@ const DailyTasks = () => {
   const [taskData, setTaskData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-
+  
   const fetchTasks = useCallback(async () => {
     if (!user?.uid) {
       setIsLoading(false);

@@ -1,6 +1,6 @@
 // app/(tabs)/index.jsx
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, FlatList, TextInput } from 'react-native';
+import { View, Text , StyleSheet, ActivityIndicator, FlatList, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../../context/AppStateContext';
 import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
@@ -8,7 +8,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import SubjectCard from '../../components/SubjectCard';
 import MainHeader from '../../components/MainHeader'; // <-- Import our new header
 import { useFocusEffect } from 'expo-router';
-import DailyTasks from '../../components/DailyTasksComponent'; 
+import DailyTasks from '../../components/DailyTasks'; 
 const HomeScreen = () => {
   const { user } = useAppState();
   const [pathDetails, setPathDetails] = useState(null);

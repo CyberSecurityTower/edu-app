@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
-import { ActivityIndicator, View, StyleSheet, LogBox, Text } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, LogBox, Text, Image } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
 import AppStateContext from '../context/AppStateContext';
 import { POINTS_CONFIG } from '../config/points';
 import { collection, onSnapshot, query, where, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
+
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
 const toastConfig = {
@@ -60,7 +61,7 @@ function AppStateProvider({ children }) {
           if (fullUserProfile.profileStatus === 'completed') {
             const progressDoc = await getUserProgressDocument(currentUser.uid);
             setPoints(progressDoc?.stats?.points || 0);
-            
+
             const lastLogin = progressDoc?.lastLogin?.toDate();
             const streakCount = progressDoc?.streakCount || 0;
             const now = new Date();
@@ -70,13 +71,13 @@ function AppStateProvider({ children }) {
               yesterday.setDate(now.getDate() - 1);
               const isConsecutive = lastLogin && yesterday.toDateString() === lastLogin.toDateString();
               const newStreak = isConsecutive ? streakCount + 1 : 1;
-              
+
               let pointsToAward = isConsecutive ? Math.floor(POINTS_CONFIG.DAILY_STREAK_BONUS * Math.pow(1.1, streakCount)) : POINTS_CONFIG.DAILY_STREAK_BONUS;
               if (newStreak === 1 && lastLogin) pointsToAward = POINTS_CONFIG.DAILY_STREAK_BONUS; // Reset bonus if streak was broken
               if (!lastLogin) pointsToAward = 0; // No points for the very first login ever
 
               await updateUserDailyStreak(currentUser.uid, newStreak, pointsToAward);
-              
+
               if (pointsToAward > 0) {
                 Toast.show({
                   type: 'points',
@@ -84,8 +85,7 @@ function AppStateProvider({ children }) {
                   position: 'bottom',
                   visibilityTime: 3500,
                 });
-                // --- THE FIX IS HERE ---
-                // After awarding points, call refreshPoints to update the global state correctly.
+                // After awarding points, refresh points to update global state
                 refreshPoints();
               }
             }
@@ -94,7 +94,7 @@ function AppStateProvider({ children }) {
           setUser(null);
         }
       } catch (error) {
-        console.error("Auth state change error:", error);
+        console.error('Auth state change error:', error);
         setUser(null);
       } finally {
         setAuthLoading(false);
@@ -112,11 +112,58 @@ function AppStateProvider({ children }) {
 
     checkOnboardingStatus();
     return () => unsubscribeAuth();
-  }, [user?.uid]); // Added user.uid dependency to re-run refreshPoints correctly
+  }, [user?.uid, refreshPoints]);
+
+  // Notifications listener: listens for latest unread notification and shows a toast, then marks it read
+  useEffect(() => {
+    if (!user?.uid) {
+      return; // do nothing when no user
+    }
+
+    const notificationsRef = collection(db, 'userNotifications', user.uid, 'inbox');
+
+    const q = query(
+      notificationsRef,
+      where('read', '==', false),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === 'added') {
+          const notificationData = change.doc.data();
+          const notificationId = change.doc.id;
+
+          Toast.show({
+            type: 'eduai_notification',
+            text1: 'EduAI Assistant',
+            text2: notificationData.message,
+            position: 'top',
+            visibilityTime: 5000,
+          });
+
+          const docRef = doc(db, 'userNotifications', user.uid, 'inbox', notificationId);
+          try {
+            await updateDoc(docRef, { read: true });
+          } catch (e) {
+            console.error('Failed to mark notification read:', e);
+          }
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   const contextValue = useMemo(() => ({
-    user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser,
-    points, refreshPoints,
+    user,
+    authLoading,
+    hasCompletedOnboarding,
+    setHasCompletedOnboarding,
+    setUser,
+    points,
+    refreshPoints,
   }), [user, authLoading, hasCompletedOnboarding, points, refreshPoints]);
 
   return (
@@ -126,7 +173,6 @@ function AppStateProvider({ children }) {
   );
 }
 
-// ... (RootLayoutNav, MainLayout, RootLayout, and styles remain unchanged)
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useContext(AppStateContext);
   const segments = useSegments();
@@ -202,4 +248,22 @@ const styles = StyleSheet.create({
   toastContainer: { width: 'auto', maxWidth: '80%', alignItems: 'center', marginBottom: 50 },
   toastGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 25, gap: 10, shadowColor: '#10B981', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 10 },
   toastText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  toastIcon: {
+    width: 30,
+    height: 30,
+    marginRight: 10,
+  },
+  toastTextContainer: {
+    flex: 1,
+  },
+  toastTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  toastMessage: {
+    color: '#E0E7FF',
+    fontSize: 14,
+    marginTop: 2,
+  },
 });

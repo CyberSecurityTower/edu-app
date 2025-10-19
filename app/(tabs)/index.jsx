@@ -58,7 +58,7 @@ const HomeScreen = () => {
              <MainHeader title={`Hello, ${user?.firstName}!`} points={currentPoints} />
             
  {/* --- أضف مكون المهام هنا --- */}
-           {/* <DailyTasks />*/}
+            <DailyTasks />
             <View style={styles.listHeaderContent}>
               <Text style={styles.sectionTitle}>All Subjects</Text> {/* عنوان جديد */}
               <View style={styles.searchContainer}>

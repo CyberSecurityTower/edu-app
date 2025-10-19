@@ -144,7 +144,7 @@ const DailyTasks = () => {
       </View>
       {tasks.map(item => (
         <TaskItem 
-          key={item.id}
+           key={item.id} 
           task={item} 
           onToggleStatus={handleToggleTaskStatus}
           onNavigate={handleNavigateToTask}

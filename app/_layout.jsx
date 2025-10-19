@@ -136,12 +136,12 @@ function AppStateProvider({ children }) {
           const notificationId = change.doc.id;
 
           Toast.show({
-            type: 'eduai_notification',
-            text1: 'EduAI Assistant',
-            text2: notificationData.message,
-            position: 'top',
-            visibilityTime: 5000,
-          });
+    type: 'eduai_notification',
+    text1: 'EduAI Assistant',
+    text2: notificationData.message,
+    position: 'top',
+    visibilityTime: 6500, // --- الإصلاح هنا: 7 ثوانٍ ---
+});
 
           const docRef = doc(db, 'userNotifications', user.uid, 'inbox', notificationId);
           try {

@@ -1,147 +1,108 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { db } from '../firebase'; 
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useAppState } from '../context/AppStateContext';
-import { getUserDailyTasks } from '../services/firestoreService';
-import TaskItem from './TaskItem'
-import AnimatedGradientButton from './AnimatedGradientButton';
-
-const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com'; // Your Render URL
 
 const DailyTasks = () => {
   const { user } = useAppState();
-  const [taskData, setTaskData] = useState(null);
+  const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
 
-  const fetchTasks = useCallback(async () => {
-    if (!user?.uid) {
-      setIsLoading(false);
-      return;
-    }
-    const tasks = await getUserDailyTasks(user.uid);
-    setTaskData(tasks);
-    setIsLoading(false);
-  }, [user]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setIsLoading(true);
-      fetchTasks();
-    }, [fetchTasks])
-  );
-
-  const handleGenerateTasks = async () => {
+  useEffect(() => {
     if (!user?.uid) return;
-    setIsGenerating(true);
-    try {
-      const response = await fetch(`${RENDER_PROXY_URL}/generate-daily-tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid }),
-      });
-      if (!response.ok) throw new Error('Failed to generate tasks');
-      await fetchTasks(); // Re-fetch to get the new tasks
-    } catch (error) {
-      console.error("Error generating tasks:", error);
-      // You can show a toast or alert here
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
-  const handleToggleTaskStatus = async (taskId, newStatus) => {
-    if (!user?.uid || !taskData?.tasks) return;
-    
-    const updatedTasks = taskData.tasks.map(task => 
-      task.id === taskId ? { ...task, status: newStatus } : task
+    const userProgressRef = doc(db, 'userProgress', user.uid);
+
+    // 🔥 اشتراك مباشر في تغييرات Firestore
+    const unsubscribe = onSnapshot(
+      userProgressRef,
+      (snapshot) => {
+        const data = snapshot.data();
+        const fetchedTasks = data?.dailyTasks?.tasks || [];
+        setTasks(fetchedTasks);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching daily tasks:', error);
+        setIsLoading(false);
+      }
     );
-    
-    setTaskData(prev => ({ ...prev, tasks: updatedTasks }));
 
-    const progressRef = doc(db, `userProgress/${user.uid}`);
-    await updateDoc(progressRef, { 'dailyTasks.tasks': updatedTasks });
-  };
+    // إلغاء الاشتراك عند مغادرة الشاشة
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   if (isLoading) {
-    return <ActivityIndicator size="large" color="#10B981" style={styles.container} />;
-  }
-
-  if (!taskData || !taskData.tasks || taskData.tasks.length === 0) {
     return (
-      <View style={[styles.container, styles.emptyContainer]}>
-        <Text style={styles.emptyTitle}>Ready to plan your day?</Text>
-        <Text style={styles.emptySubtitle}>Let EduAI create a personalized study plan for you based on your progress.</Text>
-        {isGenerating ? (
-          <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }}/>
-        ) : (
-          <AnimatedGradientButton
-            text="Generate My Plan"
-            onPress={handleGenerateTasks}
-            buttonWidth={240}
-          />
-        )}
+      <View style={styles.container}>
+        <ActivityIndicator size="small" color="#10B981" />
       </View>
     );
   }
 
-  const completedCount = taskData.tasks.filter(t => t.status === 'completed').length;
-  const totalCount = taskData.tasks.length;
-  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  if (tasks.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.emptyText}>لا توجد مهام لليوم بعد 🎯</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Your Daily Plan</Text>
-        <Text style={styles.progressText}>{completedCount}/{totalCount} Done</Text>
-      </View>
-      <View style={styles.progressBarContainer}>
-        <View style={[styles.progressBar, { width: `${progress}%` }]} />
-      </View>
+      <Text style={styles.title}>مهام اليوم</Text>
       <FlatList
-        data={taskData.tasks}
-        keyExtractor={(item) => item.id}
+        data={tasks}
+        keyExtractor={(item) => item.id || Math.random().toString()}
         renderItem={({ item }) => (
-          <TaskItem 
-            task={item} 
-            onToggleStatus={handleToggleTaskStatus}
-            pathId={user.selectedPathId} // Pass down for navigation
-            subjectId={item.relatedSubjectId || null} // Assuming you add this to your task object
-          />
+          <View style={styles.taskCard}>
+            <FontAwesome5
+              name={item.status === 'done' ? 'check-circle' : 'circle'}
+              size={18}
+              color={item.status === 'done' ? '#10B981' : '#8A94A4'}
+            />
+            <Text style={styles.taskText}>{item.title}</Text>
+          </View>
         )}
-        scrollEnabled={false} // Important for FlatList inside ScrollView
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  // --- التعديل هنا ---
-  // قمنا بتغيير الهوامش ليناسب مكانه الجديد
-  container: { 
-    backgroundColor: '#0f1724', 
-    borderRadius: 16, 
-    padding: 20, 
-    marginHorizontal: 12, // ليتماشى مع محتوى الشاشة
-    marginBottom: 25,    // لإعطاء مساحة قبل القسم التالي
+  container: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 12,
+    marginVertical: 10,
   },
-  // --------------------
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  title: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  progressText: { color: '#a7adb8ff', fontSize: 14 },
-  progressBarContainer: { height: 6, backgroundColor: '#1E293B', borderRadius: 3, marginBottom: 20, overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#10B981' },
-  // --- تعديل بسيط هنا أيضًا ---
-  emptyContainer: { 
-    paddingVertical: 30, 
-    alignItems: 'center' 
+  title: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
-  // ---------------------------
-  emptyTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
-  emptySubtitle: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginVertical: 15, lineHeight: 22 },
+  taskCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+  },
+  taskText: {
+    color: 'white',
+    marginLeft: 10,
+    fontSize: 16,
+  },
+  emptyText: {
+    color: '#8A94A4',
+    textAlign: 'center',
+    fontSize: 16,
+  },
 });
-
 
 export default DailyTasks;

@@ -1,10 +1,11 @@
+// app/study-kit.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native'; // Import Alert
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 
-import { getStudyKit, getUserProgressDocument } from '../services/firestoreService';
+import { getStudyKit } from '../services/firestoreService';
 import StudyKitTabs from '../components/StudyKitTabs';
 import MainHeader from '../components/MainHeader';
 import { useAppState } from '../context/AppStateContext';
@@ -12,30 +13,27 @@ import { useAppState } from '../context/AppStateContext';
 export default function StudyKitScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
-  const { user } = useAppState();
-  const { lessonId, lessonTitle } = params;
+  // --- THE FIX: Destructure safely with defaults ---
+  const { lessonId, lessonTitle, pathId, subjectId } = params || {};
+
+  const { user, points, refreshPoints } = useAppState();
 
   const [kitData, setKitData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPoints, setCurrentPoints] = useState(0);
 
-  const refreshPoints = useCallback(async () => {
-    if (user?.uid) {
-      const progressDoc = await getUserProgressDocument(user.uid);
-      setCurrentPoints(progressDoc?.stats?.points || 0);
-    }
-  }, [user]);
-
-  // --- THE FIX IS HERE: Restoring the full, correct useEffect logic ---
   useEffect(() => {
+    let mounted = true;
     const fetchKit = async () => {
+      // Critical check before fetching
+      if (!lessonId) {
+        if (mounted) setIsLoading(false);
+        return;
+      }
+      
       setIsLoading(true);
       try {
-        console.log("Fetching kit for lesson ID:", lessonId); // For debugging
-        const [kitResult] = await Promise.all([
-          getStudyKit(lessonId),
-          new Promise(resolve => setTimeout(resolve, 1500))
-        ]);
+        const kitResult = await getStudyKit(lessonId);
+        if (!mounted) return;
 
         if (kitResult) {
           setKitData(kitResult);
@@ -43,26 +41,46 @@ export default function StudyKitScreen() {
           Alert.alert("Not Found", "No Study Kit is available for this lesson yet.");
         }
       } catch (error) {
-        console.error("Detailed error fetching study kit:", error);
-        Alert.alert("An Error Occurred", `Could not fetch the study kit. \n\nDetails: ${error.message}`);
+        if (!mounted) return;
+        console.error("Error fetching study kit:", error);
+        Alert.alert("An Error Occurred", "Could not fetch the study kit.");
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     if (lessonId) {
       fetchKit();
     } else {
-      Alert.alert("Error", "Lesson ID is missing.");
-      setIsLoading(false);
+      setTimeout(() => {
+        if (mounted) {
+          Alert.alert("Error", "Lesson ID is missing.");
+          setIsLoading(false);
+        }
+      }, 150);
     }
+
+    return () => { mounted = false; };
   }, [lessonId]);
 
   useFocusEffect(
     useCallback(() => {
-      refreshPoints();
+      if (refreshPoints) {
+        refreshPoints();
+      }
     }, [refreshPoints])
   );
+
+  const safeLessonTitle = lessonTitle ?? 'Study Kit';
+  
+  // If critical IDs are missing (shouldn't happen now), we handle gracefully
+  if (!lessonId || !pathId || !subjectId) {
+       return (
+        <SafeAreaView style={styles.centerContent}>
+            <Text style={styles.errorText}>خطأ: بيانات المسار غير متوفرة. يرجى العودة.</Text>
+        </SafeAreaView>
+       );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -73,25 +91,32 @@ export default function StudyKitScreen() {
          <MainHeader 
           title="Study Kit" 
           isCompact={true} 
-          points={currentPoints} 
-          hideNotifications={true} // Tell the header to hide the bell icon
+          points={points}
+          hideNotifications={true}
         />
       </View>
       
-      <Text style={styles.lessonTitle}>{lessonTitle}</Text>
+      <Text style={styles.lessonTitle}>{safeLessonTitle}</Text>
 
-      {isLoading ? (
+     {isLoading ? (
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#10B981" />
-          <Text style={styles.loadingText}>Generating your smart tools...</Text>
+            <ActivityIndicator size="large" color="#10B981" />
+            <Text style={styles.loadingText}>Generating your smart tools...</Text>
         </View>
-      ) : kitData ? (
-        <StudyKitTabs data={kitData} onPointsUpdate={refreshPoints} />
-      ) : (
-        <View style={styles.centerContent}>
-          <Text style={styles.errorText}>Could not load the Study Kit.</Text>
-        </View>
-      )}
+    ) : kitData ? (
+      <StudyKitTabs 
+          data={kitData} 
+          lessonTitle={safeLessonTitle}
+          lessonId={lessonId}
+          // --- Pass the new IDs down ---
+          pathId={pathId}
+          subjectId={subjectId}
+      />
+    ) : (
+      <View style={styles.centerContent}>
+        <Text style={styles.errorText}>Could not load the Study Kit.</Text>
+      </View>
+    )}
     </SafeAreaView>
   );
 }

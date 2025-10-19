@@ -4,7 +4,6 @@ import {
   limit, where 
 } from "firebase/firestore"; 
 import { db } from '../firebase';
-
 // --- User Profile Functions ---
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
@@ -209,5 +208,44 @@ export const getLeaderboard = async () => {
     // This error often means you need to create a Firestore index.
     // The error message in the console will give you a direct link to create it.
     return [];
+  }
+};
+export const updateLessonMasteryScore = async (userId, pathId, subjectId, lessonId, masteryScore, suggestedReview) => {
+  if (!userId || !pathId || !subjectId || !lessonId || masteryScore === undefined) return;
+  
+  const progressRef = doc(db, `userProgress/${userId}`);
+  
+  // بناء المسار الديناميكي للحقل
+  const lessonPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
+  
+  await setDoc(progressRef, {
+    [lessonPath]: {
+      status: 'completed', // نؤكد على أن الدرس مكتمل
+      masteryScore: masteryScore,
+      suggestedReview: suggestedReview,
+      lastAttempt: new Date(),
+    }
+  }, { merge: true });
+};
+// --- 3. هذه هي الدالة الجديدة التي أضفناها، بدون أي imports قبلها ---
+/**
+ * [NEW] Fetches only the dailyTasks object for a user.
+ * @param {string} userId The ID of the user.
+ * @returns {object | null} The dailyTasks object or null if not found.
+ */
+export const getUserDailyTasks = async (userId) => {
+  if (!userId) return null;
+  try {
+    const progressRef = doc(db, `userProgress/${userId}`);
+    const progressSnap = await getDoc(progressRef);
+    if (progressSnap.exists()) {
+      const data = progressSnap.data();
+      // Return the dailyTasks object, or a default structure if it doesn't exist
+      return data.dailyTasks || { generatedAt: null, tasks: [] };
+    }
+    return null; // Return null if the user progress document doesn't exist
+  } catch (error) {
+    console.error("Error fetching user daily tasks:", error);
+    return null;
   }
 };

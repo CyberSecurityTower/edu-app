@@ -109,6 +109,29 @@ const newUserProfile = {
                     points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME // Give them points as if they completed one lesson
 }};
         await setDoc(doc(db, "users", user.uid), newUserProfile);
+          const displayName = `${firstName.trim()} ${lastName.trim()}`;
+            const avatarUrl = `https://ui-avatars.com/api/?name=${displayName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128`;
+            const newUserProgressData = {
+                stats: {
+                    displayName: displayName,
+                    avatarUrl: avatarUrl,
+                    points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME || 20 // نقاط بداية
+                },
+                pathProgress: {}, // كائن فارغ، جاهز لتلقي التقدم
+                favorites: {
+                    subjects: [] // مصفوفة فارغة، جاهزة للمفضلة
+                },
+                dailyTasks: { // <-- هنا نضيف الكائن الجديد الذي نسيناه
+                    generatedAt: null,
+                    tasks: []
+                },
+                lastLogin: new Date(),
+                streakCount: 1 // يبدأ بسلسلة يوم واحد
+            };
+
+            // 3. حفظ مستند `userProgress` الجديد بالكامل
+            // هذا يحل محل استدعاء `updateUserProgressProfileData` القديم
+            await setDoc(doc(db, "userProgress", user.uid), newUserProgressData);
             // --- ADD THIS LINE ---
         // This will create the displayName in userProgress at the same time
         await updateUserProgressProfileData(user.uid, { 

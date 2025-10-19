@@ -1,48 +1,78 @@
 // app/lesson-view.jsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import Toast from 'react-native-toast-message';
 
+import FloatingActionButton from '../components/FloatingActionButton';
 import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints } from '../services/firestoreService';
-import { useAppState } from '../context/AppStateContext'; // Correct import path
+import { useAppState } from '../context/AppStateContext';
 import GenerateKitButton from '../components/GenerateKitButton';
 import { POINTS_CONFIG } from '../config/points';
+
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAppState();
-  const { lessonId, lessonTitle, subjectId, pathId, totalLessons } = params;
+  
+  // --- THE FIX: Destructure safely with defaults ---
+  const { 
+    lessonId, 
+    lessonTitle, 
+    subjectId, 
+    pathId, 
+    totalLessons 
+  } = params || {};
+  // ------------------------------------------------
 
   const [lessonContent, setLessonContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     const loadLesson = async () => {
-      if (!user) return;
+      // Critical check before fetching
+      if (!user || !lessonId || !subjectId || !pathId) {
+        if (mounted) {
+            Alert.alert("خطأ", "بيانات الدرس ناقصة. لا يمكن المتابعة.");
+            setIsLoading(false);
+        }
+        return;
+      }
+      
       setIsLoading(true);
       const contentData = await getLessonContent(lessonId);
-      if (contentData) setLessonContent(contentData.content);
-      await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', parseInt(totalLessons, 10));
-      setIsLoading(false);
+      if (mounted) {
+        if (contentData) setLessonContent(contentData.content);
+        // Ensure totalLessons is a number before passing
+        const total = parseInt(totalLessons, 10) || 1;
+        await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', total);
+        setIsLoading(false);
+      }
     };
     loadLesson();
-  }, [lessonId, user]);
+    return () => { mounted = false; };
+  }, [lessonId, user, subjectId, pathId, totalLessons]);
 
   const handleCompleteLesson = async () => {
     if (isCompleted || !user) return;
     setIsCompleted(true);
 
-    // --- FIX #1: Added the missing catch block ---
     try {
+      // Re-check for critical IDs before saving
+      if (!user || !lessonId || !subjectId || !pathId) {
+          throw new Error("Missing IDs for completion update.");
+      }
+      
       const progressDoc = await getUserProgressDocument(user.uid);
       const currentStatus = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
+      const total = parseInt(totalLessons, 10) || 1;
 
-      await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', parseInt(totalLessons, 10));
+      await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', total);
 
       if (currentStatus !== 'completed') {
         const points = POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME;
@@ -57,13 +87,23 @@ export default function LessonViewScreen() {
       }
     } catch (error) {
       console.error("Error in handleCompleteLesson:", error);
-      setIsCompleted(false); // Allow user to try again if something fails
+      setIsCompleted(false);
     }
   };
 
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
     return layoutMeasurement.height + contentOffset.y >= contentSize.height - 30;
   };
+  
+  // If critical IDs are missing, show an error state
+  if (isLoading && (!lessonId || !subjectId || !pathId)) {
+      return (
+        <SafeAreaView style={styles.centerContent}>
+            <Text style={styles.errorText}>يرجى العودة والبدء من شاشة المادة.</Text>
+        </SafeAreaView>
+      );
+  }
+
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -90,8 +130,27 @@ export default function LessonViewScreen() {
           </ScrollView>
           
           <GenerateKitButton 
-            onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle }})}
+            onPress={() => router.push({ 
+                pathname: '/study-kit', 
+                params: { 
+                    lessonId, 
+                    lessonTitle, 
+                    subjectId, 
+                    pathId     
+                }
+            })}
           />
+             <View style={{ position: 'absolute', bottom: 120, right: 25 }}>
+             <FloatingActionButton 
+                onPress={() => router.push({ 
+                    pathname: '/(modal)/ai-chatbot', 
+                    params: { 
+                        contextLessonId: lessonId, 
+                        contextLessonTitle: `About: ${lessonTitle}` 
+                    }
+                })}
+             />
+          </View>
         </>
       )}
     </SafeAreaView>
@@ -105,6 +164,7 @@ const styles = StyleSheet.create({
   headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', flex: 1, textAlign: 'center' },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   contentContainer: { padding: 20, paddingBottom: 120 },
+  errorText: { color: '#EF4444', fontSize: 18, textAlign: 'center' },
 });
 
 const markdownStyles = StyleSheet.create({

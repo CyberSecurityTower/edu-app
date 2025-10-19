@@ -8,6 +8,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import SubjectCard from '../../components/SubjectCard';
 import MainHeader from '../../components/MainHeader'; // <-- Import our new header
 import { useFocusEffect } from 'expo-router';
+import DailyTasks from '../../components/DailyTasks'; 
 const HomeScreen = () => {
   const { user } = useAppState();
   const [pathDetails, setPathDetails] = useState(null);
@@ -56,12 +57,15 @@ const HomeScreen = () => {
             {/* --- THE FIX IS HERE: Using the new MainHeader --- */}
              <MainHeader title={`Hello, ${user?.firstName}!`} points={currentPoints} />
             
+ {/* --- أضف مكون المهام هنا --- */}
+            <DailyTasks />
             <View style={styles.listHeaderContent}>
+              <Text style={styles.sectionTitle}>All Subjects</Text> {/* عنوان جديد */}
               <View style={styles.searchContainer}>
                 <FontAwesome5 name="search" size={18} color="#8A94A4" />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search for a subject or lesson..."
+                  placeholder="Search for a subject..."
                   placeholderTextColor="#8A94A4"
                 />
               </View>

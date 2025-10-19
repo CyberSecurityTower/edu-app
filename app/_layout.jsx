@@ -6,7 +6,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
-
 import { auth } from '../firebase';
 import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
 import OnboardingScreen from '../components/OnboardingScreen';
@@ -30,60 +29,54 @@ function AppStateProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
+  const [points, setPoints] = useState(0);
+
+  const refreshPoints = useCallback(async () => {
+    if (user?.uid) {
+      const progressDoc = await getUserProgressDocument(user.uid);
+      setPoints(progressDoc?.stats?.points || 0);
+    }
+  }, [user]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
-          // Initial fetch to set the user state
           const userProfile = await getUserProfile(currentUser.uid);
-          let fullUserProfile = userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' };
+          const fullUserProfile = userProfile ? { uid: currentUser.uid, ...userProfile } : { uid: currentUser.uid, email: currentUser.email, profileStatus: 'pending_setup' };
           setUser(fullUserProfile);
 
           if (fullUserProfile.profileStatus === 'completed') {
             const progressDoc = await getUserProgressDocument(currentUser.uid);
+            setPoints(progressDoc?.stats?.points || 0);
+            
             const lastLogin = progressDoc?.lastLogin?.toDate();
             const streakCount = progressDoc?.streakCount || 0;
             const now = new Date();
 
-            if (!lastLogin) {
-              await updateUserDailyStreak(currentUser.uid, 1, 0);
-              return;
-            }
+            if (!lastLogin || now.toDateString() !== lastLogin.toDateString()) {
+              const yesterday = new Date();
+              yesterday.setDate(now.getDate() - 1);
+              const isConsecutive = lastLogin && yesterday.toDateString() === lastLogin.toDateString();
+              const newStreak = isConsecutive ? streakCount + 1 : 1;
+              
+              let pointsToAward = isConsecutive ? Math.floor(POINTS_CONFIG.DAILY_STREAK_BONUS * Math.pow(1.1, streakCount)) : POINTS_CONFIG.DAILY_STREAK_BONUS;
+              if (newStreak === 1 && lastLogin) pointsToAward = POINTS_CONFIG.DAILY_STREAK_BONUS; // Reset bonus if streak was broken
+              if (!lastLogin) pointsToAward = 0; // No points for the very first login ever
 
-            const isSameDay = now.toDateString() === lastLogin.toDateString();
-            if (isSameDay) return;
-
-            const yesterday = new Date();
-            yesterday.setDate(now.getDate() - 1);
-            const isConsecutive = yesterday.toDateString() === lastLogin.toDateString();
-            
-            const newStreak = isConsecutive ? streakCount + 1 : 1;
-            
-            let pointsToAward = POINTS_CONFIG.DAILY_STREAK_BONUS;
-            if (isConsecutive && streakCount > 0) {
-              const previousBonus = POINTS_CONFIG.DAILY_STREAK_BONUS * Math.pow(1.1, streakCount - 1);
-              pointsToAward = Math.floor(previousBonus * 1.1);
-            }
-
-            await updateUserDailyStreak(currentUser.uid, newStreak, pointsToAward);
-            
-            Toast.show({
-              type: 'points',
-              text1: `Day ${newStreak} Streak! +${pointsToAward} Points`,
-              position: 'bottom',
-              visibilityTime: 3500,
-            });
-            
-            // --- THE IMMEDIATE UPDATE FIX IS HERE ---
-            // After awarding points, we need to re-fetch the progress document
-            // and merge the new points into our existing user state.
-            const updatedProgressDoc = await getUserProgressDocument(currentUser.uid);
-            if (updatedProgressDoc?.stats) {
-              setUser(prevUser => ({
-                ...prevUser,
-                stats: { ...prevUser.stats, ...updatedProgressDoc.stats }
-              }));
+              await updateUserDailyStreak(currentUser.uid, newStreak, pointsToAward);
+              
+              if (pointsToAward > 0) {
+                Toast.show({
+                  type: 'points',
+                  text1: `Day ${newStreak} Streak! +${pointsToAward} Points`,
+                  position: 'bottom',
+                  visibilityTime: 3500,
+                });
+                // --- THE FIX IS HERE ---
+                // After awarding points, call refreshPoints to update the global state correctly.
+                refreshPoints();
+              }
             }
           }
         } else {
@@ -108,11 +101,12 @@ function AppStateProvider({ children }) {
 
     checkOnboardingStatus();
     return () => unsubscribeAuth();
-  }, []);
+  }, [user?.uid]); // Added user.uid dependency to re-run refreshPoints correctly
 
   const contextValue = useMemo(() => ({
     user, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, setUser,
-  }), [user, authLoading, hasCompletedOnboarding]);
+    points, refreshPoints,
+  }), [user, authLoading, hasCompletedOnboarding, points, refreshPoints]);
 
   return (
     <AppStateContext.Provider value={contextValue}>
@@ -121,6 +115,7 @@ function AppStateProvider({ children }) {
   );
 }
 
+// ... (RootLayoutNav, MainLayout, RootLayout, and styles remain unchanged)
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useContext(AppStateContext);
   const segments = useSegments();
@@ -133,18 +128,12 @@ function RootLayoutNav() {
     const currentSegment = segments[0] || null;
     const isUserAuthenticated = !!user;
     const profileStatus = user?.profileStatus;
-
-    // --- THE FIX IS HERE ---
-    // We are adding '(setup)' to the list of protected routes.
-    // This tells the gatekeeper not to redirect a completed user if they are in the setup flow (e.g., editing their profile).
     const isProtectedRoute = (seg) => ['(tabs)', '(modal)', '(setup)', 'subject-details', 'lesson-view', 'study-kit'].includes(seg);
 
     if (isUserAuthenticated) {
       if (profileStatus === 'pending_setup' && currentSegment !== '(setup)') {
         router.replace('/(setup)/profile-setup');
       } else if (profileStatus === 'completed' && !isProtectedRoute(currentSegment)) {
-        // This condition will now be FALSE when the user is on the edit-profile screen,
-        // preventing the unwanted redirect.
         router.replace('/(tabs)/');
       }
     } else {

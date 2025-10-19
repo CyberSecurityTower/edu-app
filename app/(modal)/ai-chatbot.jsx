@@ -24,7 +24,7 @@ import Markdown from 'react-native-markdown-display';
 import { useAppState } from '../../context/AppStateContext';
 
 const SESSIONS_KEY = '@chat_sessions_v2';
-const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';
+const RENDER_PROXY_URL = 'https://eduserver-v14-ultra.onrender.com/chat';
 
 export default function AiChatbotScreen() {
   const router = useRouter();

@@ -10,11 +10,16 @@ import AnimatedGradientButton from './AnimatedGradientButton';
 
 const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';
 
+
+// --- النسخة الجديدة والمحسّنة ---
 const ICONS = {
-  review: { name: 'book-reader', color: '#60A5FA' },
-  quiz: { name: 'puzzle-piece', color: '#FBBF24' },
-  new_lesson: { name: 'lightbulb', color: '#34D399' },
-  default: { name: 'tasks', color: '#9CA3AF' },
+  review: { name: 'book-reader', color: '#60A5FA' },       // مراجعة
+  quiz: { name: 'puzzle-piece', color: '#FBBF24' },      // اختبار
+  new_lesson: { name: 'lightbulb', color: '#34D399' },    // درس جديد
+  practice: { name: 'pencil-ruler', color: '#F87171' },  // تمرين (مثل الرياضيات)
+  study: { name: 'brain', color: '#C084FC' },           // دراسة عامة
+  read: { name: 'book-open', color: '#60A5FA' },         // قراءة
+  default: { name: 'clipboard-list', color: '#9CA3AF' }, // الأيقونة الافتراضية
 };
 
 const TaskItem = ({ task, onToggleStatus, onNavigate }) => {

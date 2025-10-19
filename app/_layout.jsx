@@ -11,7 +11,7 @@ import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '
 import OnboardingScreen from '../components/OnboardingScreen';
 import AppStateContext from '../context/AppStateContext';
 import { POINTS_CONFIG } from '../config/points';
-
+import { collection, onSnapshot, query, where, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
 const toastConfig = {
@@ -20,6 +20,17 @@ const toastConfig = {
       <LinearGradient colors={['#10B981', '#34D399']} style={styles.toastGradient}>
         <FontAwesome5 name="star" size={18} color="white" solid />
         <Text style={styles.toastText}>{text1}</Text>
+      </LinearGradient>
+    </View>
+  ),
+  eduai_notification: ({ text1, text2 }) => (
+    <View style={styles.toastContainer}>
+      <LinearGradient colors={['#3B82F6', '#4F46E5']} style={styles.toastGradient}>
+        <Image source={require('../assets/images/owl.png')} style={styles.toastIcon} />
+        <View style={styles.toastTextContainer}>
+          <Text style={styles.toastTitle}>{text1}</Text>
+          <Text style={styles.toastMessage}>{text2}</Text>
+        </View>
       </LinearGradient>
     </View>
   ),

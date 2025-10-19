@@ -8,7 +8,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import SubjectCard from '../../components/SubjectCard';
 import MainHeader from '../../components/MainHeader'; // <-- Import our new header
 import { useFocusEffect } from 'expo-router';
-import DailyTasks from '../../components/DailyTasks'; 
+import DailyTasks from '../../components/DailyTasksComponent'; 
 const HomeScreen = () => {
   const { user } = useAppState();
   const [pathDetails, setPathDetails] = useState(null);
@@ -45,7 +45,7 @@ const HomeScreen = () => {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
-  return (
+ return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <FlatList
         data={pathDetails?.subjects || []}
@@ -54,13 +54,12 @@ const HomeScreen = () => {
         numColumns={2}
         ListHeaderComponent={
           <>
-            {/* --- THE FIX IS HERE: Using the new MainHeader --- */}
-             <MainHeader title={`Hello, ${user?.firstName}!`} points={currentPoints} />
+            <MainHeader title={`Hello, ${user?.firstName}!`} points={currentPoints} />
             
- {/* --- أضف مكون المهام هنا --- */}
             <DailyTasks />
+            
             <View style={styles.listHeaderContent}>
-              <Text style={styles.sectionTitle}>All Subjects</Text> {/* عنوان جديد */}
+              <Text style={styles.sectionTitle}>All Subjects</Text>
               <View style={styles.searchContainer}>
                 <FontAwesome5 name="search" size={18} color="#8A94A4" />
                 <TextInput
@@ -70,7 +69,7 @@ const HomeScreen = () => {
                 />
               </View>
             </View>
-          </>
+          </> // <--- تأكد من أن هذا هو وسم الإغلاق الوحيد لـ <> في الأعلى
         }
         contentContainerStyle={{ paddingHorizontal: 8 }}
       />

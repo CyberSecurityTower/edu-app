@@ -6,7 +6,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAppState } from '../context/AppStateContext';
 import { getUserDailyTasks } from '../services/firestoreService';
-import TaskItem from './TaskItem';
+import TaskItem from './TaskItemComponent';
 import AnimatedGradientButton from './AnimatedGradientButton';
 
 const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';

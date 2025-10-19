@@ -6,10 +6,10 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAppState } from '../context/AppStateContext';
 import { getUserDailyTasks } from '../services/firestoreService';
-import TaskItem from './TaskItem'
+import TaskItem from './TaskItem';
 import AnimatedGradientButton from './AnimatedGradientButton';
 
-const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com'; // Your Render URL
+const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';
 
 const DailyTasks = () => {
   const { user } = useAppState();
@@ -18,6 +18,7 @@ const DailyTasks = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const fetchTasks = useCallback(async () => {
+    // --- الحارس الأول: لا تفعل شيئًا إذا لم يكن المستخدم موجودًا ---
     if (!user?.uid) {
       setIsLoading(false);
       return;
@@ -35,6 +36,7 @@ const DailyTasks = () => {
   );
 
   const handleGenerateTasks = async () => {
+    // ... (هذا الكود يبقى كما هو)
     if (!user?.uid) return;
     setIsGenerating(true);
     try {
@@ -44,16 +46,16 @@ const DailyTasks = () => {
         body: JSON.stringify({ userId: user.uid }),
       });
       if (!response.ok) throw new Error('Failed to generate tasks');
-      await fetchTasks(); // Re-fetch to get the new tasks
+      await fetchTasks();
     } catch (error) {
       console.error("Error generating tasks:", error);
-      // You can show a toast or alert here
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleToggleTaskStatus = async (taskId, newStatus) => {
+    // ... (هذا الكود يبقى كما هو)
     if (!user?.uid || !taskData?.tasks) return;
     
     const updatedTasks = taskData.tasks.map(task => 
@@ -70,7 +72,10 @@ const DailyTasks = () => {
     return <ActivityIndicator size="large" color="#10B981" style={styles.container} />;
   }
 
-  if (!taskData || !taskData.tasks || taskData.tasks.length === 0) {
+  // --- الحارس الثاني: استخدام Optional Chaining (?.) للوصول الآمن ---
+  const tasks = taskData?.tasks || [];
+
+  if (tasks.length === 0) {
     return (
       <View style={[styles.container, styles.emptyContainer]}>
         <Text style={styles.emptyTitle}>Ready to plan your day?</Text>
@@ -88,8 +93,8 @@ const DailyTasks = () => {
     );
   }
 
-  const completedCount = taskData.tasks.filter(t => t.status === 'completed').length;
-  const totalCount = taskData.tasks.length;
+  const completedCount = tasks.filter(t => t.status === 'completed').length;
+  const totalCount = tasks.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
@@ -102,22 +107,24 @@ const DailyTasks = () => {
         <View style={[styles.progressBar, { width: `${progress}%` }]} />
       </View>
       <FlatList
-        data={taskData.tasks}
+        data={tasks} // <-- نستخدم المتغير الآمن هنا
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TaskItem 
             task={item} 
             onToggleStatus={handleToggleTaskStatus}
-            pathId={user.selectedPathId} // Pass down for navigation
-            subjectId={item.relatedSubjectId || null} // Assuming you add this to your task object
+            pathId={user.selectedPathId}
+            // ملاحظة: تأكد من أن كائن المهمة يحتوي على subjectId إذا كنت ستستخدمه
+            subjectId={item.relatedSubjectId || null} 
           />
         )}
-        scrollEnabled={false} // Important for FlatList inside ScrollView
+        scrollEnabled={false}
       />
     </View>
   );
 };
 
+// ... (الـ styles تبقى كما هي)
 const styles = StyleSheet.create({
   container: { backgroundColor: '#0f1724', borderRadius: 16, padding: 20, marginHorizontal: 12, marginVertical: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -129,5 +136,6 @@ const styles = StyleSheet.create({
   emptyTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
   emptySubtitle: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginVertical: 15, lineHeight: 22 },
 });
+
 
 export default DailyTasks;

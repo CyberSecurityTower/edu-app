@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
-
 import { db } from '../firebase';
 import { useAppState } from '../context/AppStateContext';
 import { getUserDailyTasks } from '../services/firestoreService';
@@ -16,7 +15,7 @@ const DailyTasks = () => {
   const [taskData, setTaskData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   const fetchTasks = useCallback(async () => {
     if (!user?.uid) {
       setIsLoading(false);
@@ -119,15 +118,30 @@ const DailyTasks = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#0f1724', borderRadius: 16, padding: 20, marginHorizontal: 12, marginVertical: 20 },
+  // --- التعديل هنا ---
+  // قمنا بتغيير الهوامش ليناسب مكانه الجديد
+  container: { 
+    backgroundColor: '#0f1724', 
+    borderRadius: 16, 
+    padding: 20, 
+    marginHorizontal: 12, // ليتماشى مع محتوى الشاشة
+    marginBottom: 25,    // لإعطاء مساحة قبل القسم التالي
+  },
+  // --------------------
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   title: { color: 'white', fontSize: 20, fontWeight: 'bold' },
   progressText: { color: '#a7adb8ff', fontSize: 14 },
   progressBarContainer: { height: 6, backgroundColor: '#1E293B', borderRadius: 3, marginBottom: 20, overflow: 'hidden' },
   progressBar: { height: '100%', backgroundColor: '#10B981' },
-  emptyContainer: { paddingVertical: 30, alignItems: 'center' },
+  // --- تعديل بسيط هنا أيضًا ---
+  emptyContainer: { 
+    paddingVertical: 30, 
+    alignItems: 'center' 
+  },
+  // ---------------------------
   emptyTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
   emptySubtitle: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginVertical: 15, lineHeight: 22 },
 });
+
 
 export default DailyTasks;

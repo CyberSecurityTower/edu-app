@@ -27,7 +27,7 @@ const TaskItem = ({ task, onToggleStatus, pathId, subjectId }) => {
     textOpacity.value = withTiming(isCompleted ? 0.5 : 1);
     textLineThrough.value = withTiming(isCompleted ? 1 : 0);
   }, [isCompleted]);
-
+  
   const animatedCheckmarkStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));

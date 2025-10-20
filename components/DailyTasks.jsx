@@ -1,3 +1,4 @@
+// components/DailyTasks.jsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -7,19 +8,15 @@ import { useAppState } from '../context/AppStateContext';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import AnimatedGradientButton from './AnimatedGradientButton';
+import { API_CONFIG } from '../config/api'; // IMPROVEMENT: Centralized config
 
-const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';
-
-
-// --- النسخة الجديدة والمحسّنة ---
 const ICONS = {
-  review: { name: 'book-reader', color: '#60A5FA' },       // مراجعة
-  quiz: { name: 'puzzle-piece', color: '#FBBF24' },      // اختبار
-  new_lesson: { name: 'lightbulb', color: '#34D399' },    // درس جديد
-  practice: { name: 'pencil-ruler', color: '#F87171' },  // تمرين (مثل الرياضيات)
-  study: { name: 'brain', color: '#C084FC' },           // دراسة عامة
-  read: { name: 'book-open', color: '#60A5FA' },         // قراءة
-  default: { name: 'clipboard-list', color: '#9CA3AF' }, // الأيقونة الافتراضية
+  review: { name: 'book-reader', color: '#60A5FA' },
+  quiz: { name: 'puzzle-piece', color: '#FBBF24' },
+  new_lesson: { name: 'lightbulb', color: '#34D399' },
+  practice: { name: 'pencil-ruler', color: '#F87171' },
+  study: { name: 'brain', color: '#C084FC' },
+  default: { name: 'clipboard-list', color: '#9CA3AF' },
 };
 
 const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
@@ -28,7 +25,7 @@ const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
 
   return (
     <Animated.View style={styles.taskCard} entering={FadeInUp.duration(500)} layout={Layout.springify()}>
-      <Pressable style={styles.mainContent} onPress={() => onNavigate(task)}>
+      <Pressable style={styles.mainContent} onPress={() => onNavigate(task)} disabled={!task.relatedLessonId}>
         <View style={[styles.iconContainer, { backgroundColor: `${iconInfo.color}20` }]}>
           <FontAwesome5 name={iconInfo.name} size={18} color={iconInfo.color} />
         </View>
@@ -48,10 +45,10 @@ const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
   );
 };
 
-const DailyTasks = () => {
+const DailyTasks = ({ tasksProp = [] }) => {
   const { user } = useAppState();
   const router = useRouter();
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState(tasksProp);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -76,7 +73,7 @@ const DailyTasks = () => {
     if (!user?.uid) return;
     setIsGenerating(true);
     try {
-      await fetch(`${RENDER_PROXY_URL}/generate-daily-tasks`, {
+      await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.uid }),
@@ -90,12 +87,18 @@ const DailyTasks = () => {
 
   const handleToggleTaskStatus = async (taskId, newStatus) => {
     if (!user?.uid) return;
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
-    await updateDoc(doc(db, `userProgress/${user.uid}`), { 'dailyTasks.tasks': updatedTasks });
+    const optimisticTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
+    setTasks(optimisticTasks); // Optimistic UI update
+    try {
+      await updateDoc(doc(db, `userProgress/${user.uid}`), { 'dailyTasks.tasks': optimisticTasks });
+    } catch (error) {
+      console.error("Failed to update task status:", error);
+      setTasks(tasks); // Revert on failure
+    }
   };
 
   const handleNavigateToTask = (task) => {
-    if (task.relatedLessonId) {
+    if (task.relatedLessonId && user.selectedPathId && task.relatedSubjectId) {
       const pathname = task.type === 'quiz' ? '/study-kit' : '/lesson-view';
       router.push({
         pathname,
@@ -106,6 +109,8 @@ const DailyTasks = () => {
           subjectId: task.relatedSubjectId,
         },
       });
+    } else {
+      console.warn("Navigation cancelled: Missing required IDs for task:", task.id);
     }
   };
 
@@ -134,26 +139,31 @@ const DailyTasks = () => {
   }
   
   const completedCount = tasks.filter(t => t.status === 'completed').length;
-  const totalCount = tasks.length;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Your Daily Plan</Text>
-        <Text style={styles.progressText}>{completedCount}/{totalCount} Done</Text>
+        <Text style={styles.progressText}>{completedCount}/{tasks.length} Done</Text>
       </View>
-      {tasks.map(item => (
-        <TaskItem 
-           key={item.id} 
-          task={item} 
-          onToggleStatus={handleToggleTaskStatus}
-          onNavigate={handleNavigateToTask}
-        />
-      ))}
+      {/* PERFORMANCE: Use FlatList instead of .map for better memory management */}
+      <FlatList
+        data={tasks}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TaskItem 
+            task={item} 
+            onToggleStatus={handleToggleTaskStatus}
+            onNavigate={handleNavigateToTask}
+          />
+        )}
+        scrollEnabled={false} // Disable scrolling within the component itself
+      />
     </View>
   );
 };
 
+// Styles remain the same
 const styles = StyleSheet.create({
   container: { backgroundColor: '#1E293B', borderRadius: 20, padding: 20, marginHorizontal: 12, marginBottom: 10 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },

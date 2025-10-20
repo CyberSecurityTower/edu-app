@@ -14,23 +14,21 @@ const HomeScreen = () => {
   const [pathDetails, setPathDetails] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPoints, setCurrentPoints] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
       const fetchPathData = async () => {
-        // استخدم user.uid للتحقق من وجود المستخدم
         if (user?.uid && user.selectedPathId) {
           try {
+            // REFACTOR: Fetch both documents in parallel
             const [details, progressDoc] = await Promise.all([
               getEducationalPathById(user.selectedPathId),
               getUserProgressDocument(user.uid)
             ]);
             if (isMounted) {
               setPathDetails(details);
-              setUserProgress(progressDoc?.pathProgress?.[user.selectedPathId] || {});
-              setCurrentPoints(progressDoc?.stats?.points || 0);
+              setUserProgress(progressDoc); // Store the whole progress document
             }
           } catch (error) {
             console.error("Error fetching home screen data:", error);
@@ -41,37 +39,42 @@ const HomeScreen = () => {
         }
       };
       
-      setIsLoading(true); // أظهر التحميل في كل مرة يتم فيها التركيز على الشاشة
+      setIsLoading(true);
       fetchPathData();
 
       return () => { isMounted = false; };
-    }, [user?.uid, user?.selectedPathId]) // <--- الإصلاح الحاسم هنا
+    }, [user?.uid, user?.selectedPathId])
   );
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
+  // IMPROVEMENT: Pass daily tasks and points down as props to avoid redundant fetches
+  const dailyTasks = userProgress?.dailyTasks?.tasks || [];
+  const currentPoints = userProgress?.stats?.points || 0;
+  const pathProgressForSubjects = userProgress?.pathProgress?.[user.selectedPathId] || {};
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <FlatList
         data={pathDetails?.subjects || []}
-        renderItem={({ item }) => <SubjectCard item={item} userProgress={userProgress} />}
+        renderItem={({ item }) => <SubjectCard item={item} userProgress={pathProgressForSubjects} />}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        contentContainerStyle={{ paddingHorizontal: 8 }}
+        contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
             <MainHeader title={`Hello, ${user?.firstName}!`} points={currentPoints} />
             
-            <DailyTasks />
+            {/* Pass tasks as a prop */}
+            <DailyTasks tasksProp={dailyTasks} />
             
             <View style={styles.subjectsHeader}>
               <Text style={styles.sectionTitle}>Continue Learning</Text>
             </View>
           </>
         }
-        // إضافة مكون في حالة كانت قائمة المواد فارغة
         ListEmptyComponent={
           !isLoading && (
             <View style={styles.emptySubjectsContainer}>
@@ -87,6 +90,7 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
+  listContent: { paddingHorizontal: 8, paddingBottom: 20 },
   subjectsHeader: {
     paddingHorizontal: 12,
     marginTop: 10,

@@ -1,4 +1,4 @@
-// app/lesson-view.jsx
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,7 +18,6 @@ export default function LessonViewScreen() {
   const router = useRouter();
   const { user } = useAppState();
   
-  // --- THE FIX: Destructure safely with defaults ---
   const { 
     lessonId, 
     lessonTitle, 
@@ -26,7 +25,6 @@ export default function LessonViewScreen() {
     pathId, 
     totalLessons 
   } = params || {};
-  // ------------------------------------------------
 
   const [lessonContent, setLessonContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -35,8 +33,8 @@ export default function LessonViewScreen() {
   useEffect(() => {
     let mounted = true;
     const loadLesson = async () => {
-      // Critical check before fetching
-      if (!user || !lessonId || !subjectId || !pathId) {
+      // استخدم user.uid هنا للتحقق
+      if (!user?.uid || !lessonId || !subjectId || !pathId) {
         if (mounted) {
             Alert.alert("خطأ", "بيانات الدرس ناقصة. لا يمكن المتابعة.");
             setIsLoading(false);
@@ -48,33 +46,36 @@ export default function LessonViewScreen() {
       const contentData = await getLessonContent(lessonId);
       if (mounted) {
         if (contentData) setLessonContent(contentData.content);
-        // Ensure totalLessons is a number before passing
         const total = parseInt(totalLessons, 10) || 1;
+        // استخدم user.uid هنا للتحديث
         await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', total);
         setIsLoading(false);
       }
     };
     loadLesson();
     return () => { mounted = false; };
-  }, [lessonId, user, subjectId, pathId, totalLessons]);
+  }, [lessonId, user?.uid, subjectId, pathId, totalLessons]); // <--- الإصلاح الحاسم هنا
 
   const handleCompleteLesson = async () => {
-    if (isCompleted || !user) return;
+    // استخدم user.uid هنا
+    if (isCompleted || !user?.uid) return;
     setIsCompleted(true);
 
     try {
-      // Re-check for critical IDs before saving
-      if (!user || !lessonId || !subjectId || !pathId) {
+      if (!user.uid || !lessonId || !subjectId || !pathId) {
           throw new Error("Missing IDs for completion update.");
       }
       
       const progressDoc = await getUserProgressDocument(user.uid);
-      const currentStatus = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
-      const total = parseInt(totalLessons, 10) || 1;
+      const lessonProgress = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
+      // تحقق مما إذا كان الدرس قد تم إكماله بالفعل
+      const wasAlreadyCompleted = lessonProgress?.status === 'completed';
 
+      const total = parseInt(totalLessons, 10) || 1;
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', total);
 
-      if (currentStatus !== 'completed') {
+      // امنح النقاط فقط إذا لم يكن الدرس مكتملاً من قبل
+      if (!wasAlreadyCompleted) {
         const points = POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME;
         await updateUserPoints(user.uid, points);
         
@@ -91,11 +92,10 @@ export default function LessonViewScreen() {
     }
   };
 
-  const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
+    const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
     return layoutMeasurement.height + contentOffset.y >= contentSize.height - 30;
   };
   
-  // If critical IDs are missing, show an error state
   if (isLoading && (!lessonId || !subjectId || !pathId)) {
       return (
         <SafeAreaView style={styles.centerContent}>
@@ -105,7 +105,8 @@ export default function LessonViewScreen() {
   }
 
 
-  return (
+
+   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}>

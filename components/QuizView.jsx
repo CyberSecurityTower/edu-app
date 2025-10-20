@@ -1,4 +1,3 @@
-// components/QuizView.jsx
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -19,13 +18,18 @@ import {
   updateUserPoints,
   getUserProgressDocument
 } from '../services/firestoreService';
-import { POINTS_CONFIG } from '../config/points';
 import { useAppState } from '../context/AppStateContext';
 
-// --- CONFIGURATION ---
+// --- CONFIGURATION CONSTANTS ---
+// All component-specific configurations are now centralized here.
 const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';
+const POINTS_CONFIG = {
+  QUIZ_CORRECT_ANSWER: 10,
+  QUIZ_INCORRECT_ANSWER: 0,
+  QUIZ_RETRY: -50,
+};
 
-// --- OPTION ITEM (sub-component) ---
+// --- OPTION ITEM (Sub-component for quiz choices) ---
 const OptionItem = ({
   option,
   index,
@@ -39,9 +43,7 @@ const OptionItem = ({
 }) => {
   const animatedStyle = useAnimatedStyle(() => {
     if (shakeIdx.value === index) {
-      return {
-        transform: [{ translateX: shakeValue.value }],
-      };
+      return { transform: [{ translateX: shakeValue.value }] };
     }
     return { transform: [{ translateX: 0 }] };
   });
@@ -64,11 +66,11 @@ const OptionItem = ({
   );
 };
 
-// --- QUIZ VIEW COMPONENT ---
+// --- MAIN QUIZ VIEW COMPONENT ---
 const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) => {
   const { user, refreshPoints } = useAppState();
 
-  // Guard: ensure quizData exists
+  // Guard: Ensure quizData exists and is not empty.
   if (!quizData || quizData.length === 0) {
     return (
       <View style={styles.centerAnalyzing}>
@@ -77,7 +79,7 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
     );
   }
 
-  // --- STATE ---
+  // --- STATE MANAGEMENT ---
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -87,125 +89,108 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
   const [analysisData, setAnalysisData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Shared values for shake animation
+  // --- REANIMATED SHARED VALUES ---
   const shakeValue = useSharedValue(0);
   const shakeIdx = useSharedValue(-1);
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-  // Prepare data for AI (memoized)
+  // Memoize data for AI analysis to prevent re-computation on every render.
   const quizQuestionsData = useMemo(() => quizData.map(q => ({
     question: q.question,
     correctAnswer: q.correctAnswer,
     options: q.options,
   })), [quizData]);
 
-  // Helper to trigger shake on a given option index
+  // --- ANIMATION & LOGIC CALLBACKS ---
   const triggerShake = useCallback((index) => {
     shakeIdx.value = index;
     shakeValue.value = withSequence(
       withTiming(-10, { duration: 60, easing: Easing.linear }),
       withTiming(10, { duration: 60, easing: Easing.linear }),
-      withTiming(-6, { duration: 50, easing: Easing.linear }),
-      withTiming(6, { duration: 50, easing: Easing.linear }),
-      withTiming(0, { duration: 40, easing: Easing.linear })
+      withTiming(0, { duration: 50, easing: Easing.linear })
     );
-
-    // reset index after approx duration
-    setTimeout(() => {
-      shakeIdx.value = -1;
-    }, 270);
+    setTimeout(() => { shakeIdx.value = -1; }, 200);
   }, [shakeIdx, shakeValue]);
 
-  // Handle answer
   const handleAnswerPress = useCallback(async (option, index) => {
     if (isAnswered || !user) return;
 
-    setSelectedAnswer(option);
     setIsAnswered(true);
-
+    setSelectedAnswer(option);
+    
     const newAnswers = [...userAnswers];
     newAnswers[currentQuestionIndex] = option;
     setUserAnswers(newAnswers);
 
-    let points = 0;
+    let pointsAwarded = 0;
     if (option === currentQuestion.correctAnswer) {
       setScore(prev => prev + 1);
-      points = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
-      Toast.show({
-        type: 'points',
-        text1: `+${points} نقاط!`,
-        position: 'bottom',
-        visibilityTime: 1500,
-      });
+      pointsAwarded = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
+      Toast.show({ type: 'points', text1: `+${pointsAwarded} نقاط!` });
     } else {
       triggerShake(index);
-      points = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
+      pointsAwarded = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
     }
 
-    try {
-      await updateUserPoints(user.uid, points);
-      if (refreshPoints) refreshPoints();
-    } catch (err) {
-      console.error("updateUserPoints failed:", err);
+    if (pointsAwarded !== 0) {
+      try {
+        await updateUserPoints(user.uid, pointsAwarded);
+        refreshPoints?.();
+      } catch (err) {
+        console.error("Failed to update user points:", err);
+      }
     }
   }, [isAnswered, user, currentQuestion, currentQuestionIndex, userAnswers, triggerShake, refreshPoints]);
 
-  // AI analysis + Firestore update
   const analyzeAndFinishQuiz = useCallback(async () => {
     setIsAnalyzing(true);
 
-    // Safety check for required IDs
-    if (!user || !pathId || !subjectId || !lessonId) {
-      Alert.alert("خطأ البيانات", "بيانات المادة أو المسار مفقودة. لا يمكن حفظ النتيجة.");
+    // Enhanced Guard: Stricter check for data integrity before making an API call.
+    if (!user?.uid || !pathId || !subjectId || !lessonId) {
+      Alert.alert("خطأ في البيانات", "لا يمكن حفظ النتيجة بسبب نقص بيانات المسار أو المادة. سيتم عرض نتيجتك محلياً فقط.");
       setIsAnalyzing(false);
+      setIsQuizFinished(true);
       setAnalysisData({
         newMasteryScore: Math.round((score / quizData.length) * 100),
-        feedbackSummary: "لا يمكن إجراء حفظ تلقائي للنتيجة بسبب نقص البيانات. لكنك حققت أداءً جيداً.",
-        suggestedNextStep: "تأكد من إعداد المسار والموضوع قبل المحاولة مرة أخرى."
+        feedbackSummary: "أداء جيد، لكن لم نتمكن من حفظ النتيجة تلقائياً.",
+        suggestedNextStep: "تأكد من أن المسار التعليمي والمادة محددين بشكل صحيح."
       });
-      setIsQuizFinished(true);
       return;
     }
 
     try {
-      const analysisResponse = await fetch(`${RENDER_PROXY_URL}/analyze-quiz-fail`, {
+      const response = await fetch(`${RENDER_PROXY_URL}/analyze-quiz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.uid,
-          lessonTitle: lessonTitle || 'Lesson Quiz',
+          lessonTitle,
           quizQuestions: quizQuestionsData,
           userAnswers,
           totalScore: score,
         }),
       });
 
-      if (!analysisResponse.ok) throw new Error("AI Analysis Server Error");
-
-      const data = await analysisResponse.json();
-      setAnalysisData(data);
-
-      // Save results in Firestore
-      try {
-        await updateLessonMasteryScore(
-          user.uid,
-          pathId,
-          subjectId,
-          lessonId,
-          data.newMasteryScore,
-          data.suggestedNextStep
-        );
-      } catch (err) {
-        console.error("updateLessonMasteryScore failed:", err);
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`AI Analysis Server Error (${response.status}): ${errorBody}`);
       }
 
+      const data = await response.json();
+      setAnalysisData(data);
+
+      await updateLessonMasteryScore(
+        user.uid, pathId, subjectId, lessonId,
+        data.newMasteryScore, data.suggestedNextStep
+      );
+
     } catch (error) {
-      console.error("AI Analysis Failed:", error);
+      console.error("AI Analysis or Firestore update failed:", error);
       setAnalysisData({
         newMasteryScore: Math.round((score / quizData.length) * 100),
-        feedbackSummary: "لم نتمكن من إجراء تحليل مفصل، لكنك حققت نتائج جيدة.",
-        suggestedNextStep: "يمكنك مراجعة الدروس التي وجدت صعوبة فيها."
+        feedbackSummary: "لم نتمكن من الحصول على تحليل مفصل، لكنك قمت بعمل رائع!",
+        suggestedNextStep: "يمكنك مراجعة الدروس التي واجهت فيها صعوبة."
       });
     } finally {
       setIsAnalyzing(false);
@@ -213,34 +198,32 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
     }
   }, [quizQuestionsData, user, userAnswers, score, lessonId, lessonTitle, pathId, subjectId, quizData.length]);
 
-  // Next or finish
   const handleNext = useCallback(() => {
-    if (currentQuestionIndex === quizData.length - 1) {
-      analyzeAndFinishQuiz();
-    } else {
+    if (currentQuestionIndex < quizData.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setSelectedAnswer(null);
       setIsAnswered(false);
+    } else {
+      analyzeAndFinishQuiz();
     }
   }, [currentQuestionIndex, quizData.length, analyzeAndFinishQuiz]);
 
-  // Retry quiz
   const handleRestart = useCallback(async () => {
     if (!user) return;
-
     try {
       const progressDoc = await getUserProgressDocument(user.uid);
       const currentPoints = progressDoc?.stats?.points || 0;
       const cost = Math.abs(POINTS_CONFIG.QUIZ_RETRY);
 
       if (currentPoints < cost) {
-        Alert.alert("نقاط غير كافية", `تحتاج ${cost} نقاط لإعادة المحاولة.`);
+        Alert.alert("نقاط غير كافية", `تحتاج إلى ${cost} نقطة على الأقل لإعادة المحاولة.`);
         return;
       }
 
       await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_RETRY);
-      if (refreshPoints) refreshPoints();
+      refreshPoints?.();
 
+      // Reset all states to start the quiz over
       setCurrentQuestionIndex(0);
       setSelectedAnswer(null);
       setIsAnswered(false);
@@ -249,11 +232,12 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
       setIsQuizFinished(false);
       setAnalysisData(null);
     } catch (err) {
-      console.error("handleRestart failed:", err);
+      console.error("Failed to process quiz restart:", err);
+      Alert.alert("خطأ", "حدث خطأ أثناء محاولة إعادة الاختبار.");
     }
   }, [user, refreshPoints, quizData.length]);
 
-  // UI states
+  // --- UI RENDERING ---
   if (isAnalyzing) {
     return (
       <View style={styles.centerAnalyzing}>
@@ -282,21 +266,22 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
               fill={finalMasteryScore}
               tintColor={finalMasteryScore >= 70 ? "#10B981" : "#F59E0B"}
               backgroundColor="#0f1724"
+              rotation={0}
+              lineCap="round"
             >
               {() => <Text style={styles.masteryScoreValue}>{finalMasteryScore}%</Text>}
             </AnimatedCircularProgress>
-
             <View style={styles.masteryInfo}>
               <Text style={styles.masteryScoreText}>درجة الإتقان</Text>
               <Text style={styles.analysisSummaryText}>{analysisData?.feedbackSummary}</Text>
             </View>
           </View>
 
-          <Text style={styles.analysisSummaryTitle}>اقتراح الخطوة التالية:</Text>
+          <Text style={styles.analysisSummaryTitle}>الخطوة التالية المقترحة:</Text>
           <Text style={styles.analysisNextStepText}>{analysisData?.suggestedNextStep}</Text>
 
           <AnimatedGradientButton
-            text={`إعادة المحاولة (-${Math.abs(POINTS_CONFIG.QUIZ_RETRY)} نقاط)`}
+            text={`إعادة المحاولة (${POINTS_CONFIG.QUIZ_RETRY} نقطة)`}
             onPress={handleRestart}
             buttonWidth={240}
             buttonHeight={50}
@@ -308,43 +293,36 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
     );
   }
 
-  // Regular quiz screen
   return (
     <View style={styles.container}>
       <Text style={styles.progressText}>السؤال {currentQuestionIndex + 1}/{quizData.length}</Text>
-
-      <Animated.View style={{ marginBottom: 20 }}>
-        <Text style={styles.questionText}>{currentQuestion.question}</Text>
-      </Animated.View>
+      <Text style={styles.questionText}>{currentQuestion.question}</Text>
 
       <View style={styles.optionsContainer}>
-        {currentQuestion.options.map((option, idx) => {
-          const isSelected = selectedAnswer === option;
-          const isCorrect = currentQuestion.correctAnswer === option;
-
-          return (
-            <OptionItem
-              key={idx}
-              option={option}
-              index={idx}
-              onPress={handleAnswerPress}
-              disabled={isAnswered}
-              showCorrect={isAnswered}
-              isCorrect={isCorrect}
-              isSelected={isSelected}
-              shakeIdx={shakeIdx}
-              shakeValue={shakeValue}
-            />
-          );
-        })}
+        {currentQuestion.options.map((option, idx) => (
+          <OptionItem
+            key={idx}
+            option={option}
+            index={idx}
+            onPress={handleAnswerPress}
+            disabled={isAnswered}
+            showCorrect={isAnswered}
+            isCorrect={currentQuestion.correctAnswer === option}
+            isSelected={selectedAnswer === option}
+            shakeIdx={shakeIdx}
+            shakeValue={shakeValue}
+          />
+        ))}
       </View>
 
       {isAnswered && (
-        <Pressable style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>
-            {currentQuestionIndex === quizData.length - 1 ? 'إنهاء الاختبار' : 'السؤال التالي'}
-          </Text>
-        </Pressable>
+        <AnimatedGradientButton
+          text={currentQuestionIndex === quizData.length - 1 ? 'إنهاء وتحليل النتائج' : 'السؤال التالي'}
+          onPress={handleNext}
+          buttonWidth={'100%'}
+          buttonHeight={55}
+          fontSize={16}
+        />
       )}
     </View>
   );
@@ -352,10 +330,10 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
 
 // --- STYLES ---
 const styles = StyleSheet.create({
-  container: { paddingVertical: 10 },
+  container: { padding: 10 },
   progressText: { color: '#a7adb8ff', fontSize: 14, textAlign: 'center', marginBottom: 15 },
-  questionText: { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
-  optionsContainer: { marginBottom: 20, paddingHorizontal: 10 },
+  questionText: { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+  optionsContainer: { marginBottom: 20 },
   optionButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -370,21 +348,18 @@ const styles = StyleSheet.create({
   correctOption: { backgroundColor: '#10B981', borderColor: '#34D399' },
   incorrectOption: { backgroundColor: '#EF4444', borderColor: '#F87171' },
   optionText: { color: 'white', fontSize: 16, flex: 1 },
-  nextButton: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center' },
-  nextButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  centerAnalyzing: { justifyContent: 'center', alignItems: 'center', minHeight: 250 },
+  centerAnalyzing: { justifyContent: 'center', alignItems: 'center', minHeight: 300 },
   analysisText: { color: '#a7adb8ff', fontSize: 16, marginTop: 15, textAlign: 'center' },
-  resultsCard: { alignItems: 'center', padding: 30, borderRadius: 16 },
+  resultsCard: { alignItems: 'center', padding: 25, borderRadius: 16 },
   resultsTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-  resultsText: { color: '#d1d5db', fontSize: 18, marginBottom: 15 },
-  masteryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
-  masteryBadgeContainer: { alignItems: 'center', marginVertical: 15, paddingHorizontal: 25, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 15 },
-  masteryScoreText: { color: '#d1d5db', fontSize: 14, marginBottom: 5 },
+  resultsText: { color: '#d1d5db', fontSize: 18, marginBottom: 20 },
+  masteryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, width: '100%' },
   masteryScoreValue: { fontSize: 28, fontWeight: '900', color: 'white' },
-  masteryInfo: { paddingLeft: 16, flex: 1 },
-  analysisSummaryTitle: { color: 'white', fontSize: 16, fontWeight: 'bold', marginTop: 15, marginBottom: 5, textAlign: 'center' },
-  analysisSummaryText: { color: '#d1d5db', fontSize: 15, textAlign: 'center', marginBottom: 15, lineHeight: 24 },
-  analysisNextStepText: { color: '#34D399', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 25 },
+  masteryInfo: { paddingLeft: 20, flex: 1 },
+  masteryScoreText: { color: '#d1d5db', fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
+  analysisSummaryText: { color: '#d1d5db', fontSize: 14, lineHeight: 22 },
+  analysisSummaryTitle: { color: 'white', fontSize: 16, fontWeight: 'bold', marginTop: 15, marginBottom: 8, alignSelf: 'flex-start' },
+  analysisNextStepText: { color: '#34D399', fontSize: 15, fontWeight: '600', alignSelf: 'flex-start', marginBottom: 25 },
 });
 
 export default QuizView;

@@ -17,10 +17,11 @@ const HomeScreen = () => {
   const [currentPoints, setCurrentPoints] = useState(0);
 
   useFocusEffect(
-    useCallback(() => {
-      let isMounted = true;
-      const fetchPathData = async () => {
-        if (user && user.selectedPathId) {
+  useCallback(() => {
+    let isMounted = true;
+    const fetchPathData = async () => {
+      // user.uid confirm
+      if (user && user.selectedPathId && user.uid) { 
           const [details, progressDoc] = await Promise.all([
             getEducationalPathById(user.selectedPathId),
             getUserProgressDocument(user.uid)
@@ -30,13 +31,14 @@ const HomeScreen = () => {
             setUserProgress(progressDoc?.pathProgress?.[user.selectedPathId] || {});
             setCurrentPoints(progressDoc?.stats?.points || 0);
           }
-        }
-        if (isMounted) setIsLoading(false);
-      };
-      fetchPathData();
-      return () => { isMounted = false; };
-    }, [user])
-  );
+        } else if (isMounted) {
+        setIsLoading(false);
+      }
+    };
+    fetchPathData();
+    return () => { isMounted = false; };
+  }, [user?.uid, user?.selectedPathId]) // <--- الإصلاح هنا! اعتمد على القيم البدائية.
+);
 
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;

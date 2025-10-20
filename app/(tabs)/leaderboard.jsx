@@ -56,11 +56,11 @@ export default function LeaderboardScreen() {
   const [currentPoints, setCurrentPoints] = useState(0);
 
   useFocusEffect(
-    useCallback(() => {
-      const fetchData = async () => {
-        setIsLoading(true);
-        if (user?.uid) {
-          const [leaderboardData, progressDoc] = await Promise.all([ getLeaderboard(), getUserProgressDocument(user.uid) ]);
+  useCallback(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      if (user?.uid) { // استخدم user.uid هنا
+        const [leaderboardData, progressDoc] = await Promise.all([ getLeaderboard(), getUserProgressDocument(user.uid) ]);
           
           const userPoints = progressDoc?.stats?.points || 0;
           setCurrentPoints(userPoints);
@@ -82,7 +82,7 @@ export default function LeaderboardScreen() {
         setIsLoading(false);
       };
       fetchData();
-    }, [user])
+    }, [user?.uid])
   );
 
   // This effect dynamically configures the header using the navigator's options

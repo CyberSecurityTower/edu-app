@@ -18,6 +18,7 @@ export default function LessonViewScreen() {
   const router = useRouter();
   const { user } = useAppState();
   
+  // --- THE FIX: Destructure safely with defaults ---
   const { 
     lessonId, 
     lessonTitle, 
@@ -25,6 +26,7 @@ export default function LessonViewScreen() {
     pathId, 
     totalLessons 
   } = params || {};
+  // ------------------------------------------------
 
   const [lessonContent, setLessonContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -33,8 +35,8 @@ export default function LessonViewScreen() {
   useEffect(() => {
     let mounted = true;
     const loadLesson = async () => {
-      // استخدم user.uid هنا للتحقق
-      if (!user?.uid || !lessonId || !subjectId || !pathId) {
+      // Critical check before fetching
+      if (!user || !lessonId || !subjectId || !pathId) {
         if (mounted) {
             Alert.alert("خطأ", "بيانات الدرس ناقصة. لا يمكن المتابعة.");
             setIsLoading(false);
@@ -46,36 +48,33 @@ export default function LessonViewScreen() {
       const contentData = await getLessonContent(lessonId);
       if (mounted) {
         if (contentData) setLessonContent(contentData.content);
+        // Ensure totalLessons is a number before passing
         const total = parseInt(totalLessons, 10) || 1;
-        // استخدم user.uid هنا للتحديث
         await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', total);
         setIsLoading(false);
       }
     };
     loadLesson();
     return () => { mounted = false; };
-  }, [lessonId, user?.uid, subjectId, pathId, totalLessons]); // <--- الإصلاح الحاسم هنا
+  }, [lessonId, user, subjectId, pathId, totalLessons]);
 
   const handleCompleteLesson = async () => {
-    // استخدم user.uid هنا
-    if (isCompleted || !user?.uid) return;
+    if (isCompleted || !user) return;
     setIsCompleted(true);
 
     try {
-      if (!user.uid || !lessonId || !subjectId || !pathId) {
+      // Re-check for critical IDs before saving
+      if (!user || !lessonId || !subjectId || !pathId) {
           throw new Error("Missing IDs for completion update.");
       }
       
       const progressDoc = await getUserProgressDocument(user.uid);
-      const lessonProgress = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
-      // تحقق مما إذا كان الدرس قد تم إكماله بالفعل
-      const wasAlreadyCompleted = lessonProgress?.status === 'completed';
-
+      const currentStatus = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
       const total = parseInt(totalLessons, 10) || 1;
+
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', total);
 
-      // امنح النقاط فقط إذا لم يكن الدرس مكتملاً من قبل
-      if (!wasAlreadyCompleted) {
+      if (currentStatus !== 'completed') {
         const points = POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME;
         await updateUserPoints(user.uid, points);
         
@@ -92,12 +91,11 @@ export default function LessonViewScreen() {
     }
   };
 
-  // ... (بقية الكود يبقى كما هو)
-
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
     return layoutMeasurement.height + contentOffset.y >= contentSize.height - 30;
   };
   
+  // If critical IDs are missing, show an error state
   if (isLoading && (!lessonId || !subjectId || !pathId)) {
       return (
         <SafeAreaView style={styles.centerContent}>

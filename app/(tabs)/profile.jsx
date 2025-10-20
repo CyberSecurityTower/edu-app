@@ -100,11 +100,10 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!user?.uid) {
+    if (!user?.uid) { // استخدم user.uid
       setIsLoading(false);
       return;
     }
-    
     const [progressDoc, pathDetails, leaderboard] = await Promise.all([
       getUserProgressDocument(user.uid),
       getEducationalPathById(user.selectedPathId),
@@ -135,7 +134,7 @@ export default function ProfileScreen() {
         setUserProgress(progressDoc.pathProgress?.[user.selectedPathId] || {});
       }
     }
-  }, [user]);
+  }, [user?.uid]);
 
   useFocusEffect(
     useCallback(() => {

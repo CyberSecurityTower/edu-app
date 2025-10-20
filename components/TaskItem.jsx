@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { getLessonContent } from '../services/firestoreService'; // Assuming you have a way to get lesson details
 
 const ICONS = {
-  review: { name: 'book-reader', color: '#3B82F6' },
+  review: { name: 'book-reader', color: '#417fe4ff' },
   quiz: { name: 'puzzle-piece', color: '#F59E0B' },
   new_lesson: { name: 'lightbulb', color: '#10B981' },
   default: { name: 'tasks', color: '#9CA3AF' },

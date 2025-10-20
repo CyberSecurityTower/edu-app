@@ -108,7 +108,7 @@ export default function SubjectDetailsScreen() {
 
     const fetchData = async () => {
       setIsLoading(true);
-      if (!user || !params?.id) {
+      if (!user?.uid || !params?.id) { // استخدم user.uid
         if (mounted) setIsLoading(false);
         return;
       }
@@ -133,11 +133,11 @@ export default function SubjectDetailsScreen() {
       }
     };
 
-    fetchData();
+      fetchData();
     return () => {
       mounted = false;
     };
-  }, [user, params?.id]);
+  }, [user?.uid, params?.id]); // <--- الإصلاح هنا!
 
   const handleFavoritePress = async () => {
     if (!user || !params?.id) return;

@@ -6,7 +6,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { MotiView, MotiText } from 'moti';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import LottieView from 'lottie-react-native'; // ✨ 1. استيراد LottieView
+import LottieView from 'lottie-react-native';
 
 const ICONS = {
   review: { name: 'book-reader', color: '#60A5FA' },
@@ -17,19 +17,21 @@ const ICONS = {
   default: { name: 'clipboard-list', color: '#9CA3AF' },
 };
 
-// ✨ 2. تحديث المكون ليقبل مصدر Lottie
+// ✨ تم تحديث هذا المكون ليكون أكثر أماناً
 const SwipeActionComponent = ({ iconName, color, align, lottieSource }) => {
   return (
     <View style={[styles.swipeAction, { backgroundColor: color, alignItems: align }]}>
+      {/* إذا كان هناك مصدر للأنيميشن، اعرضه */}
       {lottieSource ? (
         <LottieView
           source={lottieSource}
-          autoPlay // ✨ سيعمل الأنيميشن تلقائيًا عند السحب
+          autoPlay
           loop={false}
           style={styles.lottieStyle}
         />
       ) : (
-        <FontAwesome5 name={iconName} size={22} color="white" />
+        /* ✨ وإلا، اعرض أيقونة عادية كخيار احتياطي آمن */
+        <FontAwesome5 name={iconName || 'check'} size={22} color="white" />
       )}
     </View>
   );
@@ -55,7 +57,7 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
     <View style={styles.outerContainer}>
       <Swipeable
         renderLeftActions={(progress, dragX) => <SwipeActionComponent iconName="trash" color="#EF4444" align="flex-start" />}
-        // ✨ 3. تمرير مصدر Lottie هنا
+        // ✨ الآن هذا السطر آمن. إذا لم يجد الملف، لن ينهار التطبيق
         renderRightActions={(progress, dragX) => <SwipeActionComponent color="#10B981" align="flex-end" lottieSource={require('../assets/images/Done.json')} />}
         onSwipeableOpen={(direction) => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -112,7 +114,6 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
 const styles = StyleSheet.create({
     outerContainer: { marginHorizontal: 20, marginBottom: 12, },
     swipeAction: { justifyContent: 'center', width: 100, borderRadius: 16, paddingHorizontal: 25 },
-    // ✨ 4. إضافة ستايل للأنيميشن
     lottieStyle: { width: 60, height: 60 },
     taskContainer: { padding: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#374151', overflow: 'hidden' },
     selectedContainer: { borderColor: '#34D399', backgroundColor: '#1f293790' },

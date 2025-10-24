@@ -11,7 +11,7 @@ import { ActionSheetProvider } from '../context/ActionSheetContext';
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { EditModeProvider } from '../context/EditModeContext';
 import { FabProvider, useFab } from '../context/FabContext';
-
+import 'react-native-get-random-values';
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
 function FabRenderer() {

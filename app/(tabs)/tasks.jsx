@@ -1,11 +1,10 @@
-// app/(tabs)/tasks.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid'; // سيعمل الآن بشكل صحيح بعد تثبيت المكتبة الإضافية
 
 import { useAppState } from '../../context/AppStateContext';
 import { useFab } from '../../context/FabContext';
@@ -22,7 +21,6 @@ export default function TasksScreen() {
   const { user } = useAppState();
   const router = useRouter();
   const { setFabConfig, setIsSheetVisible } = useFab();
-  // ✨ --- الإصلاح: استيراد setActions لربط الدوال --- ✨
   const { isEditMode, setIsEditMode, selectedTasks, setSelectedTasks, setActions } = useEditMode();
 
   const [tasks, setTasks] = useState([]);
@@ -59,7 +57,6 @@ export default function TasksScreen() {
     }
   }, [user?.uid]);
 
-  // ✨ --- الإصلاح: تعريف دوال التحكم --- ✨
   const handlePinSelectedTasks = useCallback(() => {
     const updatedTasks = tasks.map(task => 
       selectedTasks.has(task.id) ? { ...task, isPinned: !task.isPinned } : task
@@ -89,41 +86,53 @@ export default function TasksScreen() {
     );
   }, [tasks, selectedTasks, updateTasksInFirestore, setSelectedTasks, setIsEditMode]);
 
-  // ✨ --- الإصلاح: ربط دوال التحكم بالسياق عند تحميل المكون --- ✨
+  // ✨ --- دالة جديدة لفتح نافذة إعادة التسمية --- ✨
+  const handleRenameSelectedTask = useCallback(() => {
+    if (selectedTasks.size !== 1) return;
+    const taskIdToRename = selectedTasks.values().next().value;
+    const taskObject = tasks.find(t => t.id === taskIdToRename);
+    if (taskObject) {
+      setTaskToRename(taskObject);
+      setIsRenameModalVisible(true);
+    }
+  }, [selectedTasks, tasks]);
+
   useEffect(() => {
     setActions({
       onPin: handlePinSelectedTasks,
       onDelete: handleDeleteSelectedTasks,
+      onRename: handleRenameSelectedTask, // ✨ --- إضافة دالة إعادة التسمية للسياق
     });
-    // تنظيف عند مغادرة الشاشة
-    return () => setActions({ onPin: () => {}, onDelete: () => {} });
-  }, [setActions, handlePinSelectedTasks, handleDeleteSelectedTasks]);
+    return () => setActions({ onPin: () => {}, onDelete: () => {}, onRename: () => {} });
+  }, [setActions, handlePinSelectedTasks, handleDeleteSelectedTasks, handleRenameSelectedTask]);
 
   useFocusEffect(
     useCallback(() => {
-      if (isEditMode) {
-        setFabConfig(null);
-        return;
-      }
-      
-      setFabConfig({
+      // ✨ --- هذا الجزء هو المسؤول عن إعداد الـ FAB وإلغاء وضع التعديل --- ✨
+      const fabConfig = {
         component: ExpandableFAB,
         props: {
           actions: [
-            // ✨ --- الإضافة: إضافة زر الشات بوت --- ✨
             { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
             { icon: 'plus', label: 'Add Task', onPress: () => bottomSheetRef.current?.expand() },
             { icon: 'edit', label: 'Edit Tasks', onPress: () => setIsEditMode(true) },
           ],
         },
-      });
+      };
 
-      return () => {
+      if (!isEditMode) {
+        setFabConfig(fabConfig);
+      } else {
         setFabConfig(null);
+      }
+
+      // دالة التنظيف التي تعمل عند مغادرة الشاشة
+      return () => {
         if (isEditMode) {
           setIsEditMode(false);
           setSelectedTasks(new Set());
         }
+        setFabConfig(null);
       };
     }, [isEditMode, setFabConfig, setIsEditMode, setSelectedTasks, router])
   );
@@ -144,11 +153,17 @@ export default function TasksScreen() {
   };
 
   const handleRenameTask = (newTitle) => {
-    if (!taskToRename) return;
-    const updatedTasks = tasks.map(t => t.id === taskToRename.id ? { ...t, title: newTitle } : t);
+    const taskId = taskToRename.id;
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, title: newTitle } : t);
     updateTasksInFirestore(updatedTasks);
+    
+    // تنظيف بعد إعادة التسمية
     setIsRenameModalVisible(false);
     setTaskToRename(null);
+    if (isEditMode) {
+      setSelectedTasks(new Set());
+      setIsEditMode(false);
+    }
   };
 
   const handleTaskUpdate = (taskData) => {
@@ -212,8 +227,6 @@ export default function TasksScreen() {
 
       <AddTaskBottomSheet ref={bottomSheetRef} onTaskUpdate={handleTaskUpdate} onVisibilityChange={setIsSheetVisible} />
       <RenameTaskModal isVisible={isRenameModalVisible} onClose={() => setIsRenameModalVisible(false)} onRename={handleRenameTask} task={taskToRename} />
-      
-      {/* تم حذف شريط الأدوات القديم من هنا لأنه أصبح في _layout.jsx */}
     </SafeAreaView>
   );
 }

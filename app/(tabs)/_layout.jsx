@@ -1,4 +1,3 @@
-// app/(tabs)/_layout.jsx
 import React from 'react';
 import { View, Pressable, StyleSheet, Text } from 'react-native';
 import { Tabs } from 'expo-router';
@@ -8,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { EditModeProvider, useEditMode } from '../../context/EditModeContext';
 
-// --- شريط التبويبات المخصص (بدون تغيير) ---
+// --- MyCustomTabBar (بدون تغيير) ---
 function MyCustomTabBar({ state, descriptors, navigation }) {
     const layouts = React.useRef(new Array(state.routes.length));
     const translateX = useSharedValue(0);
@@ -74,11 +73,11 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
     );
 }
 
-// --- شريط وضع التعديل (تم التعديل) ---
+// --- EditModeActionBar (تم التعديل) ---
 function EditModeActionBar() {
-  // ✨ --- الإصلاح: actions الآن تحتوي على الدوال الحقيقية من شاشة المهام --- ✨
   const { selectedTasks, actions, setIsEditMode, setSelectedTasks } = useEditMode();
-  const hasSelection = selectedTasks.size > 0;
+  const selectionCount = selectedTasks.size;
+  const canRename = selectionCount === 1; // ✨ --- شرط إظهار زر إعادة التسمية
 
   const handleCancel = () => {
     setIsEditMode(false);
@@ -88,27 +87,29 @@ function EditModeActionBar() {
   return (
     <Animated.View style={styles.tabBarContainer} entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)}>
       <View style={styles.tabBar}>
-        <Pressable style={[styles.actionItem, !hasSelection && styles.disabledAction]} onPress={actions.onPin} disabled={!hasSelection}>
-          <FontAwesome5 name="thumbtack" size={22} color={hasSelection ? "#60A5FA" : "#4B5563"} />
-          <Text style={[styles.actionLabel, !hasSelection && styles.disabledText]}>Pin/Unpin</Text>
+        <Pressable style={[styles.actionItem, !canRename && styles.disabledAction]} onPress={actions.onRename} disabled={!canRename}>
+          <FontAwesome5 name="pen" size={20} color={canRename ? "#FBBF24" : "#4B5563"} />
+          <Text style={[styles.actionLabel, !canRename && styles.disabledText]}>Rename</Text>
         </Pressable>
-        <Text style={styles.selectionCount}>{selectedTasks.size} Selected</Text>
-        <Pressable style={[styles.actionItem, !hasSelection && styles.disabledAction]} onPress={actions.onDelete} disabled={!hasSelection}>
-          <FontAwesome5 name="trash" size={22} color={hasSelection ? "#F87171" : "#4B5563"} />
-          <Text style={[styles.actionLabel, !hasSelection && styles.disabledText]}>Delete</Text>
+        <Pressable style={[styles.actionItem, selectionCount === 0 && styles.disabledAction]} onPress={actions.onPin} disabled={selectionCount === 0}>
+          <FontAwesome5 name="thumbtack" size={20} color={selectionCount > 0 ? "#60A5FA" : "#4B5563"} />
+          <Text style={[styles.actionLabel, selectionCount === 0 && styles.disabledText]}>Pin</Text>
         </Pressable>
-        {/* زر الإلغاء أصبح جزءًا من الشريط */}
+        <Pressable style={[styles.actionItem, selectionCount === 0 && styles.disabledAction]} onPress={actions.onDelete} disabled={selectionCount === 0}>
+          <FontAwesome5 name="trash" size={20} color={selectionCount > 0 ? "#F87171" : "#4B5563"} />
+          <Text style={[styles.actionLabel, selectionCount === 0 && styles.disabledText]}>Delete</Text>
+        </Pressable>
         <Pressable style={styles.cancelButton} onPress={handleCancel}>
-            <FontAwesome5 name="times" size={20} color="white" />
+            <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>
+      {selectionCount > 0 && <Text style={styles.selectionCount}>{selectionCount} Selected</Text>}
     </Animated.View>
   );
 }
 
 function TabsLayoutContent() {
     const { isEditMode } = useEditMode();
-
     return (
         <Tabs tabBar={(props) => isEditMode && props.state.routes[props.state.index].name === 'tasks' ? <EditModeActionBar /> : <MyCustomTabBar {...props} />}>
             <Tabs.Screen name="index" options={{ title: 'Home', tabBarIconName: 'home', headerShown: false }} />
@@ -133,10 +134,11 @@ const styles = StyleSheet.create({
     tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%', zIndex: 1 },
     tabLabel: { fontSize: 11, marginTop: 4, fontWeight: '600' },
     animatedPill: { position: 'absolute', height: '80%', top: '10%', left: 0, borderRadius: 25, overflow: 'hidden' },
-    actionItem: { flex: 1.5, alignItems: 'center', justifyContent: 'center' },
-    disabledAction: { opacity: 0.5 },
+    actionItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    disabledAction: { opacity: 0.4 },
     disabledText: { color: '#6B7280' },
     actionLabel: { color: 'white', fontSize: 11, marginTop: 4, fontWeight: '600' },
-    selectionCount: { flex: 2, color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+    selectionCount: { position: 'absolute', top: -25, alignSelf: 'center', backgroundColor: '#10B981', color: 'white', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, fontSize: 14, fontWeight: 'bold' },
     cancelButton: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: 25 },
+    cancelText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 });

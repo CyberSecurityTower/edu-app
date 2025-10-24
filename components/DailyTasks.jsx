@@ -23,10 +23,13 @@ const ICONS = {
 const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
   const isCompleted = task.status === 'completed';
   const iconInfo = ICONS[task.type] || ICONS.default;
+  
+  // ✨ --- تعديل هنا: تعطيل الضغط إذا لم تكن المهمة مرتبطة بأي شيء --- ✨
+  const isPressable = !!task.relatedLessonId || !!task.relatedSubjectId;
 
   return (
     <Animated.View style={styles.taskCard} entering={FadeInUp.duration(500)} layout={Layout.springify()}>
-      <Pressable style={styles.mainContent} onPress={() => onNavigate(task)} disabled={!task.relatedLessonId}>
+      <Pressable style={styles.mainContent} onPress={() => onNavigate(task)} disabled={!isPressable}>
         <View style={[styles.iconContainer, { backgroundColor: `${iconInfo.color}20` }]}>
           <FontAwesome5 name={iconInfo.name} size={18} color={iconInfo.color} />
         </View>
@@ -140,8 +143,16 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
     }
   };
 
+  // ✨ --- الدالة المُحسّنة هنا --- ✨
   const handleNavigateToTask = (task) => {
-    if (task.relatedLessonId && user.selectedPathId && task.relatedSubjectId) {
+    // التحقق من وجود مسار محدد للمستخدم، وهو ضروري للتنقل
+    if (!user.selectedPathId) {
+      Alert.alert("No Path Selected", "Please complete your profile setup to navigate to tasks.");
+      return;
+    }
+
+    // الحالة الأولى: المهمة مرتبطة بدرس ومادة
+    if (task.relatedLessonId && task.relatedSubjectId) {
       const pathname = task.type === 'quiz' ? '/study-kit' : '/lesson-view';
       router.push({
         pathname,
@@ -152,8 +163,20 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
           subjectId: task.relatedSubjectId,
         },
       });
+    // الحالة الثانية: المهمة مرتبطة بمادة فقط
+    } else if (task.relatedSubjectId) {
+      router.push({
+        pathname: '/subject-details',
+        params: { 
+          id: task.relatedSubjectId,
+          // يمكننا تمرير اسم المادة إذا كان متاحًا في كائن المهمة، أو تركه
+        },
+      });
+    // الحالة الثالثة: المهمة غير مرتبطة
     } else {
-      Alert.alert("Info", "This task is not linked to a specific lesson.");
+      // لا تفعل شيئًا، لأن الزر معطل بالفعل
+      // أو يمكنك عرض رسالة إذا أردت
+      // Alert.alert("Info", "This task is not linked to any specific content.");
     }
   };
 
@@ -186,7 +209,7 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
         scrollEnabled={false}
       />
       {isCompact && displayedTasks.length < tasks.length && (
-        <Pressable style={styles.viewAllButton} onPress={() => router.push('/tasks')}>
+        <Pressable style={styles.viewAllButton} onPress={() => router.push('/(tabs)/tasks')}>
           <Text style={styles.viewAllText}>View All Tasks</Text>
           <FontAwesome5 name="arrow-right" size={14} color="#34D399" />
         </Pressable>

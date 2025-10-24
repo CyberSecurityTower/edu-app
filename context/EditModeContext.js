@@ -8,7 +8,8 @@ export const useEditMode = () => useContext(EditModeContext);
 export const EditModeProvider = ({ children }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState(new Set());
-  // This will hold the functions from the Tasks screen (onPin, onDelete)
+  
+  // يمكن استخدام هذا لتمرير الدوال من الشاشة إلى شريط الأدوات لاحقًا
   const [actions, setActions] = useState({ onPin: () => {}, onDelete: () => {} });
 
   const value = useMemo(() => ({
@@ -24,5 +25,4 @@ export const EditModeProvider = ({ children }) => {
     <EditModeContext.Provider value={value}>
       {children}
     </EditModeContext.Provider>
-  );
-};
+  );};

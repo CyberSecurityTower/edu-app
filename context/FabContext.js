@@ -1,4 +1,3 @@
-// context/FabContext.js
 import React, { createContext, useContext, useState, useMemo } from 'react';
 
 const FabContext = createContext(null);
@@ -6,16 +5,16 @@ const FabContext = createContext(null);
 export const useFab = () => useContext(FabContext);
 
 export const FabProvider = ({ children }) => {
-  // ✨ التغيير: بدلاً من إجراء واحد، أصبح لدينا مصفوفة من الإجراءات
-  const [fabActions, setFabActions] = useState(null);
+  // ✨ التغيير: الآن هو كائن يحتوي على المكون والخصائص
+  const [fabConfig, setFabConfig] = useState(null);
   const [isSheetVisible, setIsSheetVisible] = useState(false);
 
   const value = useMemo(() => ({
-    fabActions,
-    setFabActions,
+    fabConfig,
+    setFabConfig,
     isSheetVisible,
     setIsSheetVisible,
-  }), [fabActions, isSheetVisible]);
+  }), [fabConfig, isSheetVisible]);
 
   return (
     <FabContext.Provider value={value}>

@@ -12,6 +12,8 @@ import { getLessonContent, updateLessonProgress, getUserProgressDocument, update
 import { useAppState } from '../context/AppStateContext';
 import GenerateKitButton from '../components/GenerateKitButton';
 import { POINTS_CONFIG } from '../config/points';
+import { LocalRouteParamsContext } from 'expo-router/build/Route';
+import { formatDiagnostic } from 'typescript';
 
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();
@@ -81,7 +83,7 @@ export default function LessonViewScreen() {
         
         Toast.show({
           type: 'points',
-          text1: `+${points} Points!`,
+          text1: `+${points} Points that's gentl // for each i in arbc!`,
           position: 'bottom',
           visibilityTime: 2000,
         });
@@ -103,8 +105,6 @@ export default function LessonViewScreen() {
         </SafeAreaView>
       );
   }
-
-
 
    return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -157,7 +157,9 @@ export default function LessonViewScreen() {
     </SafeAreaView>
   );
 }
+const style = StyleSheet.create({
 
+})
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },

@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,11 +19,8 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { Bubble, Composer, GiftedChat, InputToolbar, Send, MessageText } from 'react-native-gifted-chat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Markdown from 'react-native-markdown-display';
-
+import { API_CONFIG, STORAGE_KEYS } from '../../config/appConfig'; // <-- centralized imports
 import { useAppState } from '../../context/AppStateContext';
-
-const SESSIONS_KEY = '@chat_sessions_v2';
-const RENDER_PROXY_URL = 'https://eduserver-v14-ultra.onrender.com';
 
 export default function AiChatbotScreen() {
   const router = useRouter();
@@ -37,19 +33,16 @@ export default function AiChatbotScreen() {
 
   const sessionId = useRef(params.sessionId || null);
 
-  // --- THE FIX: We consolidate the initial lesson ID into one stable ref ---
-  // If we open the chat from a lesson link, this ref will hold the ID until the first message is sent.
+  // Hold initial lesson id until first message is sent
   const initialLessonIdRef = useRef(params.contextLessonId || null);
 
-  // Chat title: prefer contextLessonTitle, then title param, then fallback
   const [chatTitle, setChatTitle] = useState(params.contextLessonTitle || params.title || 'New Chat');
-
   const [isRenameModalVisible, setRenameModalVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
 
   const BOT = { _id: 2, name: 'EduAI', avatar: require('../../assets/images/owl.png') };
 
-  // Load stored session
+  // Load stored session using centralized STORAGE_KEYS.CHAT_SESSIONS
   useEffect(() => {
     const loadChat = async () => {
       setIsLoading(true);
@@ -59,10 +52,12 @@ export default function AiChatbotScreen() {
 
       if (sessionId.current) {
         try {
-          const allSessionsRaw = await AsyncStorage.getItem(SESSIONS_KEY);
+          const allSessionsRaw = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
           const allSessions = allSessionsRaw ? JSON.parse(allSessionsRaw) : {};
-          const storedMessages = allSessions[sessionId.current]?.messages || [];
+          const stored = allSessions[sessionId.current] || {};
+          const storedMessages = stored.messages || [];
           setMessages(storedMessages.map(msg => ({ ...msg, createdAt: new Date(msg.createdAt) })));
+          if (stored.title) setChatTitle(stored.title);
         } catch (e) {
           console.error('Failed to load chat.', e);
         }
@@ -70,23 +65,29 @@ export default function AiChatbotScreen() {
       setIsLoading(false);
     };
     loadChat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.sessionId]);
 
-  // Save chat on update
+  // Save chat to AsyncStorage on updates (centralized key)
   useEffect(() => {
     const saveChat = async () => {
       if (isLoading || !sessionId.current) return;
-
       try {
-        const allSessionsRaw = await AsyncStorage.getItem(SESSIONS_KEY);
+        const allSessionsRaw = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
         let allSessions = allSessionsRaw ? JSON.parse(allSessionsRaw) : {};
 
+        // Convert createdAt to ISO for storage
+        const serializableMessages = messages.map(m => ({
+          ...m,
+          createdAt: (m.createdAt instanceof Date) ? m.createdAt.toISOString() : m.createdAt,
+        }));
+
         allSessions[sessionId.current] = {
-          messages: messages,
+          messages: serializableMessages,
           title: chatTitle,
           isPinned: allSessions[sessionId.current]?.isPinned || false,
         };
-        await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(allSessions));
+        await AsyncStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(allSessions));
       } catch (e) {
         console.error('Failed to save chat.', e);
       }
@@ -102,6 +103,7 @@ export default function AiChatbotScreen() {
       sessionId.current = `chat_${Date.now()}`;
     }
 
+    // Append user's message immediately to UI
     setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages));
     setIsBotTyping(true);
 
@@ -110,7 +112,7 @@ export default function AiChatbotScreen() {
     // Auto-generate a chat title for brand new chats
     if (isNewChat) {
       try {
-        const titleResponse = await fetch(`${RENDER_PROXY_URL}/generate-title`, {
+        const titleResponse = await fetch(`${API_CONFIG.BASE_URL}/generate-title`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: userMessage, language: 'Arabic' }),
@@ -127,36 +129,42 @@ export default function AiChatbotScreen() {
       }
     }
 
-    const currentHistory = messages.slice(-5).map(msg => ({
+    // Build currentHistory: take most recent 5 messages and send them in chronological order
+    // GiftedChat stores messages with newest first, so slice(0,5) grabs the latest 5, then reverse()
+    const currentHistory = messages.slice(0, 5).map(msg => ({
       role: msg.user._id === BOT._id ? 'model' : 'user',
       text: msg.text,
     })).reverse();
 
     try {
-      // --- THE FIX: Get lessonId from initialLessonIdRef ONLY if it's the first message ---
+      // Get lessonId only for the first message in a new chat
       const lessonIdForServer = isNewChat ? initialLessonIdRef.current : null;
 
       const requestBody = {
         message: userMessage,
         userId: user?.uid,
         history: currentHistory,
-        lessonId: lessonIdForServer, // This is now correctly sent only once
+        lessonId: lessonIdForServer, // sent only once for new chat
       };
 
-      const chatResponse = await fetch(`${RENDER_PROXY_URL}/chat`, {
+      const chatResponse = await fetch(`${API_CONFIG.BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
-      
-      // --- FIX: Clear the ref after the first send, ensuring it's never sent again ---
+
+      // Clear the ref after first send
       if (isNewChat && initialLessonIdRef.current) {
-         initialLessonIdRef.current = null;
+        initialLessonIdRef.current = null;
       }
 
       if (!chatResponse.ok) throw new Error('Server error');
 
       const data = await chatResponse.json();
+
+      // If server indicates an async action (isAction true), it typically returns an ack message.
+      // We display that ack as the bot reply. If it later pushes a notification the app should fetch it
+      // from the notifications endpoint / or rely on push notifications.
       if (data?.reply) {
         const botMessage = {
           _id: Math.random().toString(36).substring(7),
@@ -165,9 +173,19 @@ export default function AiChatbotScreen() {
           user: BOT,
         };
         setMessages(previousMessages => GiftedChat.append(previousMessages, [botMessage]));
+      } else if (data?.isAction && data?.jobId) {
+        // Optional: show minimal ack if server returned different shape
+        const ackText = data.reply || (data.isAction ? 'Working on it...' : 'Done.');
+        const botMessage = {
+          _id: Math.random().toString(36).substring(7),
+          text: ackText,
+          createdAt: new Date(),
+          user: BOT,
+        };
+        setMessages(previousMessages => GiftedChat.append(previousMessages, [botMessage]));
       }
     } catch (error) {
-      console.error('Error fetching from proxy:', error);
+      console.error('Error fetching from server:', error);
       const errorMessage = {
         _id: Math.random().toString(36).substring(7),
         text: "Sorry, I'm having trouble connecting.",
@@ -202,7 +220,6 @@ export default function AiChatbotScreen() {
 
   const renderMessageText = (props) => {
     const { currentMessage } = props;
-    // Render Markdown for BOT messages
     if (currentMessage?.user?._id === BOT._id) {
       return (
         <View style={styles.markdownContainer}>
@@ -210,7 +227,6 @@ export default function AiChatbotScreen() {
         </View>
       );
     }
-    // Fallback for user messages
     return <MessageText {...props} textStyle={{ color: 'white' }} />;
   };
 

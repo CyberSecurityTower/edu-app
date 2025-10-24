@@ -1,6 +1,5 @@
-// components/DailyTasks.jsx
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { db } from '../firebase'; 
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -8,7 +7,8 @@ import { useAppState } from '../context/AppStateContext';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import AnimatedGradientButton from './AnimatedGradientButton';
-import { API_CONFIG } from '../config/api'; // IMPROVEMENT: Centralized config
+import { API_CONFIG } from '../config/appConfig';
+import LottieView from 'lottie-react-native';
 
 const ICONS = {
   review: { name: 'book-reader', color: '#60A5FA' },
@@ -29,23 +29,53 @@ const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
         <View style={[styles.iconContainer, { backgroundColor: `${iconInfo.color}20` }]}>
           <FontAwesome5 name={iconInfo.name} size={18} color={iconInfo.color} />
         </View>
-        <Text style={[styles.taskText, isCompleted && styles.taskTextCompleted]}>
-          {task.title}
-        </Text>
+        <Text style={[styles.taskText, isCompleted && styles.taskTextCompleted]}>{task.title}</Text>
       </Pressable>
       <Pressable style={styles.checkbox} onPress={() => onToggleStatus(task.id, isCompleted ? 'pending' : 'completed')}>
-        <FontAwesome5
-          name={isCompleted ? 'check-circle' : 'circle'}
-          size={24}
-          color={isCompleted ? '#10B981' : '#4B5563'}
-          solid={isCompleted}
-        />
+        <FontAwesome5 name={isCompleted ? 'check-circle' : 'circle'} size={24} color={isCompleted ? '#10B981' : '#4B5563'} solid={isCompleted} />
       </Pressable>
     </Animated.View>
   );
 };
 
-const DailyTasks = ({ tasksProp = [] }) => {
+// --- 1. إنشاء مكون معزول ومُحسَّن للحالة الفارغة ---
+const EmptyDailyTasks = React.memo(({ isGenerating, onGenerate }) => {
+  return (
+    <View style={[styles.container, styles.emptyContainer]}>
+      <FontAwesome5 name="clipboard-list" size={32} color="#4B5563" style={{ marginBottom: 15 }}/>
+      
+      {isGenerating ? (
+        <>
+          {/* نصوص حالة التحميل */}
+          <Text style={styles.emptyTitle}>جاري إنشاء خطتك...</Text>
+          <Text style={styles.emptySubtitle}>يقوم EduAI بتخصيص مهامك الآن.</Text>
+          <LottieView
+            source={require('../assets/images/task_loading.json')}
+            autoPlay
+            loop
+            style={styles.lottieAnimation}
+            renderMode="hardware"
+          />
+        </>
+      ) : (
+        <>
+          {/* نصوص الحالة العادية */}
+          <Text style={styles.emptyTitle}>Your daily plan is clear!</Text>
+          <Text style={styles.emptySubtitle}>Let EduAI create a personalized study plan for you.</Text>
+          <AnimatedGradientButton
+            text="Generate My Plan"
+            onPress={onGenerate}
+            buttonWidth={220}
+            buttonHeight={45}
+          />
+        </>
+      )}
+    </View>
+  );
+});
+
+
+const DailyTasks = ({ tasksProp = [], pathId }) => {
   const { user } = useAppState();
   const router = useRouter();
   const [tasks, setTasks] = useState(tasksProp);
@@ -62,38 +92,43 @@ const DailyTasks = ({ tasksProp = [] }) => {
       const fetchedTasks = snapshot.data()?.dailyTasks?.tasks || [];
       setTasks(fetchedTasks);
       setIsLoading(false);
-    }, (error) => {
-      console.error('Error fetching tasks:', error);
-      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [user?.uid]);
 
-  const handleGenerateTasks = async () => {
+  // --- 2. تغليف الدالة بـ useCallback لضمان استقرارها ---
+  const handleGenerateTasks = useCallback(async () => {
     if (!user?.uid) return;
     setIsGenerating(true);
     try {
-      await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid }),
+        body: JSON.stringify({ userId: user.uid, pathId: pathId }),
       });
+      if (!response.ok) {
+        throw new Error('Failed to generate tasks from server.');
+      }
     } catch (error) {
       console.error("Error generating tasks:", error);
+      Alert.alert("Error", "Couldn't generate new tasks at this time.");
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [user, pathId]); // تعتمد على user و pathId
 
   const handleToggleTaskStatus = async (taskId, newStatus) => {
     if (!user?.uid) return;
-    const optimisticTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
-    setTasks(optimisticTasks); // Optimistic UI update
+    const originalTasks = tasks;
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
+    setTasks(updatedTasks);
+
     try {
-      await updateDoc(doc(db, `userProgress/${user.uid}`), { 'dailyTasks.tasks': optimisticTasks });
+      await updateDoc(doc(db, `userProgress/${user.uid}`), { 'dailyTasks.tasks': updatedTasks });
     } catch (error) {
-      console.error("Failed to update task status:", error);
-      setTasks(tasks); // Revert on failure
+      console.error("Failed to update task status, reverting:", error);
+      setTasks(originalTasks);
+      Alert.alert("Error", "Could not sync your changes.");
     }
   };
 
@@ -110,7 +145,7 @@ const DailyTasks = ({ tasksProp = [] }) => {
         },
       });
     } else {
-      console.warn("Navigation cancelled: Missing required IDs for task:", task.id);
+      Alert.alert("معلومات غير كافية", "لا يمكن فتح هذه المهمة لأنها غير مرتبطة بدرس محدد.");
     }
   };
 
@@ -118,23 +153,13 @@ const DailyTasks = ({ tasksProp = [] }) => {
     return <View style={styles.container}><ActivityIndicator color="#10B981" /></View>;
   }
 
+  // --- 3. استخدام المكون الجديد والمُحسَّن ---
   if (tasks.length === 0) {
     return (
-      <View style={[styles.container, styles.emptyContainer]}>
-        <FontAwesome5 name="clipboard-list" size={32} color="#4B5563" style={{ marginBottom: 15 }}/>
-        <Text style={styles.emptyTitle}>Your daily plan is clear!</Text>
-        <Text style={styles.emptySubtitle}>Let EduAI create a personalized study plan for you.</Text>
-        {isGenerating ? (
-          <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }}/>
-        ) : (
-          <AnimatedGradientButton
-            text="Generate My Plan"
-            onPress={handleGenerateTasks}
-            buttonWidth={220}
-            buttonHeight={45}
-          />
-        )}
-      </View>
+      <EmptyDailyTasks 
+        isGenerating={isGenerating} 
+        onGenerate={handleGenerateTasks} 
+      />
     );
   }
   
@@ -146,7 +171,6 @@ const DailyTasks = ({ tasksProp = [] }) => {
         <Text style={styles.title}>Your Daily Plan</Text>
         <Text style={styles.progressText}>{completedCount}/{tasks.length} Done</Text>
       </View>
-      {/* PERFORMANCE: Use FlatList instead of .map for better memory management */}
       <FlatList
         data={tasks}
         keyExtractor={(item) => item.id}
@@ -157,13 +181,12 @@ const DailyTasks = ({ tasksProp = [] }) => {
             onNavigate={handleNavigateToTask}
           />
         )}
-        scrollEnabled={false} // Disable scrolling within the component itself
+        scrollEnabled={false}
       />
     </View>
   );
 };
 
-// Styles remain the same
 const styles = StyleSheet.create({
   container: { backgroundColor: '#1E293B', borderRadius: 20, padding: 20, marginHorizontal: 12, marginBottom: 10 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
@@ -178,6 +201,12 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', paddingVertical: 30 },
   emptyTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
   emptySubtitle: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginTop: 8, marginBottom: 20 },
+  // --- 4. إضافة النمط للأنيميشن ---
+  lottieAnimation: {
+    width: 120,
+    height: 120,
+    marginTop: 10,
+  },
 });
 
 export default DailyTasks;

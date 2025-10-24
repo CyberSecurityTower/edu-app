@@ -1,89 +1,47 @@
+// components/AnimatedGradientButton.jsx
+import React from 'react';
+import { Pressable, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MotiView } from 'moti';
 
-const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
-
-const AnimatedGradientButton = ({ 
-  text, 
-  onPress, 
-  buttonWidth = 240, 
-  buttonHeight,
-  fontSize,
-  borderRadius
-}) => {
-  const animatedValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedValue, {
-          toValue: 0,
-          duration: 1100,
-          useNativeDriver: false,
-        }),
-      ])
-    ).start();
-  }, [animatedValue]);
-
-  const startX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-0.5, 1.5],
-  });
-
-  const endX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.5, 2.5],
-  });
-
-  const finalHeight = buttonHeight || buttonWidth * 0.22;
-  const finalFontSize = fontSize || buttonWidth * 0.08;
-  const finalBorderRadius = borderRadius !== undefined ? borderRadius : finalHeight / 2;
-
-  const dynamicStyles = {
-    button: {
-      width: buttonWidth,
-      height: finalHeight,
-      borderRadius: finalBorderRadius,
-    },
-    text: {
-      fontSize: finalFontSize,
-    }
-  };
-
+const AnimatedGradientButton = ({ text, onPress, buttonWidth = 200, buttonHeight = 50 }) => {
   return (
-    <View style={styles.container}>
-      <Pressable onPress={onPress}>
-        <AnimatedGradient
-          colors={['rgba(7, 152, 255, 1)', '#10B981']}
-          start={{ x: startX, y: 0.5 }}
-          end={{ x: endX, y: 0.5 }}
-          style={[styles.button, dynamicStyles.button]}
+    <Pressable onPress={onPress}>
+      <MotiView
+        from={{ scale: 1 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+        style={[styles.buttonContainer, { width: buttonWidth, height: buttonHeight, borderRadius: buttonHeight / 2 }]}
+      >
+        <LinearGradient
+          colors={['#34D399', '#10B981']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.gradient, { borderRadius: buttonHeight / 2 }]}
         >
-          <Text style={[styles.text, dynamicStyles.text]}>{text}</Text>
-        </AnimatedGradient>
-      </Pressable>
-    </View>
+          <Text style={styles.buttonText}>{text}</Text>
+        </LinearGradient>
+      </MotiView>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  buttonContainer: {
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  button: {
+  gradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
   },
-  text: {
+  buttonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

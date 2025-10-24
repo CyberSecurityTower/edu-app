@@ -137,7 +137,7 @@ export default function SubjectDetailsScreen() {
     return () => {
       mounted = false;
     };
-  }, [user?.uid, params?.id]); // <--- الإصلاح هنا!
+  }, [user?.uid, params?.id]);
 
   const handleFavoritePress = async () => {
     if (!user || !params?.id) return;

@@ -217,6 +217,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, 
     paddingBottom: 120 // Increased padding to avoid overlap with floating tab bar
   },
+   scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
+  },
   // --- END OF FIX ---
   header: { alignItems: 'center', marginVertical: 20 },
   avatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 15 },
@@ -245,4 +249,9 @@ const styles = StyleSheet.create({
   menuIcon: { width: 25, textAlign: 'center' },
   menuText: { color: 'white', fontSize: 16, marginLeft: 15 },
   logoutText: { color: '#EF4444' },
+  // ✨ --- أضف هذا التعديل --- ✨
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
+  },
 });

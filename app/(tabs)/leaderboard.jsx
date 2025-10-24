@@ -197,4 +197,14 @@ const styles = StyleSheet.create({
   // --- Current User Sticky Card ---
   currentUserStickyCard: { position: 'absolute', bottom: 100, left: 20, right: 20, shadowColor: '#60A5FA', shadowOpacity: 0.5, shadowRadius: 10, elevation: 20 },
   currentUserItem: { borderWidth: 2, borderColor: '#60A5FA' },
+    listContent: { 
+    paddingHorizontal: 20, 
+    paddingTop: 120, 
+    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
+  },
+   listContent: { 
+    paddingHorizontal: 20, 
+    paddingTop: 120, 
+    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
+  },
 });

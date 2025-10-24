@@ -11,7 +11,8 @@ import { ActionSheetProvider } from '../context/ActionSheetContext';
 import { FabProvider } from '../context/FabContext'; // ✨ 1. استيراد السياق الجديد
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
-
+import { useFab } from '../../context/FabContext'; 
+import ExpandableFAB from '../../components/ExpandableFAB';
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
 function RootLayoutNav() {

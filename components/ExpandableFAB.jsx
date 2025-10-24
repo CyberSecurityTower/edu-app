@@ -4,7 +4,7 @@ import { View, Pressable, StyleSheet, Text } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { MotiView, AnimatePresence } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import MagicTriggerFAB from './MagicTriggerFAB'; // <-- سنستخدم هذا كزر رئيسي
+import MagicTriggerFAB from './MagicTriggerFAB'; // الزر الرئيسي
 
 const ActionButton = ({ icon, label, onPress, delay }) => (
   <MotiView
@@ -26,9 +26,7 @@ const ActionButton = ({ icon, label, onPress, delay }) => (
 const ExpandableFAB = ({ actions }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
-  };
+  const toggleMenu = () => setIsOpen(!isOpen);
 
   return (
     <View style={styles.container}>
@@ -36,7 +34,6 @@ const ExpandableFAB = ({ actions }) => {
         {isOpen && (
           <View>
             {actions.map((action, index) => (
-              // التأكد من أن الإجراء موجود قبل عرضه
               action && action.onPress &&
               <ActionButton
                 key={action.label}
@@ -52,8 +49,6 @@ const ExpandableFAB = ({ actions }) => {
           </View>
         )}
       </AnimatePresence>
-
-      {/* استخدام الزر السحري كزر رئيسي */}
       <MagicTriggerFAB isOpen={isOpen} onPress={toggleMenu} />
     </View>
   );

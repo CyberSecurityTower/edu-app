@@ -8,12 +8,29 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { ActionSheetProvider } from '../context/ActionSheetContext';
-import { FabProvider } from '../context/FabContext';
+import { FabProvider, useFab } from '../context/FabContext';
+import { EditModeProvider } from '../context/EditModeContext'; // ✨ 1. استيراد السياق الجديد
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
 
 // تجاهل تحذير معين من Expo Router لا يؤثر على الأداء
 LogBox.ignoreLogs(['WARN  [Layout children]']);
+
+/**
+ * ✨ 2. مكون جديد لعرض الزر السحري بشكل ديناميكي
+ * هذا المكون يستمع إلى سياق الـ FAB ويعرض الزر المناسب للشاشة الحالية.
+ */
+function FabRenderer() {
+  const { fabConfig, isSheetVisible } = useFab();
+  
+  // لا تعرض الزر إذا كانت هناك BottomSheet مفتوحة أو لا يوجد تكوين للزر
+  if (isSheetVisible || !fabConfig) {
+    return null;
+  }
+
+  const { component: FabComponent, props } = fabConfig;
+  return <FabComponent {...props} />;
+}
 
 /**
  * هذا المكون هو المسؤول عن منطق التوجيه الرئيسي بعد تحميل التطبيق.
@@ -97,10 +114,18 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStateProvider>
         <FabProvider>
-          <ActionSheetProvider>
-            <MainLayout />
-            <Toast config={toastConfig} />
-          </ActionSheetProvider>
+          {/* ✨ 3. إضافة EditModeProvider ليغلف التطبيق */}
+          <EditModeProvider>
+            <ActionSheetProvider>
+              {/* MainLayout يعرض الشاشات الفعلية */}
+              <MainLayout />
+              
+              {/* ✨ 4. المكونات العامة التي تظهر فوق الشاشات */}
+              <FabRenderer />
+              <Toast config={toastConfig} />
+
+            </ActionSheetProvider>
+          </EditModeProvider>
         </FabProvider>
       </AppStateProvider>
     </GestureHandlerRootView>

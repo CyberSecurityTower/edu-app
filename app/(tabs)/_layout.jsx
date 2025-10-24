@@ -8,7 +8,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { ActionSheetProvider } from '../context/ActionSheetContext';
-import { FabProvider } from '../context/FabContext'; // ✨ 1. استيراد السياق الجديد
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
 import { useFab } from '../../context/FabContext'; 

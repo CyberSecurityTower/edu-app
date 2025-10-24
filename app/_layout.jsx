@@ -1,5 +1,5 @@
 // app/_layout.jsx
-import React, { useEffect, useCallback } from 'react';
+import React, { useContext, useEffect, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,18 +8,23 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { ActionSheetProvider } from '../context/ActionSheetContext';
-import { FabProvider } from '../context/FabContext'; // ✨ 1. استيراد الـ Provider فقط
+import { FabProvider } from '../context/FabContext';
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
 
+// تجاهل تحذير معين من Expo Router لا يؤثر على الأداء
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
+/**
+ * هذا المكون هو المسؤول عن منطق التوجيه الرئيسي بعد تحميل التطبيق.
+ */
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    // لا تقم بأي توجيه حتى يتم تحميل حالة المصادقة والإعداد الأولي
     const isReady = !authLoading && hasCompletedOnboarding !== null;
     if (!isReady) return;
 
@@ -27,16 +32,22 @@ function RootLayoutNav() {
     const inSetupGroup = segments[0] === '(setup)';
 
     if (user) {
+      // إذا كان المستخدم مسجلاً ولكنه لم يكمل إعداد الملف الشخصي
       if (user.profileStatus === 'pending_setup' && !inSetupGroup) {
         router.replace('/(setup)/profile-setup');
-      } else if (user.profileStatus === 'completed' && (inAuthGroup || inSetupGroup)) {
-        router.replace('/(tabs)/');
+      } 
+      // إذا كان المستخدم قد أكمل الإعداد وهو حالياً في صفحة تسجيل الدخول أو الإعداد
+      else if (user.profileStatus === 'completed' && (inAuthGroup || inSetupGroup)) {
+        router.replace('/(tabs)/'); // توجيه إلى الشاشة الرئيسية (التبويبات)
       }
-    } else if (!inAuthGroup) {
+    } 
+    // إذا لم يكن المستخدم مسجلاً وهو ليس في صفحة تسجيل الدخول
+    else if (!inAuthGroup) {
       router.replace('/(auth)/');
     }
   }, [user, segments, authLoading, hasCompletedOnboarding, router]);
 
+  // تعريف مكدس التنقل الرئيسي (Stack Navigator)
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
@@ -50,9 +61,13 @@ function RootLayoutNav() {
   );
 }
 
+/**
+ * هذا المكون هو "البوابة" التي تقرر ما يجب عرضه للمستخدم أولاً.
+ */
 function MainLayout() {
   const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
 
+  // دالة لحفظ حالة إكمال الإعداد الأولي
   const handleOnboardingComplete = useCallback(async () => {
     try {
       await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
@@ -60,23 +75,27 @@ function MainLayout() {
     } catch (e) { console.log('Error saving onboarding status:', e); }
   }, [setHasCompletedOnboarding]);
 
+  // 1. عرض شاشة التحميل أثناء جلب البيانات
   if (authLoading || hasCompletedOnboarding === null) {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
+  // 2. عرض شاشة الإعداد الأولي (Onboarding) إذا لم يكملها المستخدم
   if (hasCompletedOnboarding === false) {
     return <OnboardingScreen onComplete={handleOnboardingComplete} />;
   }
 
+  // 3. عرض التطبيق الرئيسي إذا تم كل شيء
   return <RootLayoutNav />;
 }
 
+/**
+ * هذا هو المكون الجذري للتطبيق، يغلف كل شيء بالـ Providers اللازمة.
+ */
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStateProvider>
-        {/* ✨ 2. تغليف التطبيق بـ FabProvider */}
-        {/* هذا يسمح لأي شاشة بتحديد الإجراءات التي يجب أن يعرضها الزر العائم */}
         <FabProvider>
           <ActionSheetProvider>
             <MainLayout />

@@ -1,15 +1,12 @@
-// app/(tabs)/index.jsx (النسخة النهائية المدمجة والمحسّنة)
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, FlatList, Text, Alert } from 'react-native';
+// app/(tabs)/index.jsx (النسخة النهائية مع إصلاح عرض الدروس)
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ActivityIndicator, FlatList, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { doc, onSnapshot } from 'firebase/firestore';
 
-import { db } from '../../firebase';
 import { useAppState } from '../../context/AppStateContext';
 import { useFab } from '../../context/FabContext';
-import { getEducationalPathById } from '../../services/firestoreService';
-import { API_CONFIG } from '../../config/appConfig';
+import { getEducationalPathById, getUserProgressDocument } from '../../services/firestoreService';
 
 import SubjectCard from '../../components/SubjectCard';
 import MainHeader from '../../components/MainHeader';
@@ -17,7 +14,7 @@ import DailyTasks from '../../components/DailyTasks';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 
 const HomeScreen = () => {
-  const { user } = useAppState();
+  const { user, points } = useAppState();
   const router = useRouter();
   const { setFabActions } = useFab();
 
@@ -25,11 +22,11 @@ const HomeScreen = () => {
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- 1. تحديد إجراءات الزر العائم لهذه الشاشة ---
+  // --- إعداد إجراءات الزر السحري ---
   useFocusEffect(
     useCallback(() => {
       const actions = [
-        { icon: 'tasks', label: 'Manage Tasks', onPress: () => router.push('/tasks') },
+        { icon: 'tasks', label: 'Manage All Tasks', onPress: () => router.push('/tasks') },
         { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
       ];
       setFabActions(actions);
@@ -37,77 +34,53 @@ const HomeScreen = () => {
     }, [router, setFabActions])
   );
 
-  // --- 2. جلب البيانات في الوقت الفعلي باستخدام onSnapshot ---
+  // --- جلب بيانات المسار والتقدم ---
   useFocusEffect(
     useCallback(() => {
-      if (!user?.uid) {
-        setIsLoading(false);
-        return;
-      }
-
-      const userProgressRef = doc(db, 'userProgress', user.uid);
-      const unsubscribe = onSnapshot(userProgressRef, async (progressDoc) => {
-        if (progressDoc.exists()) {
-          const progressData = progressDoc.data();
-          setUserProgress(progressData);
-
-          if (progressData.selectedPathId && progressData.selectedPathId !== pathDetails?.id) {
-            try {
-              const details = await getEducationalPathById(progressData.selectedPathId);
-              setPathDetails(details);
-            } catch (error) {
-              console.error("Error fetching path details:", error);
-              setPathDetails(null);
-            }
-          } else if (!progressData.selectedPathId) {
-            setPathDetails(null);
-          }
-        } else {
-          setUserProgress(null);
-          setPathDetails(null);
+      let isMounted = true;
+      const fetchAllData = async () => {
+        setIsLoading(true);
+        if (!user?.uid) {
+          if (isMounted) setIsLoading(false);
+          return;
         }
-        setIsLoading(false);
-      });
+        
+        try {
+            const progressDoc = await getUserProgressDocument(user.uid);
+            if (isMounted) setUserProgress(progressDoc);
 
-      return () => unsubscribe();
-    }, [user?.uid])
+            if (user.selectedPathId) {
+                const details = await getEducationalPathById(user.selectedPathId);
+                if (isMounted) setPathDetails(details);
+            }
+        } catch (error) {
+            console.error("Error fetching home screen data:", error);
+        } finally {
+            if (isMounted) setIsLoading(false);
+        }
+      };
+      
+      fetchAllData();
+      return () => { isMounted = false; };
+    }, [user?.uid, user?.selectedPathId])
   );
-  
-  // --- 3. دالة لتوليد مهام جديدة (سيتم تمريرها لـ DailyTasks) ---
-  const handleGenerateTasks = useCallback(async () => {
-    if (!user?.uid) return;
-    try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, pathId: user.selectedPathId }),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to generate tasks from server.');
-      }
-    } catch (error) {
-      console.error("Error generating tasks:", error);
-      Alert.alert("Error", "Couldn't generate new tasks at this time.");
-    }
-  }, [user]);
 
-
-  // --- 4. حالات العرض المختلفة (تحميل، لا يوجد مسار، عرض البيانات) ---
   if (isLoading) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
-  if (!user?.selectedPathId && !isLoading) {
+  // حالة عدم وجود مسار دراسي محدد
+  if (!user?.selectedPathId) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerPadding}>
-          <MainHeader title={`Hi, ${user?.firstName || 'Student'}!`} points={userProgress?.stats?.points || 0} />
+           <MainHeader title={`Hi, ${user?.firstName || 'Student'}!`} points={points} />
         </View>
         <View style={styles.emptyPathContainer}>
-          <Text style={styles.emptyPathTitle}>قم بتحديد مسارك الدراسي أولاً!</Text>
-          <Text style={styles.emptyPathSubtitle}>لتتمكن من عرض المهام والمواد، يرجى إكمال إعداد ملفك الشخصي.</Text>
+          <Text style={styles.emptyPathTitle}>Choose Your Learning Path!</Text>
+          <Text style={styles.emptyPathSubtitle}>To see your subjects and tasks, please complete your profile setup.</Text>
           <AnimatedGradientButton 
-            text="إعداد الملف الشخصي" 
+            text="Setup Profile" 
             onPress={() => router.replace('/(setup)/profile-setup')} 
             buttonWidth={220}
           />
@@ -116,7 +89,7 @@ const HomeScreen = () => {
     );
   }
 
-  const currentPoints = userProgress?.stats?.points || 0;
+  const dailyTasks = userProgress?.dailyTasks?.tasks || [];
   const pathProgressForSubjects = userProgress?.pathProgress?.[user.selectedPathId] || {};
 
   return (
@@ -130,23 +103,19 @@ const HomeScreen = () => {
         ListHeaderComponent={
           <>
             <View style={styles.headerPadding}>
-              <MainHeader title={`Hi, ${user?.firstName || 'Student'}!`} points={currentPoints} />
+              <MainHeader title={`Hi, ${user?.firstName || 'Student'}!`} points={points} />
             </View>
             <DailyTasks 
+              tasksProp={dailyTasks} 
               pathId={user.selectedPathId}
-              // ✨ تمرير الدالة الجديدة هنا
-              onGenerateNewTasks={handleGenerateTasks}
+              isCompact={true}
             />
-            <View style={styles.subjectsHeader}>
-              <Text style={styles.sectionTitle}>Continue Learning</Text>
-            </View>
+            {pathDetails?.subjects?.length > 0 && (
+              <View style={styles.subjectsHeader}>
+                <Text style={styles.sectionTitle}>Continue Learning</Text>
+              </View>
+            )}
           </>
-        }
-        // يمكنك إضافة مكون للحالة الفارغة إذا لم تكن هناك مواد دراسية
-        ListEmptyComponent={
-            <View style={styles.emptySubjectsContainer}>
-                <Text style={styles.emptySubjectsText}>لا توجد مواد دراسية في هذا المسار بعد.</Text>
-            </View>
         }
       />
     </SafeAreaView>
@@ -156,29 +125,13 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
-  listContent: { 
-    paddingHorizontal: 8, 
-    paddingBottom: 130 // مساحة كافية للزر العائم وشريط التبويبات
-  },
-  headerPadding: {
-    paddingHorizontal: 12, // توحيد المسافات
-    marginBottom: 10,
-  },
+  headerPadding: { paddingHorizontal: 20, marginBottom: 10 },
+  listContent: { paddingHorizontal: 8, paddingBottom: 130 },
   subjectsHeader: { paddingHorizontal: 12, marginTop: 20 },
   sectionTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginBottom: 10 },
-  emptyPathContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, margin: 20, backgroundColor: '#1E293B', borderRadius: 16 },
+  emptyPathContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, marginHorizontal: 20 },
   emptyPathTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
   emptyPathSubtitle: { color: '#8A94A4', fontSize: 16, textAlign: 'center', marginBottom: 25 },
-  emptySubjectsContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  emptySubjectsText: {
-    color: '#8A94A4',
-    fontSize: 16,
-    textAlign: 'center',
-  }
 });
 
 export default HomeScreen;

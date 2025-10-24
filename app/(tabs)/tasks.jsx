@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import Toast from 'react-native-toast-message';
 import { v4 as uuidv4 } from 'uuid';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -19,8 +18,7 @@ import TaskItem from '../../components/TaskItem';
 import EmptyTasksComponent from '../../components/EmptyTasksComponent';
 import AddTaskBottomSheet from '../../components/AddTaskBottomSheet';
 import RenameTaskModal from '../../components/RenameTaskModal';
-import ExpandableFAB from '../../components/ExpandableFAB'; // ✨ استيراد الزر السحري
-import { API_CONFIG } from '../../config/appConfig';
+import ExpandableFAB from '../../components/ExpandableFAB';
 
 // شريط الأدوات الذي يظهر في وضع التعديل
 const EditModeToolbar = ({ onPin, onDelete, onCancel, hasSelection }) => (
@@ -49,6 +47,7 @@ const EditModeToolbar = ({ onPin, onDelete, onCancel, hasSelection }) => (
 export default function TasksScreen() {
   const { user } = useAppState();
   const router = useRouter();
+  // ✨ --- الإصلاح هنا: استخدم setFabConfig بدلاً من setFabActions --- ✨
   const { setFabConfig, setIsSheetVisible } = useFab();
   const { isEditMode, setIsEditMode, selectedTasks, setSelectedTasks } = useEditMode();
 
@@ -60,7 +59,6 @@ export default function TasksScreen() {
 
   const bottomSheetRef = useRef(null);
 
-  // ... (useEffect for fetching tasks remains the same)
   useEffect(() => {
     if (!user?.uid) { setIsLoading(false); return; }
     const userProgressRef = doc(db, 'userProgress', user.uid);
@@ -77,14 +75,14 @@ export default function TasksScreen() {
     return () => unsubscribe();
   }, [user?.uid]);
 
-  // ✨ إعداد الزر السحري عند التركيز على الشاشة
   useFocusEffect(
     useCallback(() => {
       if (isEditMode) {
-        setFabConfig(null); // إخفاء الزر في وضع التعديل
+        setFabConfig(null);
         return;
       }
       
+      // ✨ --- والإصلاح هنا أيضًا: استخدم setFabConfig --- ✨
       setFabConfig({
         component: ExpandableFAB,
         props: {
@@ -97,7 +95,7 @@ export default function TasksScreen() {
 
       return () => {
         setFabConfig(null);
-        setIsEditMode(false); // الخروج من وضع التعديل عند مغادرة الشاشة
+        setIsEditMode(false);
         setSelectedTasks(new Set());
       };
     }, [isEditMode, setFabConfig, setIsEditMode, setSelectedTasks])
@@ -110,12 +108,9 @@ export default function TasksScreen() {
     } catch (error) {
       console.error("Firestore update failed:", error);
       Alert.alert("Error", "Could not sync changes.");
-      // Revert UI on failure
-      // (For simplicity, we're keeping the optimistic update for now)
     }
   };
 
-  // ✨ دوال جديدة لوضع التعديل
   const handlePinSelectedTasks = () => {
     const updatedTasks = tasks.map(task => 
       selectedTasks.has(task.id) ? { ...task, isPinned: !task.isPinned } : task
@@ -134,7 +129,6 @@ export default function TasksScreen() {
     setIsEditMode(false);
   };
 
-  // ... (other handlers like handleToggleTaskStatus, handleRenameTask, etc. remain the same)
   const handleToggleTaskStatus = (taskId, newStatus) => {
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
     setTasks(updatedTasks);
@@ -161,18 +155,24 @@ export default function TasksScreen() {
     setTaskToRename(null);
   };
 
-  const handleTaskUpdate = (taskData, editingTask) => {
+  const handleTaskUpdate = (title, editingTask) => {
     if (!editingTask) {
-      const newTask = { id: uuidv4(), title: taskData.title, status: 'pending', type: 'default', isPinned: false, relatedSubjectId: taskData.relatedSubjectId || null, relatedLessonId: taskData.relatedLessonId || null, createdAt: new Date().toISOString() };
+      const newTask = { id: uuidv4(), title: title, status: 'pending', type: 'default', isPinned: false, createdAt: new Date().toISOString() };
       const updatedTasks = [newTask, ...tasks];
       setTasks(updatedTasks);
       updateTasksInFirestore(updatedTasks);
     }
   };
 
-  const handleGenerateTasks = async () => { /* ... same as before ... */ };
-  const handleNavigateToTask = (task) => { /* ... same as before ... */ };
-  const progressData = useMemo(() => { /* ... same as before ... */ }, [tasks]);
+  const handleGenerateTasks = async () => { /* ... (implementation) ... */ };
+  const handleNavigateToTask = (task) => { /* ... (implementation) ... */ };
+
+  const progressData = useMemo(() => {
+    const totalCount = tasks.length;
+    const completedCount = tasks.filter(t => t.status === 'completed').length;
+    const progress = totalCount > 0 ? completedCount / totalCount : 0;
+    return { progress, completedCount, totalCount };
+  }, [tasks]);
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#10B981" /></View>;
@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
   listContent: { paddingBottom: 180 },
-  // Toolbar styles
   toolbarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 90, backgroundColor: '#1E293B', borderTopWidth: 1, borderTopColor: '#334155', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingBottom: 20 },
   toolbarButton: { alignItems: 'center' },
   toolbarButtonText: { color: 'white', marginTop: 5, fontWeight: '600' },

@@ -9,26 +9,32 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { ActionSheetProvider } from '../context/ActionSheetContext';
 import { FabProvider, useFab } from '../context/FabContext';
-import { EditModeProvider } from '../context/EditModeContext'; // ✨ 1. استيراد السياق الجديد
+import { EditModeProvider } from '../context/EditModeContext';
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
 
-// تجاهل تحذير معين من Expo Router لا يؤثر على الأداء
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
 /**
- * ✨ 2. مكون جديد لعرض الزر السحري بشكل ديناميكي
- * هذا المكون يستمع إلى سياق الـ FAB ويعرض الزر المناسب للشاشة الحالية.
+ * ✨ --- الإصلاح الحاسم هنا --- ✨
+ * تم تعديل هذا المكون ليكون أكثر أمانًا.
  */
 function FabRenderer() {
   const { fabConfig, isSheetVisible } = useFab();
   
-  // لا تعرض الزر إذا كانت هناك BottomSheet مفتوحة أو لا يوجد تكوين للزر
+  // 1. تحقق أولاً من الشروط التي يجب أن تخفي الزر
+  // إذا كانت الـ BottomSheet مرئية، أو إذا لم يكن هناك تكوين للزر (null)، فلا تعرض شيئًا.
   if (isSheetVisible || !fabConfig) {
     return null;
   }
 
+  // 2. الآن نحن متأكدون أن fabConfig هو كائن صالح
   const { component: FabComponent, props } = fabConfig;
+  
+  // 3. تأكد أيضًا من أن المكون نفسه موجود قبل عرضه
+  if (!FabComponent) {
+    return null;
+  }
   return <FabComponent {...props} />;
 }
 

@@ -27,21 +27,21 @@ const SwipeActionComponent = ({ iconName, color, align, lottieSource }) => (
     </View>
 );
 
-// ✨ onLongPress prop is added
 const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isEditMode, isSelected, onSelect }) => {
   const isCompleted = task.status === 'completed';
+  const isPressable = !!task.relatedLessonId || !!task.relatedSubjectId;
 
+  // ✨ --- المنطق الجديد للضغط --- ✨
   const handlePress = () => {
     if (isEditMode) {
       onSelect(task.id);
-    } else {
+    } else if (isPressable) {
       onNavigate(task);
     }
   };
 
   const getIcon = () => {
     const iconConfig = ICONS[task.type] || ICONS.default;
-    // ✨ NEW: Icon color changes when completed
     return <FontAwesome5 name={iconConfig.name} size={20} color={isCompleted ? '#4B5563' : iconConfig.color} />;
   };
 
@@ -60,7 +60,7 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
         overshootFriction={8}
         enabled={!isEditMode}
       >
-        {/* ✨ MODIFIED: onLongPress is now used here */}
+        {/* ✨ --- الضغطة المطولة الآن مخصصة فقط لوضع غير التعديل --- ✨ */}
         <Pressable onLongPress={() => !isEditMode && onLongPress(task)} onPress={handlePress}>
           <LinearGradient
             colors={task.isPinned ? ['#374151', '#1F2937'] : ['#1F2937', '#1F2937']}
@@ -80,10 +80,9 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
                 )}
               </MotiView>
             ) : (
-              // ✨ MODIFIED: Icon container now has a background color based on the icon type
               <View style={[
                   styles.iconContainer, 
-                  { backgroundColor: isCompleted ? '#1F2937' : `${iconConfig.color}25` }, // Faded color background
+                  { backgroundColor: isCompleted ? '#1F2937' : `${iconConfig.color}25` },
                   isCompleted && styles.completedIconContainer
               ]}>
                 {getIcon()}

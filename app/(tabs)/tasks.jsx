@@ -1,10 +1,11 @@
+// app/(tabs)/tasks.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { v4 as uuidv4 } from 'uuid'; // سيعمل الآن بشكل صحيح بعد تثبيت المكتبة الإضافية
+import { v4 as uuidv4 } from 'uuid';
 
 import { useAppState } from '../../context/AppStateContext';
 import { useFab } from '../../context/FabContext';
@@ -31,6 +32,7 @@ export default function TasksScreen() {
 
   const bottomSheetRef = useRef(null);
 
+  // ... (بقية الدوال مثل useEffect, updateTasksInFirestore, etc. تبقى كما هي)
   useEffect(() => {
     if (!user?.uid) { setIsLoading(false); return; }
     const userProgressRef = doc(db, 'userProgress', user.uid);
@@ -86,7 +88,6 @@ export default function TasksScreen() {
     );
   }, [tasks, selectedTasks, updateTasksInFirestore, setSelectedTasks, setIsEditMode]);
 
-  // ✨ --- دالة جديدة لفتح نافذة إعادة التسمية --- ✨
   const handleRenameSelectedTask = useCallback(() => {
     if (selectedTasks.size !== 1) return;
     const taskIdToRename = selectedTasks.values().next().value;
@@ -101,14 +102,13 @@ export default function TasksScreen() {
     setActions({
       onPin: handlePinSelectedTasks,
       onDelete: handleDeleteSelectedTasks,
-      onRename: handleRenameSelectedTask, // ✨ --- إضافة دالة إعادة التسمية للسياق
+      onRename: handleRenameSelectedTask,
     });
     return () => setActions({ onPin: () => {}, onDelete: () => {}, onRename: () => {} });
   }, [setActions, handlePinSelectedTasks, handleDeleteSelectedTasks, handleRenameSelectedTask]);
 
   useFocusEffect(
     useCallback(() => {
-      // ✨ --- هذا الجزء هو المسؤول عن إعداد الـ FAB وإلغاء وضع التعديل --- ✨
       const fabConfig = {
         component: ExpandableFAB,
         props: {
@@ -126,7 +126,6 @@ export default function TasksScreen() {
         setFabConfig(null);
       }
 
-      // دالة التنظيف التي تعمل عند مغادرة الشاشة
       return () => {
         if (isEditMode) {
           setIsEditMode(false);
@@ -148,6 +147,7 @@ export default function TasksScreen() {
   };
 
   const handleLongPressTask = (task) => {
+    // الضغطة المطولة الآن هي التي تفتح نافذة إعادة التسمية مباشرة
     setTaskToRename(task);
     setIsRenameModalVisible(true);
   };
@@ -157,7 +157,6 @@ export default function TasksScreen() {
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, title: newTitle } : t);
     updateTasksInFirestore(updatedTasks);
     
-    // تنظيف بعد إعادة التسمية
     setIsRenameModalVisible(false);
     setTaskToRename(null);
     if (isEditMode) {
@@ -182,7 +181,32 @@ export default function TasksScreen() {
   };
 
   const handleGenerateTasks = async () => { /* ... */ };
-  const handleNavigateToTask = (task) => { /* ... */ };
+
+  // ✨ --- دالة التنقل المحسنة --- ✨
+  const handleNavigateToTask = (task) => {
+    if (!user.selectedPathId) {
+      Alert.alert("No Path Selected", "Please complete your profile setup to navigate to tasks.");
+      return;
+    }
+
+    if (task.relatedLessonId && task.relatedSubjectId) {
+      const pathname = task.type === 'quiz' ? '/study-kit' : '/lesson-view';
+      router.push({
+        pathname,
+        params: { 
+          lessonId: task.relatedLessonId, 
+          lessonTitle: task.title,
+          pathId: user.selectedPathId,
+          subjectId: task.relatedSubjectId,
+        },
+      });
+    } else if (task.relatedSubjectId) {
+      router.push({
+        pathname: '/subject-details',
+        params: { id: task.relatedSubjectId },
+      });
+    }
+  };
 
   const progressData = useMemo(() => {
     const totalCount = tasks.length;
@@ -211,7 +235,7 @@ export default function TasksScreen() {
               task={item}
               onToggleStatus={handleToggleTaskStatus}
               onDelete={handleDeleteTask}
-              onNavigate={handleNavigateToTask}
+              onNavigate={handleNavigateToTask} // تمرير الدالة
               onLongPress={handleLongPressTask}
               isEditMode={isEditMode}
               isSelected={selectedTasks.has(item.id)}

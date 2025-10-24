@@ -1,16 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  FlatList,
-  ActivityIndicator,
-  TextInput,
-  Alert,
-  Platform,
-  Modal
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, TextInput, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -18,9 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { ChatActionSheet } from '../../components/ChatActionSheet';
-// --- REMOVED FIREBASE INITIALIZATION ---
-
-const SESSIONS_KEY = '@chat_sessions_v2';
+import { STORAGE_KEYS } from '../../config/appConfig'; // ✨ --- استيراد المفتاح الموحد
 
 // --- NEW: Custom Rename Modal Component ---
 const RenameModal = ({ isVisible, currentName, onClose, onSave }) => {
@@ -36,7 +23,6 @@ const RenameModal = ({ isVisible, currentName, onClose, onSave }) => {
     if (newName && newName.trim() !== '') {
       onSave(newName.trim());
     } else {
-      // you can show a toast or alert if empty
       Alert.alert('Invalid name', 'Please enter a valid name.');
     }
   };
@@ -77,7 +63,6 @@ const RenameModal = ({ isVisible, currentName, onClose, onSave }) => {
   );
 };
 
-// Helper to group sessions by date (kept as you had)
 const groupSessionsByDate = (sessionsArray) => {
   const groups = { Today: [], Yesterday: [], 'Previous 7 Days': [], Older: [] };
   const today = new Date();
@@ -104,15 +89,12 @@ export default function ChatHistoryScreen() {
 
   const modalizeRef = useRef(null);
   const [selectedSession, setSelectedSession] = useState(null);
-
-  // rename modal state
   const [isRenameModalVisible, setRenameModalVisible] = useState(false);
 
-  // load sessions function (reusable)
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const savedSessionsRaw = await AsyncStorage.getItem(SESSIONS_KEY);
+      const savedSessionsRaw = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS); // ✨ --- استخدام المفتاح الموحد
       const sessionsData = savedSessionsRaw ? JSON.parse(savedSessionsRaw) : {};
       const sessionsArray = Object.keys(sessionsData).map(key => ({
         id: key,
@@ -128,11 +110,9 @@ export default function ChatHistoryScreen() {
     }
   }, []);
 
-  // reload on focus
   useFocusEffect(
     useCallback(() => {
       loadSessions();
-      // no cleanup needed
     }, [loadSessions])
   );
 
@@ -143,7 +123,7 @@ export default function ChatHistoryScreen() {
       return obj;
     }, {});
     try {
-      await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(sessionsObject));
+      await AsyncStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessionsObject)); // ✨ --- استخدام المفتاح الموحد
     } catch (e) {
       console.error("Failed to save updated sessions.", e);
     }
@@ -160,7 +140,6 @@ export default function ChatHistoryScreen() {
     modalizeRef.current?.open();
   };
 
-  // rename flow (open modal)
   const renameSession = (session) => {
     setSelectedSession(session);
     setRenameModalVisible(true);
@@ -177,7 +156,6 @@ export default function ChatHistoryScreen() {
     setSelectedSession(null);
   };
 
-  // toggle pin
   const togglePinSession = async (session) => {
     const updatedSessions = sessions.map(s =>
       s.id === session.id ? { ...s, isPinned: !s.isPinned } : s
@@ -186,7 +164,6 @@ export default function ChatHistoryScreen() {
     modalizeRef.current?.close();
   };
 
-  // delete with confirmation
   const deleteSession = (session) => {
     modalizeRef.current?.close();
     Alert.alert(
@@ -200,7 +177,6 @@ export default function ChatHistoryScreen() {
           onPress: async () => {
             const updatedSessions = sessions.filter(s => s.id !== session.id);
             await updateAndSaveSessions(updatedSessions);
-            // if it was selected, clear selection
             if (selectedSession?.id === session.id) setSelectedSession(null);
           }
         }
@@ -208,7 +184,6 @@ export default function ChatHistoryScreen() {
     );
   };
 
-  // filter & grouping
   const filteredSessions = sessions.filter(s =>
     s.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -288,7 +263,6 @@ export default function ChatHistoryScreen() {
           />
         )}
 
-        {/* Rename modal */}
         <RenameModal
           isVisible={isRenameModalVisible}
           currentName={selectedSession?.title || ''}
@@ -296,7 +270,6 @@ export default function ChatHistoryScreen() {
           onSave={handleSaveRename}
         />
 
-        {/* Action sheet (imported component) */}
         <ChatActionSheet
           ref={modalizeRef}
           session={selectedSession}
@@ -323,44 +296,11 @@ const styles = StyleSheet.create({
   sessionTitle: { flex: 1, color: 'white', fontSize: 16 },
   ellipsisButton: { padding: 18 },
   emptyText: { color: '#a7adb8ff', fontSize: 16, textAlign: 'center', marginTop: 50 },
-  // rename modal styles:
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    width: '90%',
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 20,
-  },
-  modalTitle: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  modalInput: {
-    backgroundColor: '#334155',
-    color: 'white',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  modalButtonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  modalButton: {
-    padding: 15,
-  },
-  modalButtonText: {
-    color: '#a7adb8ff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalContainer: { width: '90%', backgroundColor: '#1E293B', borderRadius: 16, padding: 20 },
+  modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
+  modalInput: { backgroundColor: '#334155', color: 'white', borderRadius: 10, padding: 15, fontSize: 16, marginBottom: 20 },
+  modalButtonContainer: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+  modalButton: { padding: 15 },
+  modalButtonText: { color: '#a7adb8ff', fontSize: 16, fontWeight: '600' },
 });

@@ -1,17 +1,13 @@
 import React from 'react';
 import { View, Pressable, StyleSheet, Text } from 'react-native';
-import { Tabs, useRouter, useSegments } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, FadeIn, FadeOut } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AnimatePresence } from 'moti';
 
 import { EditModeProvider, useEditMode } from '../../context/EditModeContext';
-import { useFab } from '../../context/FabContext'; // <-- سيعمل الآن لأن Provider موجود في الملف الجذري
-import ExpandableFAB from '../../components/ExpandableFAB';
-import MagicTriggerFAB from '../../components/MagicTriggerFAB';
 
-// --- شريط التبويبات المخصص الخاص بك (بدون أي تغيير) ---
+// --- شريط التبويبات المخصص ---
 function MyCustomTabBar({ state, descriptors, navigation }) {
     const layouts = React.useRef(new Array(state.routes.length));
     const translateX = useSharedValue(0);
@@ -26,7 +22,7 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
             translateX.value = withTiming(activeLayout.x + padding, { duration: 250 });
             pillWidth.value = withTiming(newWidth, { duration: 250 });
         }
-    }, [state.index, layouts.current]);
+    }, [state.index, layouts.current, translateX, pillWidth]);
 
     const animatedPillStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: translateX.value }],
@@ -57,7 +53,6 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
                             onLayout={(event) => {
                                 const { x, width } = event.nativeEvent.layout;
                                 layouts.current[index] = { x, width };
-                                // تحديث فوري عند أول رسم
                                 if (state.index === index && pillWidth.value === 0) {
                                     const pillScale = 0.7;
                                     const newWidth = width * pillScale;
@@ -78,7 +73,7 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
     );
 }
 
-// --- شريط وضع التعديل (بدون أي تغيير) ---
+// --- شريط وضع التعديل ---
 function EditModeActionBar() {
   const { selectedTasks, actions } = useEditMode();
   if (selectedTasks.size === 0) return null;
@@ -101,36 +96,17 @@ function EditModeActionBar() {
 
 function TabsLayoutContent() {
     const { isEditMode } = useEditMode();
-    const { fabActions } = useFab();
-    const shouldShowFab = fabActions && fabActions.length > 0 && !isEditMode;
 
-    const renderFab = () => {
-        if (!fabActions) return null;
-        if (fabActions.length > 1) return <ExpandableFAB actions={fabActions} />;
-        if (fabActions.length === 1) {
-            return (
-                <View style={styles.fabContainer}>
-                    <MagicTriggerFAB isOpen={false} onPress={fabActions[0].onPress} />
-                </View>
-            );
-        }
-        return null;
-    };
+    // ✨ --- تم حذف منطق عرض الزر السحري من هنا --- ✨
+    // أصبح يتم عرضه مركزيًا بواسطة FabRenderer في الملف الجذري.
 
     return (
-        <View style={{ flex: 1, position: 'relative' }}>
-            <Tabs tabBar={(props) => isEditMode && props.state.routes[props.state.index].name === 'tasks' ? <EditModeActionBar /> : <MyCustomTabBar {...props} />}>
-                <Tabs.Screen name="index" options={{ title: 'Home', tabBarIconName: 'home', headerShown: false }} />
-                <Tabs.Screen name="tasks" options={{ title: 'Tasks', tabBarIconName: 'tasks', headerShown: false }} />
-                {/* --- تم إصلاح المسار هنا --- */}
-                <Tabs.Screen name="leaderboard" options={{ title: 'Ranking', tabBarIconName: 'trophy', headerShown: false }} />
-                <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIconName: 'user-alt', headerShown: false }} />
-            </Tabs>
-            
-            <AnimatePresence>
-                {shouldShowFab && renderFab()}
-            </AnimatePresence>
-        </View>
+        <Tabs tabBar={(props) => isEditMode && props.state.routes[props.state.index].name === 'tasks' ? <EditModeActionBar /> : <MyCustomTabBar {...props} />}>
+            <Tabs.Screen name="index" options={{ title: 'Home', tabBarIconName: 'home', headerShown: false }} />
+            <Tabs.Screen name="tasks" options={{ title: 'Tasks', tabBarIconName: 'tasks', headerShown: false }} />
+            <Tabs.Screen name="leaderboard" options={{ title: 'Ranking', tabBarIconName: 'trophy', headerShown: false }} />
+            <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIconName: 'user-alt', headerShown: false }} />
+        </Tabs>
     );
 }
 
@@ -138,13 +114,11 @@ function TabsLayoutContent() {
 export default function TabsLayout() {
     return (
         <EditModeProvider>
-            {/* FabProvider موجود الآن في الملف الجذري، لا حاجة له هنا */}
             <TabsLayoutContent />
         </EditModeProvider>
     );
 }
 
-// --- الستايلات (بدون تغيير) ---
 const styles = StyleSheet.create({
     tabBarContainer: { position: 'absolute', bottom: 25, left: 20, right: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 5 },
     tabBar: { flexDirection: 'row', height: 70, backgroundColor: 'rgba(30, 41, 59, 0.9)', borderRadius: 35, alignItems: 'center', justifyContent: 'space-around', overflow: 'hidden' },
@@ -154,5 +128,4 @@ const styles = StyleSheet.create({
     actionItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     actionLabel: { color: 'white', fontSize: 11, marginTop: 4, fontWeight: '600' },
     selectionCount: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-    fabContainer: { position: 'absolute', bottom: 100, right: 25 },
 });

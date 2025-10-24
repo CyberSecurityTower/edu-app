@@ -12,26 +12,17 @@ import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { EditModeProvider } from '../context/EditModeContext';
 import { FabProvider, useFab } from '../context/FabContext';
 
-// تجاهل تحذير لا يؤثر على الأداء
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
-/**
- * ✨ --- الإصلاح الحاسم هنا --- ✨
- * هذا المكون هو المسؤول عن عرض الزر السحري بأمان.
- * تمت إضافة تحقق إضافي للتأكد من أن `fabConfig` و `fabConfig.component` موجودان قبل العرض.
- */
 function FabRenderer() {
   const { fabConfig, isSheetVisible } = useFab();
 
-  // الشرط الأول: لا تعرض أي شيء إذا كانت الـ BottomSheet مرئية أو لا يوجد تكوين للزر.
   if (isSheetVisible || !fabConfig) {
     return null;
   }
 
   const { component: FabComponent, props } = fabConfig;
 
-  // الشرط الثاني (الأكثر أمانًا): تأكد من أن المكون نفسه موجود بالفعل قبل محاولة عرضه.
-  // هذا يمنع الانهيار تمامًا.
   if (!FabComponent) {
     return null;
   }

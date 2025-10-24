@@ -1,15 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, StatusBar, Image, Animated, ActivityIndicator } from 'react-native';
+import { SafeAreaView, View, Text, TextInput, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, StatusBar, Image, Animated, ActivityIndicator, Platform } from 'react-native';
 import { Link } from 'expo-router';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import { Feather } from '@expo/vector-icons';
 import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import * as Device from 'expo-device';
 import { useAppState } from '../../context/AppStateContext';
 import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+import { POINTS_CONFIG } from '../../config/points'; // ✨ --- إضافة الاستيراد المفقود
+
 export default function CreateAccountScreen() {
     const { setUser } = useAppState();
     const [firstName, setFirstName] = useState('');
@@ -38,125 +38,110 @@ export default function CreateAccountScreen() {
         return re.test(String(email).toLowerCase());
     };
 
-    
-const handleCreateAccount = async () => {
-    // ... (validation logic remains the same)
-    const newErrors = {};
-    if (!firstName.trim()) newErrors.firstName = 'First name is required.';
-    if (!lastName.trim()) newErrors.lastName = 'Last name is required.';
-    if (!email.trim()) newErrors.email = 'Email is required.';
-    else if (!validateEmail(email.trim())) newErrors.email = 'Please enter a valid email address.';
-    if (!password) newErrors.password = 'Password is required.';
-    else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters long.';
-    if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
-    if (!agreedToTerms) newErrors.terms = 'You must agree to the terms.';
+    const handleCreateAccount = async () => {
+        const newErrors = {};
+        if (!firstName.trim()) newErrors.firstName = 'First name is required.';
+        if (!lastName.trim()) newErrors.lastName = 'Last name is required.';
+        if (!email.trim()) newErrors.email = 'Email is required.';
+        else if (!validateEmail(email.trim())) newErrors.email = 'Please enter a valid email address.';
+        if (!password) newErrors.password = 'Password is required.';
+        else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters long.';
+        if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+        if (!agreedToTerms) newErrors.terms = 'You must agree to the terms.';
 
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
-        if (newErrors.terms) triggerShake();
-        return;
-    }
-
-    setIsLoading(true);
-    try {
-        // --- START: ROBUST DEVICE ID LOGIC (THE FIX) ---
-        let deviceId;
-        if (Platform.OS === 'ios') {
-            // Use the stable "Identifier for Vendor" on iOS
-            deviceId = await Application.getIosIdForVendorAsync();
-        } else {
-            // Use the stable "Android ID" on Android
-            deviceId = Application.androidId;
-        }
-        // --- END: ROBUST DEVICE ID LOGIC ---
-
-        if (!deviceId) {
-            // This error is now much less likely to occur
-            throw new Error("Could not identify the device.");
-        }
-
-        const trialRef = doc(db, "trialActivations", deviceId);
-        const trialSnap = await getDoc(trialRef);
-
-        if (trialSnap.exists()) {
-            setErrors({ general: "The free trial has already been used on this device. Please log in." });
-            setIsLoading(false);
+        setErrors(newErrors);
+        if (Object.keys(newErrors).length > 0) {
+            if (newErrors.terms) triggerShake();
             return;
         }
 
-        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        const user = userCredential.user;
-        // Calculate trial expiry date 
-        const trialPeriodDays = 14;
-        const trialExpiresAt = new Date();
-        trialExpiresAt.setDate(trialExpiresAt.getDate() + trialPeriodDays);
+        setIsLoading(true);
+        try {
+            let deviceId;
+            if (Platform.OS === 'ios') {
+                deviceId = await Application.getIosIdForVendorAsync();
+            } else {
+                deviceId = Application.androidId;
+            }
 
-       
-const newUserProfile = {
-    uid: user.uid,
-    firstName: firstName.trim(),
-    lastName: lastName.trim(),
-    email: email.trim().toLowerCase(),
-    createdAt: new Date(), // This is important for calculating trial days later
-    profileStatus: "pending_setup",
-    selectedPathId: null,
-    subscription: {
-        plan: "Trial",
-        status: "active",
-        expiresOn: trialExpiresAt, // Store the exact expiry date
-    },
-    stats: {
-                    points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME // Give them points as if they completed one lesson
-}};
-        await setDoc(doc(db, "users", user.uid), newUserProfile);
-          const displayName = `${firstName.trim()} ${lastName.trim()}`;
+            if (!deviceId) {
+                throw new Error("Could not identify the device.");
+            }
+
+            const trialRef = doc(db, "trialActivations", deviceId);
+            const trialSnap = await getDoc(trialRef);
+
+            if (trialSnap.exists()) {
+                setErrors({ general: "The free trial has already been used on this device. Please log in." });
+                setIsLoading(false);
+                return;
+            }
+
+            const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+            const user = userCredential.user;
+            const trialPeriodDays = 14;
+            const trialExpiresAt = new Date();
+            trialExpiresAt.setDate(trialExpiresAt.getDate() + trialPeriodDays);
+
+            const newUserProfile = {
+                uid: user.uid,
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                email: email.trim().toLowerCase(),
+                createdAt: new Date(),
+                profileStatus: "pending_setup",
+                selectedPathId: null,
+                subscription: {
+                    plan: "Trial",
+                    status: "active",
+                    expiresOn: trialExpiresAt,
+                },
+                stats: {
+                    points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME
+                }
+            };
+            await setDoc(doc(db, "users", user.uid), newUserProfile);
+
+            const displayName = `${firstName.trim()} ${lastName.trim()}`;
             const avatarUrl = `https://ui-avatars.com/api/?name=${displayName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128`;
+            
             const newUserProgressData = {
                 stats: {
                     displayName: displayName,
                     avatarUrl: avatarUrl,
-                    points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME || 20 // نقاط بداية
+                    points: POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME || 20
                 },
-                pathProgress: {}, // كائن فارغ، جاهز لتلقي التقدم
+                pathProgress: {},
                 favorites: {
-                    subjects: [] // مصفوفة فارغة، جاهزة للمفضلة
+                    subjects: []
                 },
-                dailyTasks: { // <-- هنا نضيف الكائن الجديد الذي نسيناه
+                dailyTasks: {
                     generatedAt: null,
                     tasks: []
                 },
                 lastLogin: new Date(),
-                streakCount: 1 // يبدأ بسلسلة يوم واحد
+                streakCount: 1
             };
-
-            // 3. حفظ مستند `userProgress` الجديد بالكامل
-            // هذا يحل محل استدعاء `updateUserProgressProfileData` القديم
             await setDoc(doc(db, "userProgress", user.uid), newUserProgressData);
-            // --- ADD THIS LINE ---
-        // This will create the displayName in userProgress at the same time
-        await updateUserProgressProfileData(user.uid, { 
-        firstName: firstName.trim(), 
-        lastName: lastName.trim() 
-        });
-        // We use the new robust deviceId here
-        await setDoc(trialRef, {
-            activatedAt: new Date(),
-            userIds: [user.uid],
-        });
 
-        setUser(newUserProfile);
+            await setDoc(trialRef, {
+                activatedAt: new Date(),
+                userIds: [user.uid],
+            });
 
-    } catch (error) {
-        if (error.code === 'auth/email-already-in-use') {
-            setErrors({ email: 'This email address is already in use.' });
-        } else {
-            console.error("Error during account creation:", error); // Log the actual error for debugging
-            setErrors({ general: 'An error occurred. Please try again.' });
+            setUser(newUserProfile);
+
+        } catch (error) {
+            if (error.code === 'auth/email-already-in-use') {
+                setErrors({ email: 'This email address is already in use.' });
+            } else {
+                console.error("Error during account creation:", error);
+                setErrors({ general: 'An error occurred. Please try again.' });
+            }
+        } finally {
+            setIsLoading(false);
         }
-    } finally {
-        setIsLoading(false);
-    }
-};
+    };
 
     const clearError = (fieldName) => {
         if (errors[fieldName] || errors.general) {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, FlatList, ActivityIndicator, Alert, Pressable, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,7 +20,6 @@ import AddTaskBottomSheet from '../../components/AddTaskBottomSheet';
 import RenameTaskModal from '../../components/RenameTaskModal';
 import ExpandableFAB from '../../components/ExpandableFAB';
 
-// شريط الأدوات الذي يظهر في وضع التعديل
 const EditModeToolbar = ({ onPin, onDelete, onCancel, hasSelection }) => (
   <MotiView
     from={{ translateY: 100 }}
@@ -46,9 +45,7 @@ const EditModeToolbar = ({ onPin, onDelete, onCancel, hasSelection }) => (
 
 export default function TasksScreen() {
   const { user } = useAppState();
-  const router = useRouter();
-  // ✨ --- الإصلاح هنا: استخدم setFabConfig بدلاً من setFabActions --- ✨
-  const { setFabConfig, setIsSheetVisible } = useFab();
+  const { setFabConfig, setIsSheetVisible } = useFab(); // ✨ --- الإصلاح هنا --- ✨
   const { isEditMode, setIsEditMode, selectedTasks, setSelectedTasks } = useEditMode();
 
   const [tasks, setTasks] = useState([]);
@@ -82,7 +79,7 @@ export default function TasksScreen() {
         return;
       }
       
-      // ✨ --- والإصلاح هنا أيضًا: استخدم setFabConfig --- ✨
+      // ✨ --- والإصلاح هنا أيضًا: استخدم setFabConfig مع كائن الإعدادات الكامل --- ✨
       setFabConfig({
         component: ExpandableFAB,
         props: {
@@ -155,13 +152,20 @@ export default function TasksScreen() {
     setTaskToRename(null);
   };
 
-  const handleTaskUpdate = (title, editingTask) => {
-    if (!editingTask) {
-      const newTask = { id: uuidv4(), title: title, status: 'pending', type: 'default', isPinned: false, createdAt: new Date().toISOString() };
-      const updatedTasks = [newTask, ...tasks];
-      setTasks(updatedTasks);
-      updateTasksInFirestore(updatedTasks);
-    }
+  const handleTaskUpdate = (taskData) => {
+    const newTask = { 
+        id: uuidv4(), 
+        title: taskData.title, 
+        status: 'pending', 
+        type: 'default', 
+        isPinned: false, 
+        createdAt: new Date().toISOString(),
+        relatedSubjectId: taskData.relatedSubjectId || null,
+        relatedLessonId: taskData.relatedLessonId || null,
+    };
+    const updatedTasks = [newTask, ...tasks];
+    setTasks(updatedTasks);
+    updateTasksInFirestore(updatedTasks);
   };
 
   const handleGenerateTasks = async () => { /* ... (implementation) ... */ };

@@ -1,4 +1,4 @@
-// app/(tabs)/index.jsx (النسخة النهائية مع إصلاح عرض الدروس)
+// app/(tabs)/index.jsx
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator, FlatList, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,11 +12,12 @@ import SubjectCard from '../../components/SubjectCard';
 import MainHeader from '../../components/MainHeader';
 import DailyTasks from '../../components/DailyTasks';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
+import ExpandableFAB from '../../components/ExpandableFAB'; // ✨ --- استيراد المكون
 
 const HomeScreen = () => {
   const { user, points } = useAppState();
   const router = useRouter();
-  const { setFabActions } = useFab();
+  const { setFabConfig } = useFab(); // ✨ --- الإصلاح هنا --- ✨
 
   const [pathDetails, setPathDetails] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
@@ -25,13 +26,18 @@ const HomeScreen = () => {
   // --- إعداد إجراءات الزر السحري ---
   useFocusEffect(
     useCallback(() => {
-      const actions = [
-        { icon: 'tasks', label: 'Manage All Tasks', onPress: () => router.push('/tasks') },
-        { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
-      ];
-      setFabActions(actions);
-      return () => setFabActions(null);
-    }, [router, setFabActions])
+      // ✨ --- والإصلاح هنا أيضًا: استخدم setFabConfig مع كائن الإعدادات الكامل --- ✨
+      setFabConfig({
+        component: ExpandableFAB,
+        props: {
+          actions: [
+            { icon: 'tasks', label: 'Manage All Tasks', onPress: () => router.push('/(tabs)/tasks') },
+            { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
+          ],
+        },
+      });
+      return () => setFabConfig(null);
+    }, [router, setFabConfig])
   );
 
   // --- جلب بيانات المسار والتقدم ---
@@ -69,7 +75,6 @@ const HomeScreen = () => {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
   }
 
-  // حالة عدم وجود مسار دراسي محدد
   if (!user?.selectedPathId) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>

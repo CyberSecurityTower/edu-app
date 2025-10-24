@@ -6,13 +6,16 @@ const FabContext = createContext(null);
 export const useFab = () => useContext(FabContext);
 
 export const FabProvider = ({ children }) => {
+  // ✨ التغيير: بدلاً من إجراء واحد، أصبح لدينا مصفوفة من الإجراءات
   const [fabActions, setFabActions] = useState(null);
+  const [isSheetVisible, setIsSheetVisible] = useState(false);
 
-  // نستخدم useMemo لضمان عدم إعادة إنشاء الكائن في كل مرة
   const value = useMemo(() => ({
     fabActions,
     setFabActions,
-  }), [fabActions]);
+    isSheetVisible,
+    setIsSheetVisible,
+  }), [fabActions, isSheetVisible]);
 
   return (
     <FabContext.Provider value={value}>

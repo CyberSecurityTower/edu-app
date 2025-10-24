@@ -1,7 +1,7 @@
-// app/(tabs)/_layout.jsx (النسخة النهائية والمستقرة)
+// app/(tabs)/_layout.jsx (النسخة النهائية والمستقرة مع الإصلاح)
 import React from 'react';
 import { View, Pressable, StyleSheet, Text } from 'react-native';
-import { Tabs, useRouter, useSegments } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, FadeIn, FadeOut } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,7 +12,7 @@ import { FabProvider, useFab } from '../../context/FabContext';
 import ExpandableFAB from '../../components/ExpandableFAB';
 import MagicTriggerFAB from '../../components/MagicTriggerFAB';
 
-// ✨ --- تم تعديل هذا المكون ليكون أكثر استقرارًا --- ✨
+// --- شريط التبويبات المخصص الخاص بك (بدون أي تغيير) ---
 function MyCustomTabBar({ state, descriptors, navigation }) {
     const layouts = React.useRef(new Array(state.routes.length));
     const translateX = useSharedValue(0);
@@ -57,7 +57,6 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
                             onPress={onPress}
                             onLayout={(event) => {
                                 const { x, width } = event.nativeEvent.layout;
-                                // تحديث الـ ref لا يسبب re-render وبالتالي أكثر أمانًا
                                 layouts.current[index] = { x, width };
                             }}
                             style={styles.tabItem}
@@ -72,7 +71,7 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
     );
 }
 
-// EditModeActionBar (بدون تغيير)
+// --- شريط وضع التعديل (بدون أي تغيير) ---
 function EditModeActionBar() {
   const { selectedTasks, actions } = useEditMode();
   if (selectedTasks.size === 0) return null;
@@ -93,29 +92,17 @@ function EditModeActionBar() {
   );
 }
 
-// TabsLayoutContent (بدون تغيير في المنطق)
 function TabsLayoutContent() {
-    const router = useRouter();
-    const segments = useSegments();
     const { isEditMode } = useEditMode();
-    const { primaryAction } = useFab();
+    const { fabActions } = useFab(); // ✨ الإصلاح 1: نستخدم السياق الجديد للحصول على قائمة الإجراءات
 
-    const currentScreen = segments[segments.length - 1];
-    const isTasksScreen = currentScreen === 'tasks';
-
-    const shouldShowFab = ['index', 'tasks'].includes(currentScreen) && !isEditMode;
-
-    const fabActions = [];
-    // الإجراء الأساسي (اسأل EduAI) يضاف دائمًا إذا كان الزر ظاهرًا
-    if (shouldShowFab) {
-        fabActions.push({ icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') });
-    }
-    // إجراء "إضافة مهمة" يضاف فقط في شاشة المهام
-    if (isTasksScreen && primaryAction) {
-        fabActions.unshift({ icon: 'tasks', label: 'Add Task', onPress: primaryAction });
-    }
+    // ✨ الإصلاح 2: شرط إظهار الزر أصبح أبسط بكثير
+    // سيظهر إذا كانت هناك إجراءات محددة له، وإذا لم نكن في وضع التعديل
+    const shouldShowFab = fabActions && fabActions.length > 0 && !isEditMode;
 
     const renderFab = () => {
+        if (!fabActions) return null; // حماية إضافية
+
         // إذا كان هناك أكثر من إجراء، أظهر القائمة المنسدلة
         if (fabActions.length > 1) {
             return <ExpandableFAB actions={fabActions} />;
@@ -133,10 +120,10 @@ function TabsLayoutContent() {
 
     return (
         <View style={{ flex: 1, position: 'relative' }}>
-            <Tabs tabBar={(props) => isEditMode && isTasksScreen ? <EditModeActionBar /> : <MyCustomTabBar {...props} />}>
+            <Tabs tabBar={(props) => isEditMode && props.state.routes[props.state.index].name === 'tasks' ? <EditModeActionBar /> : <MyCustomTabBar {...props} />}>
                 <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />, headerShown: false }} />
                 <Tabs.Screen name="tasks" options={{ title: 'Tasks', tabBarIcon: ({ color }) => <FontAwesome5 name="tasks" size={24} color={color} />, headerShown: false }} />
-                <Tabs.Screen name="leaderboard" options={{ title: 'Ranking', tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} />, headerShown: true }} />
+                <Tabs.Screen name="leaderboard" options={{ title: 'Ranking', tabBarIcon: ({ color }) => <FontAwesome5 name="trophy" size={24} color={color} />, headerShown: false }} />
                 <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />, headerShown: false }} />
             </Tabs>
             
@@ -147,7 +134,7 @@ function TabsLayoutContent() {
     );
 }
 
-// TabsLayout (بدون تغيير)
+// --- المكون الرئيسي (بدون تغيير) ---
 export default function TabsLayout() {
     return (
         <EditModeProvider>
@@ -158,6 +145,7 @@ export default function TabsLayout() {
     );
 }
 
+// --- الستايلات (بدون تغيير) ---
 const styles = StyleSheet.create({
     tabBarContainer: { position: 'absolute', bottom: 25, left: 20, right: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 5 },
     tabBar: { flexDirection: 'row', height: 70, backgroundColor: 'rgba(42, 56, 78, 0.75)', borderRadius: 35, alignItems: 'center', justifyContent: 'space-around', overflow: 'hidden' },

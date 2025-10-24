@@ -1,15 +1,18 @@
 // app/(tabs)/tasks.jsx
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, FlatList, Alert } from 'react-native';
+import React from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet, FlatList, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { MotiView } from 'moti';
+import { FontAwesome5 } from '@expo/vector-icons';
 
 import { db } from '../../firebase';
 import { useAppState } from '../../context/AppStateContext';
 import { useFab } from '../../context/FabContext';
+import { useEditMode } from '../../context/EditModeContext';
 import { API_CONFIG } from '../../config/appConfig';
 
 import TasksHeader from '../../components/TasksHeader';
@@ -21,13 +24,18 @@ export default function TasksScreen() {
   const { user } = useAppState();
   const router = useRouter();
   const bottomSheetRef = useRef(null);
+  
+  // السياقات
   const { setFabActions } = useFab();
+  const { isEditMode, setIsEditMode, selectedTasks, setSelectedTasks, setActions } = useEditMode();
 
+  // الحالة المحلية
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
+  // جلب وتحديث المهام من Firestore
   useEffect(() => {
     if (!user?.uid) return;
     const userProgressRef = doc(db, 'userProgress', user.uid);
@@ -36,7 +44,7 @@ export default function TasksScreen() {
       fetchedTasks.sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
         if (a.status !== b.status) return a.status === 'completed' ? 1 : -1;
-        return 0;
+        return 0; // يمكنك إضافة فرز ثانوي هنا إذا أردت
       });
       setTasks(fetchedTasks);
       setIsLoading(false);
@@ -44,6 +52,7 @@ export default function TasksScreen() {
     return () => unsubscribe();
   }, [user?.uid]);
 
+  // دالة لتحديث المهام في Firestore
   const updateTasksInFirestore = useCallback(async (newTasks) => {
     if (!user?.uid) return;
     try {
@@ -54,6 +63,7 @@ export default function TasksScreen() {
     }
   }, [user?.uid]);
 
+  // دوال التعامل مع المهام
   const handleTaskUpdate = (title, taskToEdit) => {
     let newTasks;
     if (taskToEdit) {
@@ -106,7 +116,44 @@ export default function TasksScreen() {
     }
   }, [user]);
 
-  // ✨ هنا نخبر التطبيق بأن هذه الشاشة تريد عرض هذه الإجراءات في الزر السحري
+  // التعامل مع وضع التعديل
+  const toggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+    setSelectedTasks(new Set()); // مسح التحديد عند الخروج من وضع التعديل
+  };
+
+  const handleSelectTask = (taskId) => {
+    const newSelection = new Set(selectedTasks);
+    if (newSelection.has(taskId)) {
+      newSelection.delete(taskId);
+    } else {
+      newSelection.add(taskId);
+    }
+    setSelectedTasks(newSelection);
+  };
+
+  const handleBulkDelete = () => {
+    const newTasks = tasks.filter(t => !selectedTasks.has(t.id));
+    updateTasksInFirestore(newTasks);
+    toggleEditMode();
+  };
+
+  const handleBulkPin = () => {
+    // هذا المنطق يثبت كل المهام المحددة. يمكنك تغييره ليكون تبديليًا.
+    const newTasks = tasks.map(t => selectedTasks.has(t.id) ? { ...t, isPinned: true } : t);
+    updateTasksInFirestore(newTasks);
+    toggleEditMode();
+  };
+
+  // ربط إجراءات وضع التعديل بالسياق
+  useEffect(() => {
+    setActions({
+      onDelete: handleBulkDelete,
+      onPin: handleBulkPin,
+    });
+  }, [selectedTasks, tasks]); // تحديث الإجراءات عند تغير التحديد أو المهام
+
+  // تحديد إجراءات الزر العائم لهذه الشاشة
   useFocusEffect(
     useCallback(() => {
       const actions = [
@@ -115,8 +162,7 @@ export default function TasksScreen() {
         { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
       ];
       setFabActions(actions);
-
-      return () => setFabActions(null); // عند مغادرة الشاشة، نخفي الزر
+      return () => setFabActions(null);
     }, [handleGeneratePlan, router, setFabActions])
   );
 
@@ -124,16 +170,24 @@ export default function TasksScreen() {
     const total = tasks.length;
     if (total === 0) return { completed: 0, total: 0, percent: 0 };
     const completed = tasks.filter(t => t.status === 'completed').length;
-    return { completed, total, percent: completed / total };
+    return { completed, total, percent: total > 0 ? completed / total : 0 };
   }, [tasks]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <TasksHeader
-        progress={progress.percent}
-        completedCount={progress.completed}
-        totalCount={progress.total}
-      />
+      <View style={styles.headerContainer}>
+        <TasksHeader
+          progress={progress.percent}
+          completedCount={progress.completed}
+          totalCount={progress.total}
+        />
+        {tasks.length > 0 && (
+          <Pressable onPress={toggleEditMode} style={styles.editButton}>
+            <FontAwesome5 name={isEditMode ? "times" : "pen"} size={18} color={isEditMode ? "#F87171" : "#a7adb8ff"} />
+          </Pressable>
+        )}
+      </View>
+      
       <FlatList
         data={tasks}
         keyExtractor={item => item.id}
@@ -147,18 +201,25 @@ export default function TasksScreen() {
               task={item}
               onDelete={handleDelete}
               onToggleStatus={handleToggleStatus}
-              onLongPress={() => handlePinToggle(item)}
+              onLongPress={() => !isEditMode && handlePinToggle(item)}
               onNavigate={() => {}}
+              isEditMode={isEditMode}
+              isSelected={selectedTasks.has(item.id)}
+              onSelect={handleSelectTask}
             />
           </MotiView>
         )}
         ListEmptyComponent={!isLoading && <EmptyTasksComponent isGenerating={isGenerating} onGenerate={handleGeneratePlan} />}
         contentContainerStyle={{ paddingBottom: 180, paddingTop: 10 }}
       />
+      
       <AddTaskBottomSheet
         ref={bottomSheetRef}
         editingTask={editingTask}
         onTaskUpdate={handleTaskUpdate}
+        onVisibilityChange={(isVisible) => {
+            // يمكنك استخدام هذا لتتبع رؤية النافذة السفلية إذا احتجت
+        }}
       />
     </SafeAreaView>
   );
@@ -166,4 +227,13 @@ export default function TasksScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  editButton: {
+    padding: 20,
+    paddingTop: 75,
+  },
 });

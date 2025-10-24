@@ -1,15 +1,22 @@
 // app/_layout.jsx
-import React, { useContext, useEffect, useCallback } from 'react';
+
+import React, { useEffect, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { FabProvider } from '../context/FabContext'; // ✨ استيراد الـ Provider
+
+// ✨ تم تصحيح المسارات هنا لتكون صحيحة (../)
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { ActionSheetProvider } from '../context/ActionSheetContext';
+import { FabProvider } from '../context/FabContext'; // ✨ استيراد الـ Provider فقط
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
+
+// ❌ تم حذف الأسطر الخاطئة من هنا
+// import { useFab } from '../../context/FabContext'; 
+// import ExpandableFAB from '../../components/ExpandableFAB';
 
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
@@ -29,8 +36,7 @@ function RootLayoutNav() {
       if (user.profileStatus === 'pending_setup' && !inSetupGroup) {
         router.replace('/(setup)/profile-setup');
       } else if (user.profileStatus === 'completed' && (inAuthGroup || inSetupGroup)) {
-        // ✨ --- THIS IS THE SECOND FIX --- ✨
-        router.replace('/(tabs)/'); // Changed from "/(tabs)/home"
+        router.replace('/(tabs)/');
       }
     } else if (!inAuthGroup) {
       router.replace('/(auth)/');
@@ -72,10 +78,10 @@ function MainLayout() {
 }
 
 export default function RootLayout() {
-    return (
+  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStateProvider>
-        <FabProvider> {/* ✨ تغليف التطبيق هنا */}
+        <FabProvider>
           <ActionSheetProvider>
             <MainLayout />
             <Toast config={toastConfig} />

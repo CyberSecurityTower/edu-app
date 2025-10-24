@@ -1,5 +1,4 @@
 // app/_layout.jsx
-
 import React, { useEffect, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
@@ -7,16 +6,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-// ✨ تم تصحيح المسارات هنا لتكون صحيحة (../)
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { ActionSheetProvider } from '../context/ActionSheetContext';
-import { FabProvider } from '../context/FabContext'; // ✨ استيراد الـ Provider فقط
+import { FabProvider } from '../context/FabContext'; // ✨ 1. استيراد الـ Provider فقط
 import { toastConfig } from '../config/toastConfig';
 import OnboardingScreen from '../components/OnboardingScreen';
-
-// ❌ تم حذف الأسطر الخاطئة من هنا
-// import { useFab } from '../../context/FabContext'; 
-// import ExpandableFAB from '../../components/ExpandableFAB';
 
 LogBox.ignoreLogs(['WARN  [Layout children]']);
 
@@ -81,6 +75,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppStateProvider>
+        {/* ✨ 2. تغليف التطبيق بـ FabProvider */}
+        {/* هذا يسمح لأي شاشة بتحديد الإجراءات التي يجب أن يعرضها الزر العائم */}
         <FabProvider>
           <ActionSheetProvider>
             <MainLayout />

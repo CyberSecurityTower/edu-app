@@ -1,93 +1,73 @@
+// app/(tabs)/_layout.jsx
+import React from 'react';
+import { Tabs } from 'expo-router';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { View } from 'react-native';
 
-import React, { useContext, useEffect, useCallback } from 'react';
-import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
-import { Stack, useSegments, useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Toast from 'react-native-toast-message';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
-import { AppStateProvider, useAppState } from '../context/AppStateContext';
-import { ActionSheetProvider } from '../context/ActionSheetContext';
-import { toastConfig } from '../config/toastConfig';
-import OnboardingScreen from '../components/OnboardingScreen';
-import { useFab } from '../../context/FabContext'; 
+// ✨ 1. استيراد المكونات والسياق اللازم
+import { useFab } from '../../context/FabContext';
 import ExpandableFAB from '../../components/ExpandableFAB';
-LogBox.ignoreLogs(['WARN  [Layout children]']);
 
-function RootLayoutNav() {
-  const { user, authLoading, hasCompletedOnboarding } = useAppState();
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    const isReady = !authLoading && hasCompletedOnboarding !== null;
-    if (!isReady) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-    const inSetupGroup = segments[0] === '(setup)';
-
-    if (user) {
-      if (user.profileStatus === 'pending_setup' && !inSetupGroup) {
-        router.replace('/(setup)/profile-setup');
-      } else if (user.profileStatus === 'completed' && (inAuthGroup || inSetupGroup)) {
-        router.replace('/(tabs)/');
-      }
-    } else if (!inAuthGroup) {
-      router.replace('/(auth)/');
-    }
-  }, [user, segments, authLoading, hasCompletedOnboarding, router]);
+export default function TabLayout() {
+  // ✨ 2. الحصول على الإجراءات الحالية للزر العائم من السياق
+  // هذه الإجراءات يتم تحديدها من داخل كل شاشة (مثل home.jsx أو tasks.jsx)
+  const { fabActions } = useFab();
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(setup)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(modal)" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="subject-details" options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="lesson-view" options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="study-kit" options={{ animation: 'slide_from_bottom' }} />
-    </Stack>
+    // ✨ 3. استخدام View كحاوية رئيسية للسماح بوضع الزر العائم فوق التبويبات
+    <View style={{ flex: 1, backgroundColor: '#0C0F27' }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#10B981',
+          tabBarInactiveTintColor: '#6B7280',
+          tabBarStyle: {
+            backgroundColor: '#1F293B',
+            borderTopWidth: 0,
+            height: 90,
+            paddingBottom: 30,
+          },
+        }}
+      >
+        <Tabs.Screen
+          // اسم الملف يجب أن يكون home.jsx
+          name="home"
+          options={{
+            title: 'Home',
+            tabBarIcon: ({ color }) => <FontAwesome5 name="home" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          // اسم الملف يجب أن يكون tasks.jsx
+          name="tasks"
+          options={{
+            title: 'Tasks',
+            tabBarIcon: ({ color }) => <FontAwesome5 name="tasks" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          // مثال: شاشة للمجتمع أو المجموعات الدراسية
+          name="community"
+          options={{
+            title: 'Community',
+            tabBarIcon: ({ color }) => <FontAwesome5 name="users" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          // مثال: شاشة للملف الشخصي
+          name="profile"
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ color }) => <FontAwesome5 name="user-alt" size={24} color={color} />,
+          }}
+        />
+      </Tabs>
+
+      {/* ✨ 4. عرض الزر العائم هنا بشكل شرطي */}
+      {/* سيظهر فقط إذا كانت الشاشة الحالية قد حددت له إجراءات */}
+      {fabActions && fabActions.length > 0 && (
+        <ExpandableFAB actions={fabActions} />
+      )}
+    </View>
   );
 }
-
-function MainLayout() {
-  const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
-
-  const handleOnboardingComplete = useCallback(async () => {
-    try {
-      await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
-      setHasCompletedOnboarding(true);
-    } catch (e) { console.log('Error saving onboarding status:', e); }
-  }, [setHasCompletedOnboarding]);
-
-  if (authLoading || hasCompletedOnboarding === null) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
-  }
-
-  if (hasCompletedOnboarding === false) {
-    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
-  }
-
-  return <RootLayoutNav />;
-}
-
-export default function RootLayout() {
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppStateProvider>
-        {/* ✨ 2. تغليف التطبيق بـ FabProvider */}
-        {/* هذا يسمح لأي شاشة بتحديد الإجراءات التي يجب أن يعرضها الزر العائم */}
-        <FabProvider>
-          <ActionSheetProvider>
-            <MainLayout />
-            <Toast config={toastConfig} />
-          </ActionSheetProvider>
-        </FabProvider>
-      </AppStateProvider>
-    </GestureHandlerRootView>
-  );
-}
-
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
-});

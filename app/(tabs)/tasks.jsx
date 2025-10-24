@@ -9,7 +9,7 @@ import { MotiView } from 'moti';
 
 import { db } from '../../firebase';
 import { useAppState } from '../../context/AppStateContext';
-import { useFab } from '../../context/FabContext';
+import { useFab } from '../../context/FabContext'; // ✨ 1. استيراد hook السياق
 import { API_CONFIG } from '../../config/appConfig';
 
 import TasksHeader from '../../components/TasksHeader';
@@ -20,24 +20,20 @@ import AddTaskBottomSheet from '../../components/AddTaskBottomSheet';
 export default function TasksScreen() {
   const { user } = useAppState();
   const router = useRouter();
-  const { setFabActions } = useFab();
   const bottomSheetRef = useRef(null);
+  const { setFabActions } = useFab(); // ✨ 2. الحصول على دالة تحديد الإجراءات
 
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  // ✨ 1. جلب وتحديث المهام في الوقت الفعلي من Firestore
+  // جلب وتحديث المهام في الوقت الفعلي
   useEffect(() => {
-    if (!user?.uid) {
-      setIsLoading(false);
-      return;
-    }
+    if (!user?.uid) return;
     const userProgressRef = doc(db, 'userProgress', user.uid);
     const unsubscribe = onSnapshot(userProgressRef, (snapshot) => {
       const fetchedTasks = snapshot.data()?.dailyTasks?.tasks || [];
-      // فرز المهام: المثبتة أولاً، ثم المكتملة في النهاية
       fetchedTasks.sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
         if (a.status !== b.status) return a.status === 'completed' ? 1 : -1;
@@ -48,8 +44,8 @@ export default function TasksScreen() {
     });
     return () => unsubscribe();
   }, [user?.uid]);
-  
-  // ✨ 2. دالة مركزية لتحديث المهام في Firestore
+
+  // دالة مركزية لتحديث المهام في Firestore
   const updateTasksInFirestore = useCallback(async (newTasks) => {
     if (!user?.uid) return;
     try {
@@ -60,12 +56,12 @@ export default function TasksScreen() {
     }
   }, [user?.uid]);
 
-  // ✨ 3. التعامل مع إضافة وتعديل المهام من الـ BottomSheet
+  // التعامل مع إضافة وتعديل المهام
   const handleTaskUpdate = (title, taskToEdit) => {
     let newTasks;
-    if (taskToEdit) { // تعديل مهمة
+    if (taskToEdit) {
       newTasks = tasks.map(t => t.id === taskToEdit.id ? { ...t, title } : t);
-    } else { // إضافة مهمة جديدة
+    } else {
       const newTask = {
         id: `user_${Date.now()}`,
         title,
@@ -80,7 +76,6 @@ export default function TasksScreen() {
     setEditingTask(null);
   };
 
-  // ✨ 4. التعامل مع حذف، إكمال، وتثبيت المهام
   const handleDelete = (taskId) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newTasks = tasks.filter(t => t.id !== taskId);
@@ -93,18 +88,17 @@ export default function TasksScreen() {
   };
 
   const handlePinToggle = (task) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const newTasks = tasks.map(t => t.id === task.id ? { ...t, isPinned: !t.isPinned } : t);
     updateTasksInFirestore(newTasks);
   };
 
-  // ✨ 5. فتح ورقة الإضافة/التعديل
   const openAddTaskSheet = (task = null) => {
     setEditingTask(task);
     bottomSheetRef.current?.snapToIndex(0);
   };
 
-  // ✨ 6. إنشاء خطة ذكية من الذكاء الاصطناعي
+  // إنشاء خطة ذكية من الذكاء الاصطناعي
   const handleGeneratePlan = useCallback(async () => {
     if (!user?.uid) return;
     setIsGenerating(true);
@@ -115,7 +109,7 @@ export default function TasksScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.uid, pathId: user.selectedPathId }),
       });
-      if (!response.ok) throw new Error('Failed to generate tasks from server.');
+      if (!response.ok) throw new Error('Failed to generate tasks.');
     } catch (error) {
       console.error("Error generating plan:", error);
       Alert.alert("Error", "Couldn't generate a new plan right now.");
@@ -124,7 +118,7 @@ export default function TasksScreen() {
     }
   }, [user]);
 
-  // ✨ 7. تحديد إجراءات الزر العائم (FAB) لهذه الشاشة تحديداً
+  // ✨ 3. استخدام useFocusEffect لتحديد إجراءات الزر العائم لهذه الشاشة
   useFocusEffect(
     useCallback(() => {
       const actions = [
@@ -134,12 +128,12 @@ export default function TasksScreen() {
       ];
       setFabActions(actions);
 
-      // عند مغادرة الشاشة، قم بإزالة الأزرار لتجنب ظهورها في شاشات أخرى
+      // عند الخروج من الشاشة، نزيل الإجراءات لتجنب ظهورها في شاشات أخرى
       return () => setFabActions(null);
     }, [handleGeneratePlan, router, setFabActions])
   );
 
-  // ✨ 8. حساب التقدم لعرضه في الهيدر باستخدام useMemo للأداء الأفضل
+  // حساب التقدم لعرضه في الهيدر
   const progress = useMemo(() => {
     const total = tasks.length;
     if (total === 0) return { completed: 0, total: 0, percent: 0 };
@@ -168,24 +162,23 @@ export default function TasksScreen() {
               task={item}
               onDelete={handleDelete}
               onToggleStatus={handleToggleStatus}
-              onLongPress={() => openAddTaskSheet(item)} // الضغط المطول يفتح وضع التعديل
-              onNavigate={() => { /* يمكنك هنا الانتقال للدرس المرتبط */ }}
+              onLongPress={() => handlePinToggle(item)}
+              onNavigate={() => { /* يمكنك إضافة منطق الانتقال هنا */ }}
             />
           </MotiView>
         )}
         ListEmptyComponent={
           !isLoading && <EmptyTasksComponent isGenerating={isGenerating} onGenerate={handleGeneratePlan} />
         }
-        contentContainerStyle={{ paddingBottom: 200 }} // مساحة إضافية في الأسفل
+        contentContainerStyle={{ paddingBottom: 180, paddingTop: 10 }}
       />
       
-      {/* الزر العائم أصبح الآن في ملف (tabs)/_layout.jsx، لذلك نزيله من هنا */}
+      {/* ❌ تم حذف الزر العائم من هنا لأنه أصبح في ملف الـ layout المركزي */}
       
       <AddTaskBottomSheet
         ref={bottomSheetRef}
         editingTask={editingTask}
         onTaskUpdate={handleTaskUpdate}
-        onVisibilityChange={() => {}} // يمكنك استخدام هذا لاحقاً
       />
     </SafeAreaView>
   );

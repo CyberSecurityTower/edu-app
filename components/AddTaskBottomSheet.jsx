@@ -1,5 +1,6 @@
 // components/AddTaskBottomSheet.jsx
-import React, { useState, forwardRef, useEffect, useCallback, useMemo } from 'react';
+import React from 'react';
+import { useState, forwardRef, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Keyboard } from 'react-native';
 import BottomSheet, { BottomSheetTextInput, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { BlurView } from 'expo-blur';
@@ -47,14 +48,13 @@ const AddTaskBottomSheet = forwardRef(({ onTaskUpdate, onVisibilityChange }, ref
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
 
-  // ✨ --- الحل لمشكلة لوحة المفاتيح --- ✨
   const snapPoints = useMemo(() => ['50%', '85%'], []);
 
   const resetState = useCallback(() => {
     setTitle('');
     setSelectedSubject(null);
     setSelectedLesson(null);
-    setLessons([]); // تأكد من إفراغ الدروس أيضًا
+    setLessons([]);
   }, []);
 
   useEffect(() => {
@@ -66,7 +66,10 @@ const AddTaskBottomSheet = forwardRef(({ onTaskUpdate, onVisibilityChange }, ref
         setIsLoadingSubjects(false);
       }
     };
-    fetchSubjects();
+    // استدعاء الدالة فقط إذا كان هناك مستخدم ومسار محدد
+    if (user?.selectedPathId) {
+        fetchSubjects();
+    }
   }, [user?.selectedPathId]);
 
   useEffect(() => {
@@ -100,10 +103,9 @@ const AddTaskBottomSheet = forwardRef(({ onTaskUpdate, onVisibilityChange }, ref
 
   const handleSheetChanges = useCallback((index) => {
     onVisibilityChange?.(index > -1);
-    // ✨ --- الحل لمشكلة البيانات القديمة --- ✨
-    if (index === -1) { // عندما يتم إغلاق الـ Sheet
+    if (index === -1) {
       resetState();
-      Keyboard.dismiss(); // إخفاء لوحة المفاتيح
+      Keyboard.dismiss();
     }
   }, [onVisibilityChange, resetState]);
 
@@ -116,7 +118,6 @@ const AddTaskBottomSheet = forwardRef(({ onTaskUpdate, onVisibilityChange }, ref
       onChange={handleSheetChanges}
       backgroundComponent={({ style }) => ( <BlurView intensity={50} tint="dark" style={[style, styles.blurContainer]} /> )}
       handleIndicatorStyle={styles.handleIndicator}
-      // ✨ --- خاصية مهمة لمنع الارتفاع الزائد --- ✨
       keyboardBlurBehavior="restore"
     >
       <BottomSheetScrollView contentContainerStyle={styles.contentContainer}>
@@ -160,7 +161,7 @@ const AddTaskBottomSheet = forwardRef(({ onTaskUpdate, onVisibilityChange }, ref
 });
 
 const styles = StyleSheet.create({
-  blurContainer: { backgroundColor: 'rgba(18, 42, 81, 1)', borderRadius: 24, overflow: 'hidden', },
+  blurContainer: { backgroundColor: 'rgba(30, 41, 59, 0.85)', borderRadius: 24, overflow: 'hidden', },
   handleIndicator: { backgroundColor: '#64748B', },
   contentContainer: { flexGrow: 1, paddingHorizontal: 25, paddingBottom: 40 },
   title: { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 25, },
@@ -168,11 +169,25 @@ const styles = StyleSheet.create({
   buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 },
   cancelButton: { padding: 15, },
   cancelButtonText: { color: '#9CA3AF', fontSize: 16, fontWeight: '600', },
-  pickerContainer: { marginBottom: 15, zIndex: 10 }, // zIndex مهم للقوائم المنسدلة
+  pickerContainer: { 
+    marginBottom: 15, 
+    zIndex: 1000, // ✨ --- الإصلاح الحاسم هنا --- ✨
+  },
   pickerLabel: { color: '#9CA3AF', fontSize: 14, marginBottom: 8, },
   pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#334155', borderRadius: 12, padding: 18, },
   pickerHeaderText: { color: 'white', fontSize: 16, },
-  pickerOptionsContainer: { backgroundColor: '#334155', borderRadius: 12, marginTop: 4, maxHeight: 150, },
+  pickerOptionsContainer: { 
+    backgroundColor: '#334155', 
+    borderRadius: 12, 
+    marginTop: 4, 
+    maxHeight: 150,
+    // ✨ --- إضافة مهمة لضمان الظهور فوق كل شيء --- ✨
+    position: 'absolute',
+    top: 80, // يجب أن يكون بعد ارتفاع الـ header الخاص بالـ picker
+    width: '100%',
+    elevation: 5, // for Android
+    zIndex: 2000, // zIndex أعلى لضمان الظهور
+  },
   pickerOption: { padding: 18, borderBottomWidth: 1, borderBottomColor: '#4B5563', },
   pickerOptionText: { color: 'white', fontSize: 16, },
 });

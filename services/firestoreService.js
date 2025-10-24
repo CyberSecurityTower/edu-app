@@ -4,6 +4,7 @@ import {
   limit, where 
 } from "firebase/firestore"; 
 import { db } from '../firebase';
+
 // --- User Profile Functions ---
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
@@ -64,6 +65,44 @@ export const getLessonContent = async (lessonId) => {
   return lessonSnap.exists() ? lessonSnap.data() : null;
 };
 
+// --- ✨ [NEW] Function to get all subjects for a path ---
+/**
+ * Fetches all subjects within a specific educational path.
+ * @param {string} pathId The ID of the educational path.
+ * @returns {Array<object>} An array of subject objects.
+ */
+export const getAllSubjectsForPath = async (pathId) => {
+  if (!pathId) return [];
+  try {
+    const pathData = await getEducationalPathById(pathId);
+    // Return subjects with their original names (e.g., 'name' not 'label')
+    return pathData?.subjects || [];
+  } catch (error) {
+    console.error("Error fetching subjects for path:", error);
+    return [];
+  }
+};
+
+// --- ✨ [NEW] Function to get all lessons for a subject ---
+/**
+ * Fetches all lessons within a specific subject of an educational path.
+ * @param {string} pathId The ID of the educational path.
+ * @param {string} subjectId The ID of the subject.
+ * @returns {Array<object>} An array of lesson objects.
+ */
+export const getLessonsForSubject = async (pathId, subjectId) => {
+  if (!pathId || !subjectId) return [];
+  try {
+    const subjectData = await getSubjectDetails(pathId, subjectId);
+    // Return lessons with their original names (e.g., 'title' as 'name' for consistency)
+    return (subjectData?.lessons || []).map(lesson => ({ id: lesson.id, name: lesson.title }));
+  } catch (error) {
+    console.error("Error fetching lessons for subject:", error);
+    return [];
+  }
+};
+
+
 // --- User Progress Functions ---
 export const getUserProgressDocument = async (userId) => {
   if (!userId) return null;
@@ -87,15 +126,16 @@ export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, 
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
   const progressRef = doc(db, `userProgress/${userId}`);
   
-  await setDoc(progressRef, {
-    pathProgress: { [pathId]: { subjects: { [subjectId]: { lessons: { [lessonId]: status } } } } }
-  }, { merge: true });
+  // Update the lesson status
+  const lessonPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}.status`;
+  await updateDoc(progressRef, { [lessonPath]: status });
 
+  // Recalculate and update the subject progress only if the lesson is completed
   if (status === 'completed') {
     const progressDoc = await getUserProgressDocument(userId);
     const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
     
-    const completedCount = Object.values(lessonsMap).filter(s => s === 'completed').length;
+    const completedCount = Object.values(lessonsMap).filter(lesson => lesson.status === 'completed').length;
     const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
 
     const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
@@ -111,6 +151,39 @@ export const getStudyKit = async (lessonId) => {
     return kitDocSnap.exists() ? kitDocSnap.data() : null;
   } catch (error) {
     console.error("Error fetching study kit:", error);
+    return null;
+  }
+};
+
+export const updateLessonMasteryScore = async (userId, pathId, subjectId, lessonId, masteryScore, suggestedReview) => {
+  if (!userId || !pathId || !subjectId || !lessonId || masteryScore === undefined) return;
+  
+  const progressRef = doc(db, `userProgress/${userId}`);
+  
+  const lessonPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
+  
+  await setDoc(progressRef, {
+    [lessonPath]: {
+      status: 'completed',
+      masteryScore: masteryScore,
+      suggestedReview: suggestedReview || null, // Ensure it's null if undefined
+      lastAttempt: new Date(),
+    }
+  }, { merge: true });
+};
+
+export const getUserDailyTasks = async (userId) => {
+  if (!userId) return null;
+  try {
+    const progressRef = doc(db, `userProgress/${userId}`);
+    const progressSnap = await getDoc(progressRef);
+    if (progressSnap.exists()) {
+      const data = progressSnap.data();
+      return data.dailyTasks || { generatedAt: null, tasks: [] };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching user daily tasks:", error);
     return null;
   }
 };
@@ -145,12 +218,6 @@ export const updateUserDailyStreak = async (userId, newStreakCount, pointsToAdd)
   }
 };
 
-/**
- * [NEW] Updates denormalized user data in the userProgress document.
- * This is called when a user is created or their profile is updated.
- * @param {string} userId The ID of the user.
- * @param {object} profileData An object containing firstName and lastName.
- */
 export const updateUserProgressProfileData = async (userId, profileData) => {
   if (!userId || !profileData.firstName || !profileData.lastName) return;
 
@@ -171,17 +238,12 @@ export const updateUserProgressProfileData = async (userId, profileData) => {
   }
 };
 
-/**
- * [CORRECTED & OPTIMIZED] Fetches the leaderboard with a single, efficient query.
- * Relies on denormalized data (displayName, avatarUrl) in the userProgress collection.
- */
 export const getLeaderboard = async () => {
   try {
-    // A SINGLE, EFFICIENT, INDEXED QUERY!
     const progressQuery = query(
       collection(db, 'userProgress'), 
       orderBy('stats.points', 'desc'), 
-      limit(50) // Get the top 50 users
+      limit(50)
     );
     
     const progressSnapshot = await getDocs(progressQuery);
@@ -190,14 +252,13 @@ export const getLeaderboard = async () => {
       return [];
     }
 
-    // Map the results directly without needing a second query.
     const leaderboard = progressSnapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
         points: data.stats?.points || 0,
         name: data.stats?.displayName || 'Anonymous',
-        avatarUrl: data.stats?.avatarUrl, // We now have the avatar URL directly
+        avatarUrl: data.stats?.avatarUrl || `https://ui-avatars.com/api/?name=Anonymous&background=3B82F6&color=FFFFFF&size=128`,
       };
     });
 
@@ -205,47 +266,6 @@ export const getLeaderboard = async () => {
 
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
-    // This error often means you need to create a Firestore index.
-    // The error message in the console will give you a direct link to create it.
     return [];
-  }
-};
-export const updateLessonMasteryScore = async (userId, pathId, subjectId, lessonId, masteryScore, suggestedReview) => {
-  if (!userId || !pathId || !subjectId || !lessonId || masteryScore === undefined) return;
-  
-  const progressRef = doc(db, `userProgress/${userId}`);
-  
-  // بناء المسار الديناميكي للحقل
-  const lessonPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
-  
-  await setDoc(progressRef, {
-    [lessonPath]: {
-      status: 'completed', // نؤكد على أن الدرس مكتمل
-      masteryScore: masteryScore,
-      suggestedReview: suggestedReview,
-      lastAttempt: new Date(),
-    }
-  }, { merge: true });
-};
-// --- 3. هذه هي الدالة الجديدة التي أضفناها، بدون أي imports قبلها ---
-/**
- * [NEW] Fetches only the dailyTasks object for a user.
- * @param {string} userId The ID of the user.
- * @returns {object | null} The dailyTasks object or null if not found.
- */
-export const getUserDailyTasks = async (userId) => {
-  if (!userId) return null;
-  try {
-    const progressRef = doc(db, `userProgress/${userId}`);
-    const progressSnap = await getDoc(progressRef);
-    if (progressSnap.exists()) {
-      const data = progressSnap.data();
-      // Return the dailyTasks object, or a default structure if it doesn't exist
-      return data.dailyTasks || { generatedAt: null, tasks: [] };
-    }
-    return null; // Return null if the user progress document doesn't exist
-  } catch (error) {
-    console.error("Error fetching user daily tasks:", error);
-    return null;
   }
 };

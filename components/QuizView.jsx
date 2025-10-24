@@ -3,44 +3,17 @@ import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from 'rea
 import { FontAwesome5 } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-  Easing
-} from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
 
 import AnimatedGradientButton from './AnimatedGradientButton';
-import {
-  updateLessonMasteryScore,
-  updateUserPoints,
-  getUserProgressDocument
-} from '../services/firestoreService';
+import { updateLessonMasteryScore, updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { useAppState } from '../context/AppStateContext';
+import { API_CONFIG } from '../config/appConfig'; // ✨ --- استيراد الإعدادات
+import { POINTS_CONFIG } from '../config/points'; // ✨ --- استيراد الإعدادات
 
-// --- CONFIGURATION CONSTANTS ---
-// All component-specific configurations are now centralized here.
-const RENDER_PROXY_URL = 'https://eduserver-1.onrender.com';
-const POINTS_CONFIG = {
-  QUIZ_CORRECT_ANSWER: 10,
-  QUIZ_INCORRECT_ANSWER: 0,
-  QUIZ_RETRY: -50,
-};
-
-// --- OPTION ITEM (Sub-component for quiz choices) ---
-const OptionItem = ({
-  option,
-  index,
-  onPress,
-  disabled,
-  showCorrect,
-  isCorrect,
-  isSelected,
-  shakeIdx,
-  shakeValue
-}) => {
+// --- OPTION ITEM ---
+const OptionItem = ({ option, index, onPress, disabled, showCorrect, isCorrect, isSelected, shakeIdx, shakeValue }) => {
   const animatedStyle = useAnimatedStyle(() => {
     if (shakeIdx.value === index) {
       return { transform: [{ translateX: shakeValue.value }] };
@@ -54,11 +27,7 @@ const OptionItem = ({
 
   return (
     <Animated.View style={animatedStyle}>
-      <Pressable
-        onPress={() => onPress(option, index)}
-        disabled={disabled}
-        style={baseStyle}
-      >
+      <Pressable onPress={() => onPress(option, index)} disabled={disabled} style={baseStyle}>
         <Text style={styles.optionText}>{option}</Text>
         {showCorrect && isCorrect && <FontAwesome5 name="check-circle" size={20} color="white" />}
       </Pressable>
@@ -70,16 +39,14 @@ const OptionItem = ({
 const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) => {
   const { user, refreshPoints } = useAppState();
 
-  // Guard: Ensure quizData exists and is not empty.
   if (!quizData || quizData.length === 0) {
     return (
       <View style={styles.centerAnalyzing}>
-        <Text style={styles.analysisText}>⚠️ لا توجد أسئلة متاحة لهذا الدرس.</Text>
+        <Text style={styles.analysisText}>⚠️ No questions available for this lesson.</Text>
       </View>
     );
   }
 
-  // --- STATE MANAGEMENT ---
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -89,20 +56,17 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
   const [analysisData, setAnalysisData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // --- REANIMATED SHARED VALUES ---
   const shakeValue = useSharedValue(0);
   const shakeIdx = useSharedValue(-1);
 
   const currentQuestion = quizData[currentQuestionIndex];
 
-  // Memoize data for AI analysis to prevent re-computation on every render.
   const quizQuestionsData = useMemo(() => quizData.map(q => ({
     question: q.question,
     correctAnswer: q.correctAnswer,
     options: q.options,
   })), [quizData]);
 
-  // --- ANIMATION & LOGIC CALLBACKS ---
   const triggerShake = useCallback((index) => {
     shakeIdx.value = index;
     shakeValue.value = withSequence(
@@ -127,7 +91,7 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
     if (option === currentQuestion.correctAnswer) {
       setScore(prev => prev + 1);
       pointsAwarded = POINTS_CONFIG.QUIZ_CORRECT_ANSWER;
-      Toast.show({ type: 'points', text1: `+${pointsAwarded} نقاط!` });
+      Toast.show({ type: 'points', text1: `+${pointsAwarded} Points!` });
     } else {
       triggerShake(index);
       pointsAwarded = POINTS_CONFIG.QUIZ_INCORRECT_ANSWER;
@@ -146,21 +110,20 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
   const analyzeAndFinishQuiz = useCallback(async () => {
     setIsAnalyzing(true);
 
-    // Enhanced Guard: Stricter check for data integrity before making an API call.
     if (!user?.uid || !pathId || !subjectId || !lessonId) {
-      Alert.alert("خطأ في البيانات", "لا يمكن حفظ النتيجة بسبب نقص بيانات المسار أو المادة. سيتم عرض نتيجتك محلياً فقط.");
+      Alert.alert("Data Error", "Cannot save score due to missing path or subject data. Your result will be shown locally only.");
       setIsAnalyzing(false);
       setIsQuizFinished(true);
       setAnalysisData({
         newMasteryScore: Math.round((score / quizData.length) * 100),
-        feedbackSummary: "أداء جيد، لكن لم نتمكن من حفظ النتيجة تلقائياً.",
-        suggestedNextStep: "تأكد من أن المسار التعليمي والمادة محددين بشكل صحيح."
+        feedbackSummary: "Good performance, but we couldn't save the score automatically.",
+        suggestedNextStep: "Ensure the educational path and subject are correctly set."
       });
       return;
     }
 
     try {
-      const response = await fetch(`${RENDER_PROXY_URL}/analyze-quiz`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/analyze-quiz`, { // ✨ --- استخدام الرابط الموحد
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -189,8 +152,8 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
       console.error("AI Analysis or Firestore update failed:", error);
       setAnalysisData({
         newMasteryScore: Math.round((score / quizData.length) * 100),
-        feedbackSummary: "لم نتمكن من الحصول على تحليل مفصل، لكنك قمت بعمل رائع!",
-        suggestedNextStep: "يمكنك مراجعة الدروس التي واجهت فيها صعوبة."
+        feedbackSummary: "Couldn't get a detailed analysis, but you did great!",
+        suggestedNextStep: "You can review the lessons where you had difficulty."
       });
     } finally {
       setIsAnalyzing(false);
@@ -216,14 +179,13 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
       const cost = Math.abs(POINTS_CONFIG.QUIZ_RETRY);
 
       if (currentPoints < cost) {
-        Alert.alert("نقاط غير كافية", `تحتاج إلى ${cost} نقطة على الأقل لإعادة المحاولة.`);
+        Alert.alert("Insufficient Points", `You need at least ${cost} points to retry.`);
         return;
       }
 
       await updateUserPoints(user.uid, POINTS_CONFIG.QUIZ_RETRY);
       refreshPoints?.();
 
-      // Reset all states to start the quiz over
       setCurrentQuestionIndex(0);
       setSelectedAnswer(null);
       setIsAnswered(false);
@@ -233,16 +195,15 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
       setAnalysisData(null);
     } catch (err) {
       console.error("Failed to process quiz restart:", err);
-      Alert.alert("خطأ", "حدث خطأ أثناء محاولة إعادة الاختبار.");
+      Alert.alert("Error", "An error occurred while trying to restart the quiz.");
     }
   }, [user, refreshPoints, quizData.length]);
 
-  // --- UI RENDERING ---
   if (isAnalyzing) {
     return (
       <View style={styles.centerAnalyzing}>
         <ActivityIndicator size="large" color="#10B981" />
-        <Text style={styles.analysisText}>جاري تحليل نتائجك باستخدام EduAI...</Text>
+        <Text style={styles.analysisText}>Analyzing your results with EduAI...</Text>
       </View>
     );
   }
@@ -254,9 +215,9 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
     return (
       <View style={styles.container}>
         <LinearGradient colors={['#1E293B', '#334155']} style={styles.resultsCard}>
-          <Text style={styles.resultsTitle}>🎉 تم إتمام التحليل!</Text>
+          <Text style={styles.resultsTitle}>🎉 Analysis Complete!</Text>
           <Text style={styles.resultsText}>
-            نتيجتك: <Text style={{ color: '#10B981', fontWeight: 'bold' }}>{score}</Text>/{totalQuestions}
+            Your Score: <Text style={{ color: '#10B981', fontWeight: 'bold' }}>{score}</Text>/{totalQuestions}
           </Text>
 
           <View style={styles.masteryRow}>
@@ -272,16 +233,16 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
               {() => <Text style={styles.masteryScoreValue}>{finalMasteryScore}%</Text>}
             </AnimatedCircularProgress>
             <View style={styles.masteryInfo}>
-              <Text style={styles.masteryScoreText}>درجة الإتقان</Text>
+              <Text style={styles.masteryScoreText}>Mastery Score</Text>
               <Text style={styles.analysisSummaryText}>{analysisData?.feedbackSummary}</Text>
             </View>
           </View>
 
-          <Text style={styles.analysisSummaryTitle}>الخطوة التالية المقترحة:</Text>
+          <Text style={styles.analysisSummaryTitle}>Suggested Next Step:</Text>
           <Text style={styles.analysisNextStepText}>{analysisData?.suggestedNextStep}</Text>
 
           <AnimatedGradientButton
-            text={`إعادة المحاولة (${POINTS_CONFIG.QUIZ_RETRY} نقطة)`}
+            text={`Retry (${POINTS_CONFIG.QUIZ_RETRY} Points)`}
             onPress={handleRestart}
             buttonWidth={240}
             buttonHeight={50}
@@ -295,7 +256,7 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
 
   return (
     <View style={styles.container}>
-      <Text style={styles.progressText}>السؤال {currentQuestionIndex + 1}/{quizData.length}</Text>
+      <Text style={styles.progressText}>Question {currentQuestionIndex + 1}/{quizData.length}</Text>
       <Text style={styles.questionText}>{currentQuestion.question}</Text>
 
       <View style={styles.optionsContainer}>
@@ -317,7 +278,7 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
 
       {isAnswered && (
         <AnimatedGradientButton
-          text={currentQuestionIndex === quizData.length - 1 ? 'إنهاء وتحليل النتائج' : 'السؤال التالي'}
+          text={currentQuestionIndex === quizData.length - 1 ? 'Finish & Analyze' : 'Next Question'}
           onPress={handleNext}
           buttonWidth={'100%'}
           buttonHeight={55}
@@ -328,23 +289,12 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
   );
 };
 
-// --- STYLES ---
 const styles = StyleSheet.create({
   container: { padding: 10 },
   progressText: { color: '#a7adb8ff', fontSize: 14, textAlign: 'center', marginBottom: 15 },
   questionText: { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
   optionsContainer: { marginBottom: 20 },
-  optionButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#334155',
-    padding: 18,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: 'transparent'
-  },
+  optionButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#334155', padding: 18, borderRadius: 12, marginBottom: 10, borderWidth: 2, borderColor: 'transparent' },
   correctOption: { backgroundColor: '#10B981', borderColor: '#34D399' },
   incorrectOption: { backgroundColor: '#EF4444', borderColor: '#F87171' },
   optionText: { color: 'white', fontSize: 16, flex: 1 },

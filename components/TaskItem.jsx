@@ -1,4 +1,4 @@
-// components/TaskItem.jsx (النسخة النهائية مع إصلاح الانهيار)
+// components/TaskItem.jsx
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -17,26 +17,17 @@ const ICONS = {
   default: { name: 'clipboard-list', color: '#9CA3AF' },
 };
 
-// ✨ تم تحديث هذا المكون ليكون أكثر أماناً
-const SwipeActionComponent = ({ iconName, color, align, lottieSource }) => {
-  return (
+const SwipeActionComponent = ({ iconName, color, align, lottieSource }) => (
     <View style={[styles.swipeAction, { backgroundColor: color, alignItems: align }]}>
-      {/* إذا كان هناك مصدر للأنيميشن، اعرضه */}
       {lottieSource ? (
-        <LottieView
-          source={lottieSource}
-          autoPlay
-          loop={false}
-          style={styles.lottieStyle}
-        />
+        <LottieView source={lottieSource} autoPlay loop={false} style={styles.lottieStyle} />
       ) : (
-        /* ✨ وإلا، اعرض أيقونة عادية كخيار احتياطي آمن */
         <FontAwesome5 name={iconName || 'check'} size={22} color="white" />
       )}
     </View>
-  );
-};
+);
 
+// ✨ onLongPress prop is added
 const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isEditMode, isSelected, onSelect }) => {
   const isCompleted = task.status === 'completed';
 
@@ -50,15 +41,17 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
 
   const getIcon = () => {
     const iconConfig = ICONS[task.type] || ICONS.default;
+    // ✨ NEW: Icon color changes when completed
     return <FontAwesome5 name={iconConfig.name} size={20} color={isCompleted ? '#4B5563' : iconConfig.color} />;
   };
+
+  const iconConfig = ICONS[task.type] || ICONS.default;
 
   return (
     <View style={styles.outerContainer}>
       <Swipeable
-        renderLeftActions={(progress, dragX) => <SwipeActionComponent iconName="trash" color="#EF4444" align="flex-start" />}
-        // ✨ الآن هذا السطر آمن. إذا لم يجد الملف، لن ينهار التطبيق
-        renderRightActions={(progress, dragX) => <SwipeActionComponent color="#10B981" align="flex-end" lottieSource={require('../assets/images/Done.json')} />}
+        renderLeftActions={() => <SwipeActionComponent iconName="trash" color="#EF4444" align="flex-start" />}
+        renderRightActions={() => <SwipeActionComponent color="#10B981" align="flex-end" lottieSource={require('../assets/images/Done.json')} />}
         onSwipeableOpen={(direction) => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           if (direction === 'left') onDelete(task.id);
@@ -67,6 +60,7 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
         overshootFriction={8}
         enabled={!isEditMode}
       >
+        {/* ✨ MODIFIED: onLongPress is now used here */}
         <Pressable onLongPress={() => !isEditMode && onLongPress(task)} onPress={handlePress}>
           <LinearGradient
             colors={task.isPinned ? ['#374151', '#1F2937'] : ['#1F2937', '#1F2937']}
@@ -86,7 +80,12 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
                 )}
               </MotiView>
             ) : (
-              <View style={[styles.iconContainer, isCompleted && styles.completedIconContainer]}>
+              // ✨ MODIFIED: Icon container now has a background color based on the icon type
+              <View style={[
+                  styles.iconContainer, 
+                  { backgroundColor: isCompleted ? '#1F2937' : `${iconConfig.color}25` }, // Faded color background
+                  isCompleted && styles.completedIconContainer
+              ]}>
                 {getIcon()}
               </View>
             )}
@@ -117,8 +116,8 @@ const styles = StyleSheet.create({
     lottieStyle: { width: 60, height: 60 },
     taskContainer: { padding: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#374151', overflow: 'hidden' },
     selectedContainer: { borderColor: '#34D399', backgroundColor: '#1f293790' },
-    iconContainer: { width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#374151', marginRight: 15, },
-    completedIconContainer: { backgroundColor: '#1F2937' },
+    iconContainer: { width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15, },
+    completedIconContainer: { borderColor: '#374151', borderWidth: 1 },
     textContainer: { flex: 1 },
     taskTitle: { color: 'white', fontSize: 16, fontWeight: '600', },
     completedTaskTitle: { color: '#6B7280', textDecorationLine: 'line-through', },

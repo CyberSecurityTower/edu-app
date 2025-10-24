@@ -1,12 +1,13 @@
-import React from 'react';
-import { View, Text, Modal, StyleSheet, Pressable,useState, TextInput } from 'react-native';
+// components/RenameTaskModal.jsx
+import React, { useState, useEffect } from 'react';
+import { View, Text, Modal, StyleSheet, Pressable, TextInput } from 'react-native';
 import AnimatedGradientButton from './AnimatedGradientButton';
 
 const RenameTaskModal = ({ isVisible, onClose, onRename, task }) => {
-  // Use task?.title to avoid errors if task is null initially
+  // استخدم task?.title لتجنب الأخطاء إذا كانت المهمة فارغة في البداية
   const [newTitle, setNewTitle] = useState(task?.title || '');
 
-  // Update state when the task prop changes
+  // تحديث الحالة الداخلية عند تغيير خاصية المهمة
   useEffect(() => {
     if (task) {
       setNewTitle(task.title);
@@ -16,7 +17,6 @@ const RenameTaskModal = ({ isVisible, onClose, onRename, task }) => {
   const handleSave = () => {
     if (newTitle.trim().length > 0) {
       onRename(newTitle.trim());
-      onClose();
     }
   };
 

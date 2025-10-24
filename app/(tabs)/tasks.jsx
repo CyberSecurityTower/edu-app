@@ -9,7 +9,7 @@ import { MotiView } from 'moti';
 
 import { db } from '../../firebase';
 import { useAppState } from '../../context/AppStateContext';
-import { useFab } from '../../context/FabContext'; // ✨ 1. استيراد hook السياق
+import { useFab } from '../../context/FabContext';
 import { API_CONFIG } from '../../config/appConfig';
 
 import TasksHeader from '../../components/TasksHeader';
@@ -21,14 +21,13 @@ export default function TasksScreen() {
   const { user } = useAppState();
   const router = useRouter();
   const bottomSheetRef = useRef(null);
-  const { setFabActions } = useFab(); // ✨ 2. الحصول على دالة تحديد الإجراءات
+  const { setFabActions } = useFab();
 
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  // جلب وتحديث المهام في الوقت الفعلي
   useEffect(() => {
     if (!user?.uid) return;
     const userProgressRef = doc(db, 'userProgress', user.uid);
@@ -37,7 +36,7 @@ export default function TasksScreen() {
       fetchedTasks.sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
         if (a.status !== b.status) return a.status === 'completed' ? 1 : -1;
-        return 0; // يمكنك إضافة فرز ثانوي هنا إذا أردت
+        return 0;
       });
       setTasks(fetchedTasks);
       setIsLoading(false);
@@ -45,7 +44,6 @@ export default function TasksScreen() {
     return () => unsubscribe();
   }, [user?.uid]);
 
-  // دالة مركزية لتحديث المهام في Firestore
   const updateTasksInFirestore = useCallback(async (newTasks) => {
     if (!user?.uid) return;
     try {
@@ -56,20 +54,12 @@ export default function TasksScreen() {
     }
   }, [user?.uid]);
 
-  // التعامل مع إضافة وتعديل المهام
   const handleTaskUpdate = (title, taskToEdit) => {
     let newTasks;
     if (taskToEdit) {
       newTasks = tasks.map(t => t.id === taskToEdit.id ? { ...t, title } : t);
     } else {
-      const newTask = {
-        id: `user_${Date.now()}`,
-        title,
-        type: 'study',
-        status: 'pending',
-        isPinned: false,
-        source: 'user',
-      };
+      const newTask = { id: `user_${Date.now()}`, title, type: 'study', status: 'pending', isPinned: false, source: 'user' };
       newTasks = [newTask, ...tasks];
     }
     updateTasksInFirestore(newTasks);
@@ -98,18 +88,16 @@ export default function TasksScreen() {
     bottomSheetRef.current?.snapToIndex(0);
   };
 
-  // إنشاء خطة ذكية من الذكاء الاصطناعي
   const handleGeneratePlan = useCallback(async () => {
     if (!user?.uid) return;
     setIsGenerating(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
+      await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.uid, pathId: user.selectedPathId }),
       });
-      if (!response.ok) throw new Error('Failed to generate tasks.');
     } catch (error) {
       console.error("Error generating plan:", error);
       Alert.alert("Error", "Couldn't generate a new plan right now.");
@@ -118,7 +106,7 @@ export default function TasksScreen() {
     }
   }, [user]);
 
-  // ✨ 3. استخدام useFocusEffect لتحديد إجراءات الزر العائم لهذه الشاشة
+  // ✨ هنا نخبر التطبيق بأن هذه الشاشة تريد عرض هذه الإجراءات في الزر السحري
   useFocusEffect(
     useCallback(() => {
       const actions = [
@@ -128,12 +116,10 @@ export default function TasksScreen() {
       ];
       setFabActions(actions);
 
-      // عند الخروج من الشاشة، نزيل الإجراءات لتجنب ظهورها في شاشات أخرى
-      return () => setFabActions(null);
+      return () => setFabActions(null); // عند مغادرة الشاشة، نخفي الزر
     }, [handleGeneratePlan, router, setFabActions])
   );
 
-  // حساب التقدم لعرضه في الهيدر
   const progress = useMemo(() => {
     const total = tasks.length;
     if (total === 0) return { completed: 0, total: 0, percent: 0 };
@@ -148,7 +134,6 @@ export default function TasksScreen() {
         completedCount={progress.completed}
         totalCount={progress.total}
       />
-      
       <FlatList
         data={tasks}
         keyExtractor={item => item.id}
@@ -163,18 +148,13 @@ export default function TasksScreen() {
               onDelete={handleDelete}
               onToggleStatus={handleToggleStatus}
               onLongPress={() => handlePinToggle(item)}
-              onNavigate={() => { /* يمكنك إضافة منطق الانتقال هنا */ }}
+              onNavigate={() => {}}
             />
           </MotiView>
         )}
-        ListEmptyComponent={
-          !isLoading && <EmptyTasksComponent isGenerating={isGenerating} onGenerate={handleGeneratePlan} />
-        }
+        ListEmptyComponent={!isLoading && <EmptyTasksComponent isGenerating={isGenerating} onGenerate={handleGeneratePlan} />}
         contentContainerStyle={{ paddingBottom: 180, paddingTop: 10 }}
       />
-      
-      {/* ❌ تم حذف الزر العائم من هنا لأنه أصبح في ملف الـ layout المركزي */}
-      
       <AddTaskBottomSheet
         ref={bottomSheetRef}
         editingTask={editingTask}

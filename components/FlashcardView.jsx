@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import Flashcard from './Flashcard'; // Import our new 3D card
+import Flashcard from './Flashcard';
 
 const FlashcardView = ({ flashcardsData }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -19,15 +19,12 @@ const FlashcardView = ({ flashcardsData }) => {
 
   return (
     <View style={styles.container}>
-      {/* Progress Indicator */}
       <Text style={styles.progressText}>
         Card {currentIndex + 1} of {flashcardsData.length}
       </Text>
 
-      {/* The Flashcard */}
       <Flashcard key={currentIndex} frontText={currentCard.front} backText={currentCard.back} />
 
-      {/* Navigation Controls */}
       <View style={styles.controlsContainer}>
         <Pressable style={styles.navButton} onPress={handlePrevious}>
           <FontAwesome5 name="arrow-left" size={24} color="white" />

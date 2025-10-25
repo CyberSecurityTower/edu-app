@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAppState } from '../../context/AppStateContext';
 import { getLeaderboard, getUserProgressDocument } from '../../services/firestoreService';
 
-// --- Podium Item Component ---
 const PodiumItem = ({ user, rank }) => {
   const rankStyles = {
     1: { container: styles.podiumFirst, avatar: styles.podiumAvatarFirst, name: styles.podiumNameFirst, iconColor: '#FFD700' },
@@ -29,7 +28,6 @@ const PodiumItem = ({ user, rank }) => {
   );
 };
 
-// --- User Rank Item Component ---
 const UserRankItem = ({ user, rank, isCurrentUser = false }) => {
   const gradientColors = isCurrentUser 
     ? ['#3B82F6', '#4F46E5'] 
@@ -59,7 +57,7 @@ export default function LeaderboardScreen() {
   useCallback(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      if (user?.uid) { // استخدم user.uid هنا
+      if (user?.uid) {
         const [leaderboardData, progressDoc] = await Promise.all([ getLeaderboard(), getUserProgressDocument(user.uid) ]);
           
           const userPoints = progressDoc?.stats?.points || 0;
@@ -85,7 +83,6 @@ export default function LeaderboardScreen() {
     }, [user?.uid])
   );
 
-  // This effect dynamically configures the header using the navigator's options
   useEffect(() => {
     navigation.setOptions({
       headerShown: true,
@@ -156,7 +153,6 @@ export default function LeaderboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
-  // --- Header Styles ---
   headerTitle: { color: 'white', fontSize: 28, fontWeight: 'bold' },
   headerRightContainer: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   pointsBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12, gap: 8 },
@@ -164,12 +160,10 @@ const styles = StyleSheet.create({
   iconButton: { padding: 5 },
   
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  // Add paddingTop to push content below the transparent header
   listContent: { paddingHorizontal: 20, paddingTop: 120, paddingBottom: 120 },
   emptyComponentContainer: { alignItems: 'center', marginTop: '20%' },
   emptyText: { color: '#a7adb8ff', fontSize: 16 },
 
-  // --- Podium Styles ---
   podiumContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 20, marginBottom: 20 },
   podiumItemContainer: { alignItems: 'center', width: '33%' },
   podiumAvatarBase: { borderRadius: 50, borderWidth: 3 },
@@ -186,7 +180,6 @@ const styles = StyleSheet.create({
   podiumSecond: { transform: [{ translateY: 20 }] },
   podiumThird: { transform: [{ translateY: 20 }] },
   
-  // --- Rank List Styles ---
   rankItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 15, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3 },
   rankPosition: { color: 'white', opacity: 0.8, fontSize: 16, fontWeight: 'bold', width: 35, textAlign: 'center' },
   rankAvatar: { width: 45, height: 45, borderRadius: 22.5, marginHorizontal: 10 },
@@ -194,17 +187,6 @@ const styles = StyleSheet.create({
   rankUserName: { color: 'white', fontSize: 16, fontWeight: '600' },
   rankUserPoints: { color: '#10B981', fontSize: 14, fontWeight: 'bold', marginTop: 2 },
   
-  // --- Current User Sticky Card ---
   currentUserStickyCard: { position: 'absolute', bottom: 100, left: 20, right: 20, shadowColor: '#60A5FA', shadowOpacity: 0.5, shadowRadius: 10, elevation: 20 },
   currentUserItem: { borderWidth: 2, borderColor: '#60A5FA' },
-    listContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: 120, 
-    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
-  },
-   listContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: 120, 
-    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
-  },
 });

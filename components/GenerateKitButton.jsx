@@ -1,10 +1,9 @@
 // components/GenerateKitButton.jsx
 import React from 'react';
-import { Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 
-// This component is now simplified. Its only job is to be a button.
 const GenerateKitButton = ({ onPress }) => {
   return (
     <Pressable style={styles.container} onPress={onPress}>
@@ -25,7 +24,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 40,
     right: 25,
-    shadowColor: '#10B981', // Glowing effect
+    shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 15,

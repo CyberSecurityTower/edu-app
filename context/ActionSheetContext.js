@@ -27,7 +27,6 @@ export const ActionSheetProvider = ({ children }) => {
     <ActionSheetContext.Provider value={value}>
       {children}
       
-      {/* This BottomSheet now lives on top of everything */}
       <BottomSheet
         ref={sheetRef}
         index={-1}
@@ -35,7 +34,7 @@ export const ActionSheetProvider = ({ children }) => {
         enablePanDownToClose
         backgroundStyle={{ backgroundColor: '#1E293B' }}
         handleIndicatorStyle={{ backgroundColor: '#64748B' }}
-        onClose={() => setSheetContent(null)} // Clear content when closed
+        onClose={() => setSheetContent(null)}
       >
         {sheetContent && <View style={{ flex: 1 }}>{sheetContent}</View>}
       </BottomSheet>

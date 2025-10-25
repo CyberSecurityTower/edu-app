@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -35,10 +34,9 @@ export default function LessonViewScreen() {
   useEffect(() => {
     let mounted = true;
     const loadLesson = async () => {
-      // استخدم user.uid هنا للتحقق
       if (!user?.uid || !lessonId || !subjectId || !pathId) {
         if (mounted) {
-            Alert.alert("خطأ", "بيانات الدرس ناقصة. لا يمكن المتابعة.");
+            Alert.alert("Error", "Lesson data is missing. Cannot proceed.");
             setIsLoading(false);
         }
         return;
@@ -49,17 +47,15 @@ export default function LessonViewScreen() {
       if (mounted) {
         if (contentData) setLessonContent(contentData.content);
         const total = parseInt(totalLessons, 10) || 1;
-        // استخدم user.uid هنا للتحديث
         await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', total);
         setIsLoading(false);
       }
     };
     loadLesson();
     return () => { mounted = false; };
-  }, [lessonId, user?.uid, subjectId, pathId, totalLessons]); // <--- الإصلاح الحاسم هنا
+  }, [lessonId, user?.uid, subjectId, pathId, totalLessons]);
 
   const handleCompleteLesson = async () => {
-    // استخدم user.uid هنا
     if (isCompleted || !user?.uid) return;
     setIsCompleted(true);
 
@@ -70,20 +66,18 @@ export default function LessonViewScreen() {
       
       const progressDoc = await getUserProgressDocument(user.uid);
       const lessonProgress = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons?.[lessonId];
-      // تحقق مما إذا كان الدرس قد تم إكماله بالفعل
       const wasAlreadyCompleted = lessonProgress?.status === 'completed';
 
       const total = parseInt(totalLessons, 10) || 1;
       await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'completed', total);
 
-      // امنح النقاط فقط إذا لم يكن الدرس مكتملاً من قبل
       if (!wasAlreadyCompleted) {
         const points = POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME;
         await updateUserPoints(user.uid, points);
         
         Toast.show({
           type: 'points',
-          text1: `+${points} Points that's gentl // for each i in arbc!`,
+          text1: `+${points} Points! Keep it up.`,
           position: 'bottom',
           visibilityTime: 2000,
         });
@@ -101,7 +95,7 @@ export default function LessonViewScreen() {
   if (isLoading && (!lessonId || !subjectId || !pathId)) {
       return (
         <SafeAreaView style={styles.centerContent}>
-            <Text style={styles.errorText}>يرجى العودة والبدء من شاشة المادة.</Text>
+            <Text style={styles.errorText}>Please go back and start from the subject screen.</Text>
         </SafeAreaView>
       );
   }
@@ -144,7 +138,7 @@ export default function LessonViewScreen() {
              <View style={{ position: 'absolute', bottom: 120, right: 25 }}>
              <FloatingActionButton 
                 onPress={() => router.push({ 
-                    pathname: '/(modal)/ai-chatbot', 
+                    pathname: '/ai-chatbot', 
                     params: { 
                         contextLessonId: lessonId, 
                         contextLessonTitle: `About: ${lessonTitle}` 
@@ -157,9 +151,7 @@ export default function LessonViewScreen() {
     </SafeAreaView>
   );
 }
-const style = StyleSheet.create({
 
-})
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },

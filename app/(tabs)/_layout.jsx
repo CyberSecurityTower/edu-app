@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { EditModeProvider, useEditMode } from '../../context/EditModeContext';
 
-// --- MyCustomTabBar (بدون تغيير) ---
 function MyCustomTabBar({ state, descriptors, navigation }) {
     const layouts = React.useRef(new Array(state.routes.length));
     const translateX = useSharedValue(0);
@@ -73,11 +72,10 @@ function MyCustomTabBar({ state, descriptors, navigation }) {
     );
 }
 
-// --- EditModeActionBar (تم التعديل) ---
 function EditModeActionBar() {
   const { selectedTasks, actions, setIsEditMode, setSelectedTasks } = useEditMode();
   const selectionCount = selectedTasks.size;
-  const canRename = selectionCount === 1; // ✨ --- شرط إظهار زر إعادة التسمية
+  const canRename = selectionCount === 1;
 
   const handleCancel = () => {
     setIsEditMode(false);

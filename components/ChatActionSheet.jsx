@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Modalize } from 'react-native-modalize';
 import { FontAwesome5 } from '@expo/vector-icons';
 
-// --- THE FIX IS HERE: Using a named export 'export const' ---
-// This ensures that `import { ChatActionSheet }` works correctly.
 export const ChatActionSheet = forwardRef(({ session, onRename, onPin, onDelete }, ref) => {
 
   const handleRename = () => {

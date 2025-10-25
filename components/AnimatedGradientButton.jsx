@@ -4,7 +4,6 @@ import { Pressable, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 
-// ✨ --- تمت إضافة الخصائص المفقودة --- ✨
 const AnimatedGradientButton = ({ text, onPress, buttonWidth = 200, buttonHeight = 50, fontSize = 16, borderRadius, disabled = false }) => {
   const finalBorderRadius = borderRadius !== undefined ? borderRadius : buttonHeight / 2;
 

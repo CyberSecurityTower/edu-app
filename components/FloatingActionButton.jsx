@@ -6,7 +6,6 @@ import LottieView from 'lottie-react-native';
 const FloatingActionButton = ({ onPress }) => {
   return (
     <Pressable style={styles.fabContainer} onPress={onPress}>
-      {/* We use a View for the shadow and background color */}
       <View style={styles.fab}>
         <LottieView
           source={require('../assets/images/robot.json')}
@@ -26,12 +25,11 @@ const styles = StyleSheet.create({
     right: 25,
   },
   fab: {
-    width: 70, // Increased size for the animation
-    height: 70, // Increased size for the animation
-    borderRadius: 35, // A solid background color from your previous gradient
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    // Shadow styles
     shadowColor: '#8A2BE2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.6,
@@ -39,8 +37,8 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   lottie: {
-    width: 120, // Make the Lottie animation larger than the button
-    height: 110, // This makes it feel more dynamic and alive
+    width: 120,
+    height: 110,
   },
 });
 

@@ -91,7 +91,6 @@ const ProfileSetupScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" nestedScrollEnabled={true}>
         
-        {/* 1. Main content wrapper that controls spacing */}
         <View style={styles.contentWrapper}>
             <View style={styles.header}>
                 <Text style={styles.title}>{t.title}</Text>
@@ -158,27 +157,22 @@ const ProfileSetupScreen = () => {
   );
 };
 
-// --- REFACTORED STYLES FOR ROBUST RESPONSIVENESS ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0C0F27' },
   container: {
-    flexGrow: 1, // Ensures ScrollView can grow to fill space
+    flexGrow: 1,
   },
-  // 2. New wrapper to manage vertical distribution
   contentWrapper: {
-    flex: 1, // Takes up all available space in the ScrollView
-    justifyContent: 'space-around', // Distributes space evenly between children
+    flex: 1,
+    justifyContent: 'space-around',
     padding: 20,
   },
-  header: {
-    // No specific styling needed, distribution is handled by parent
-  },
+  header: {},
   title: { fontSize: 28, fontWeight: 'bold', color: 'white', marginBottom: 15, textAlign: 'center' },
   subtitle: { fontSize: 16, color: '#a7adb8ff', textAlign: 'center', maxWidth: '90%', alignSelf: 'center' },
   form: {
     width: '100%',
   },
-  // 3. Using fixed margin for predictable spacing
   label: { fontSize: 16, color: '#a7adb8ff', marginBottom: 10, marginLeft: 5, marginTop: 25, textAlign: 'left' },
   dropdown: { backgroundColor: '#1E233B', borderColor: '#334155' },
   dropdownPlaceholder: { color: '#8A94A4' },

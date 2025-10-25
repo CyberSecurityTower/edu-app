@@ -12,15 +12,12 @@ import Animated, {
 const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = false }) => {
   const previousPoints = useRef(points);
   
-  // Shared values for animations
   const scale = useSharedValue(1);
-  const color = useSharedValue(0); // 0 for normal, 1 for red
+  const color = useSharedValue(0);
   const translateX = useSharedValue(0);
 
   useEffect(() => {
-    // Check if points have decreased
     if (points < previousPoints.current) {
-      // Trigger the "shake and red" animation
       scale.value = withSequence(withTiming(1.2), withTiming(1));
       color.value = withSequence(withTiming(1), withDelay(1500, withTiming(0)));
       translateX.value = withSequence(
@@ -31,9 +28,8 @@ const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = 
         withTiming(0, { duration: 50 })
       );
     }
-    // Update the previous points for the next render
     previousPoints.current = points;
-  }, [points]); // This effect runs every time the 'points' prop changes
+  }, [points]);
 
   const animatedBadgeStyle = useAnimatedStyle(() => {
     const backgroundColor = color.value === 1 ? '#EF4444' : '#1E293B';
@@ -42,9 +38,6 @@ const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = 
       transform: [{ scale: scale.value }, { translateX: translateX.value }],
     };
   });
-
-  const pointsDifference = points - (previousPoints.current || points);
-  const showDifference = pointsDifference !== 0;
 
   return (
     <View style={[styles.headerContainer, isCompact && styles.compactHeaderContainer]}>

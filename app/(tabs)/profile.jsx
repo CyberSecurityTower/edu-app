@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,8 +10,6 @@ import { auth } from '../../firebase';
 import { getUserProgressDocument, getEducationalPathById, getLeaderboard } from '../../services/firestoreService';
 import SubjectCard from '../../components/SubjectCard';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-
-// --- SUB-COMPONENTS ---
 
 const SmartSubscriptionCard = ({ subscription }) => {
   if (!subscription) return null;
@@ -90,7 +87,6 @@ const MenuItem = ({ icon, name, onPress, isLogout = false }) => (
   </Pressable>
 );
 
-// --- MAIN PROFILE SCREEN COMPONENT ---
 export default function ProfileScreen() {
   const { user, setUser } = useAppState();
   const router = useRouter();
@@ -100,7 +96,7 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!user?.uid) { // استخدم user.uid
+    if (!user?.uid) {
       setIsLoading(false);
       return;
     }
@@ -118,7 +114,7 @@ export default function ProfileScreen() {
         Object.values(progressDoc.pathProgress).forEach(path => {
           Object.values(path.subjects).forEach(subject => {
             if (subject.lessons) {
-              completedCount += Object.values(subject.lessons).filter(status => status === 'completed').length;
+              completedCount += Object.values(subject.lessons).filter(lesson => lesson.status === 'completed').length;
             }
           });
         });
@@ -134,7 +130,7 @@ export default function ProfileScreen() {
         setUserProgress(progressDoc.pathProgress?.[user.selectedPathId] || {});
       }
     }
-  }, [user?.uid]);
+  }, [user?.uid, user?.selectedPathId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -212,16 +208,10 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0C0F27' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0C0F27' },
-  // --- FIX IS HERE ---
   scrollContent: { 
     paddingHorizontal: 20, 
-    paddingBottom: 120 // Increased padding to avoid overlap with floating tab bar
+    paddingBottom: 120
   },
-   scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
-  },
-  // --- END OF FIX ---
   header: { alignItems: 'center', marginVertical: 20 },
   avatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 15 },
   userName: { color: 'white', fontSize: 24, fontWeight: 'bold' },
@@ -249,9 +239,4 @@ const styles = StyleSheet.create({
   menuIcon: { width: 25, textAlign: 'center' },
   menuText: { color: 'white', fontSize: 16, marginLeft: 15 },
   logoutText: { color: '#EF4444' },
-  // ✨ --- أضف هذا التعديل --- ✨
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingBottom: 120 // تمت زيادة المساحة لتجنب التداخل
-  },
 });

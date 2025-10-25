@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, TextInput, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -5,11 +6,10 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-import { ChatActionSheet } from '../../components/ChatActionSheet';
-import { STORAGE_KEYS } from '../../config/appConfig'; // ✨ --- استيراد المفتاح الموحد
+import AnimatedGradientButton from '../components/AnimatedGradientButton';
+import { ChatActionSheet } from '../components/ChatActionSheet';
+import { STORAGE_KEYS } from '../config/appConfig';
 
-// --- NEW: Custom Rename Modal Component ---
 const RenameModal = ({ isVisible, currentName, onClose, onSave }) => {
   const [newName, setNewName] = useState(currentName);
 
@@ -94,7 +94,7 @@ export default function ChatHistoryScreen() {
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const savedSessionsRaw = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS); // ✨ --- استخدام المفتاح الموحد
+      const savedSessionsRaw = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
       const sessionsData = savedSessionsRaw ? JSON.parse(savedSessionsRaw) : {};
       const sessionsArray = Object.keys(sessionsData).map(key => ({
         id: key,
@@ -123,14 +123,14 @@ export default function ChatHistoryScreen() {
       return obj;
     }, {});
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessionsObject)); // ✨ --- استخدام المفتاح الموحد
+      await AsyncStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessionsObject));
     } catch (e) {
       console.error("Failed to save updated sessions.", e);
     }
   };
 
-  const handleSelectSession = (sessionId, title) => {
-    router.push({ pathname: '/(modal)/ai-chatbot', params: { sessionId, title } });
+  const handleSelectSession = (sessionId) => {
+    router.push({ pathname: '/(modal)/ai-chatbot', params: { sessionId } });
   };
 
   const handleNewChat = () => router.push('/(modal)/ai-chatbot');
@@ -203,7 +203,7 @@ export default function ChatHistoryScreen() {
   const renderSessionItem = ({ item }) => (
     <Pressable
       style={styles.sessionItem}
-      onPress={() => handleSelectSession(item.id, item.title)}
+      onPress={() => handleSelectSession(item.id)}
       onLongPress={() => openActionSheet(item)}
     >
       <FontAwesome5 name="comment-alt" size={18} color="#a7adb8ff" />

@@ -24,7 +24,6 @@ const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
   const isCompleted = task.status === 'completed';
   const iconInfo = ICONS[task.type] || ICONS.default;
   
-  // ✨ --- تعديل هنا: تعطيل الضغط إذا لم تكن المهمة مرتبطة بأي شيء --- ✨
   const isPressable = !!task.relatedLessonId || !!task.relatedSubjectId;
 
   return (
@@ -143,15 +142,12 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
     }
   };
 
-  // ✨ --- الدالة المُحسّنة هنا --- ✨
   const handleNavigateToTask = (task) => {
-    // التحقق من وجود مسار محدد للمستخدم، وهو ضروري للتنقل
     if (!user.selectedPathId) {
       Alert.alert("No Path Selected", "Please complete your profile setup to navigate to tasks.");
       return;
     }
 
-    // الحالة الأولى: المهمة مرتبطة بدرس ومادة
     if (task.relatedLessonId && task.relatedSubjectId) {
       const pathname = task.type === 'quiz' ? '/study-kit' : '/lesson-view';
       router.push({
@@ -163,20 +159,15 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
           subjectId: task.relatedSubjectId,
         },
       });
-    // الحالة الثانية: المهمة مرتبطة بمادة فقط
     } else if (task.relatedSubjectId) {
       router.push({
         pathname: '/subject-details',
         params: { 
           id: task.relatedSubjectId,
-          // يمكننا تمرير اسم المادة إذا كان متاحًا في كائن المهمة، أو تركه
         },
       });
-    // الحالة الثالثة: المهمة غير مرتبطة
     } else {
-      // لا تفعل شيئًا، لأن الزر معطل بالفعل
-      // أو يمكنك عرض رسالة إذا أردت
-      // Alert.alert("Info", "This task is not linked to any specific content.");
+      // Button is disabled, no action needed.
     }
   };
 

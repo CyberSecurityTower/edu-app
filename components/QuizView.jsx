@@ -9,10 +9,9 @@ import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { updateLessonMasteryScore, updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { useAppState } from '../context/AppStateContext';
-import { API_CONFIG } from '../config/appConfig'; // ✨ --- استيراد الإعدادات
-import { POINTS_CONFIG } from '../config/points'; // ✨ --- استيراد الإعدادات
+import { API_CONFIG } from '../config/appConfig';
+import { POINTS_CONFIG } from '../config/points';
 
-// --- OPTION ITEM ---
 const OptionItem = ({ option, index, onPress, disabled, showCorrect, isCorrect, isSelected, shakeIdx, shakeValue }) => {
   const animatedStyle = useAnimatedStyle(() => {
     if (shakeIdx.value === index) {
@@ -35,7 +34,6 @@ const OptionItem = ({ option, index, onPress, disabled, showCorrect, isCorrect, 
   );
 };
 
-// --- MAIN QUIZ VIEW COMPONENT ---
 const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) => {
   const { user, refreshPoints } = useAppState();
 
@@ -123,7 +121,7 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
     }
 
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/analyze-quiz`, { // ✨ --- استخدام الرابط الموحد
+      const response = await fetch(`${API_CONFIG.BASE_URL}/analyze-quiz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

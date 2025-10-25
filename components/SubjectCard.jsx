@@ -7,13 +7,11 @@ import { useRouter } from 'expo-router';
 const SubjectCard = ({ item, userProgress }) => {
   const router = useRouter();
   
-  // Safely access progress data
   const progressData = userProgress?.subjects?.[item.id];
   const totalLessons = item.lessons?.length || 0;
   
-  // Calculate completed lessons count from the progress data
   const completedLessons = progressData?.lessons 
-    ? Object.values(progressData.lessons).filter(status => status === 'completed').length 
+    ? Object.values(progressData.lessons).filter(lesson => lesson.status === 'completed').length 
     : 0;
 
   const progressPercent = progressData?.progress || 0;

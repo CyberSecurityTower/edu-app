@@ -38,7 +38,6 @@ const MagicTriggerFAB = ({ isOpen, onPress }) => {
             renderMode="HARDWARE"
           />
         ) : (
-          // ✨ تم التحديث إلى .png
           <Image
             source={require('../assets/images/magic.png')}
             style={styles.image}
@@ -57,7 +56,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4, shadowRadius: 8, elevation: 10,
   },
   lottie: { width: 100, height: 100 },
-  image: { width: 100, height: 95, borderRadius: 32 },
+  image: { width: 64, height: 64, resizeMode: 'contain' },
 });
 
 export default MagicTriggerFAB;

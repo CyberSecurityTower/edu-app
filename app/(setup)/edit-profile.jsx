@@ -1,10 +1,8 @@
-
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../../context/AppStateContext';
 import { useRouter } from 'expo-router';
-// --- FIX #1: ADD THE MISSING IMPORT ---
 import { updateUserProfile, updateUserProgressProfileData } from '../../services/firestoreService';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -46,7 +44,6 @@ export default function EditProfileScreen() {
 
       await updateUserProfile(user.uid, updatedData);
       
-      // This function will now be recognized
       await updateUserProgressProfileData(user.uid, { 
         firstName: firstName, 
         lastName: lastName 
@@ -107,7 +104,7 @@ export default function EditProfileScreen() {
               mode="date"
               display="spinner"
               onChange={onDateChange}
-              textColor='white' // For iOS
+              textColor='white'
             />
           )}
 

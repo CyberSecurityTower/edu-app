@@ -9,8 +9,7 @@ export const EditModeProvider = ({ children }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState(new Set());
   
-  // يمكن استخدام هذا لتمرير الدوال من الشاشة إلى شريط الأدوات لاحقًا
-  const [actions, setActions] = useState({ onPin: () => {}, onDelete: () => {} });
+  const [actions, setActions] = useState({ onPin: () => {}, onDelete: () => {}, onRename: () => {} });
 
   const value = useMemo(() => ({
     isEditMode,
@@ -25,4 +24,5 @@ export const EditModeProvider = ({ children }) => {
     <EditModeContext.Provider value={value}>
       {children}
     </EditModeContext.Provider>
-  );};
+  );
+};

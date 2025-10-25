@@ -31,7 +31,6 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
   const isCompleted = task.status === 'completed';
   const isPressable = !!task.relatedLessonId || !!task.relatedSubjectId;
 
-  // ✨ --- المنطق الجديد للضغط --- ✨
   const handlePress = () => {
     if (isEditMode) {
       onSelect(task.id);
@@ -60,7 +59,6 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
         overshootFriction={8}
         enabled={!isEditMode}
       >
-        {/* ✨ --- الضغطة المطولة الآن مخصصة فقط لوضع غير التعديل --- ✨ */}
         <Pressable onLongPress={() => !isEditMode && onLongPress(task)} onPress={handlePress}>
           <LinearGradient
             colors={task.isPinned ? ['#374151', '#1F2937'] : ['#1F2937', '#1F2937']}

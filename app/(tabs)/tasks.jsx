@@ -32,7 +32,6 @@ export default function TasksScreen() {
 
   const bottomSheetRef = useRef(null);
 
-  // ... (بقية الدوال مثل useEffect, updateTasksInFirestore, etc. تبقى كما هي)
   useEffect(() => {
     if (!user?.uid) { setIsLoading(false); return; }
     const userProgressRef = doc(db, 'userProgress', user.uid);
@@ -113,7 +112,7 @@ export default function TasksScreen() {
         component: ExpandableFAB,
         props: {
           actions: [
-            { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
+            { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/ai-chatbot') },
             { icon: 'plus', label: 'Add Task', onPress: () => bottomSheetRef.current?.expand() },
             { icon: 'edit', label: 'Edit Tasks', onPress: () => setIsEditMode(true) },
           ],
@@ -147,7 +146,6 @@ export default function TasksScreen() {
   };
 
   const handleLongPressTask = (task) => {
-    // الضغطة المطولة الآن هي التي تفتح نافذة إعادة التسمية مباشرة
     setTaskToRename(task);
     setIsRenameModalVisible(true);
   };
@@ -182,7 +180,6 @@ export default function TasksScreen() {
 
   const handleGenerateTasks = async () => { /* ... */ };
 
-  // ✨ --- دالة التنقل المحسنة --- ✨
   const handleNavigateToTask = (task) => {
     if (!user.selectedPathId) {
       Alert.alert("No Path Selected", "Please complete your profile setup to navigate to tasks.");
@@ -235,7 +232,7 @@ export default function TasksScreen() {
               task={item}
               onToggleStatus={handleToggleTaskStatus}
               onDelete={handleDeleteTask}
-              onNavigate={handleNavigateToTask} // تمرير الدالة
+              onNavigate={handleNavigateToTask}
               onLongPress={handleLongPressTask}
               isEditMode={isEditMode}
               isSelected={selectedTasks.has(item.id)}

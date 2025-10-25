@@ -4,7 +4,7 @@ import { View, Pressable, StyleSheet, Text } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { MotiView, AnimatePresence } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import MagicTriggerFAB from './MagicTriggerFAB'; // الزر الرئيسي
+import MagicTriggerFAB from './MagicTriggerFAB';
 
 const ActionButton = ({ icon, label, onPress, delay }) => (
   <MotiView
@@ -41,7 +41,7 @@ const ExpandableFAB = ({ actions }) => {
                 label={action.label}
                 onPress={() => {
                   action.onPress();
-                  setIsOpen(false); // أغلق القائمة بعد الضغط
+                  setIsOpen(false);
                 }}
                 delay={index * 50}
               />

@@ -10,11 +10,10 @@ import * as Haptics from 'expo-haptics';
 const MagicFAB = ({ onPress }) => {
   const [isAnimating, setIsAnimating] = useState(true);
 
-  // هذا الـ Hook سيعمل في كل مرة تدخل فيها إلى الشاشة التي تحتوي على هذا المكون
   useFocusEffect(
     useCallback(() => {
-      setIsAnimating(true); // ابدأ الأنيميشن دائمًا عند التركيز على الشاشة
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // لمسة اهتزاز خفيفة
+      setIsAnimating(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       return () => {};
     }, [])
   );
@@ -36,10 +35,10 @@ const MagicFAB = ({ onPress }) => {
           <LinearGradient colors={['#374151', '#1F2937']} style={styles.gradient}>
             {isAnimating ? (
               <LottieView
-                source={require('../assets/images/magic.json')} // تأكد من أن هذا المسار صحيح
+                source={require('../assets/images/magic.json')}
                 autoPlay
                 loop={false}
-                onAnimationFinish={() => setIsAnimating(false)} // عند انتهاء الأنيميشن، اعرض الصورة
+                onAnimationFinish={() => setIsAnimating(false)}
                 style={styles.lottie}
               />
             ) : (
@@ -49,7 +48,7 @@ const MagicFAB = ({ onPress }) => {
                 transition={{ type: 'timing', duration: 200 }}
               >
                 <Image
-                  source={require('../assets/images/magic.jpg')} // تأكد من أن هذا المسار صحيح
+                  source={require('../assets/images/magic.png')}
                   style={styles.image}
                 />
               </MotiView>
@@ -65,7 +64,7 @@ const styles = StyleSheet.create({
   container: { position: 'absolute', right: 25, shadowColor: '#34D399', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 12, },
   fab: { width: 64, height: 64, borderRadius: 32, overflow: 'hidden', },
   gradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  lottie: { width: 80, height: 80 }, // اجعل الأنيميشن أكبر قليلاً من الزر ليبدو حيويًا
+  lottie: { width: 80, height: 80 },
   image: { width: 64, height: 64, borderRadius: 32 },
 });
 

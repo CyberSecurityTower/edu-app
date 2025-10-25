@@ -55,13 +55,19 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      {/* Group screens */}
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(setup)" />
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(modal)" options={{ presentation: 'modal' }} />
+
+      {/* Regular screens */}
       <Stack.Screen name="subject-details" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="lesson-view" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="study-kit" options={{ animation: 'slide_from_bottom' }} />
+
+      {/* Modal screens */}
+      <Stack.Screen name="ai-chatbot" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="chat-history" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

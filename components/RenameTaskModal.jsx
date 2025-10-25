@@ -4,10 +4,8 @@ import { View, Text, Modal, StyleSheet, Pressable, TextInput } from 'react-nativ
 import AnimatedGradientButton from './AnimatedGradientButton';
 
 const RenameTaskModal = ({ isVisible, onClose, onRename, task }) => {
-  // استخدم task?.title لتجنب الأخطاء إذا كانت المهمة فارغة في البداية
   const [newTitle, setNewTitle] = useState(task?.title || '');
 
-  // تحديث الحالة الداخلية عند تغيير خاصية المهمة
   useEffect(() => {
     if (task) {
       setNewTitle(task.title);

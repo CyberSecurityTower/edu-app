@@ -12,27 +12,25 @@ import SubjectCard from '../../components/SubjectCard';
 import MainHeader from '../../components/MainHeader';
 import DailyTasks from '../../components/DailyTasks';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
-import ExpandableFAB from '../../components/ExpandableFAB'; // ✨ --- استيراد المكون
+import ExpandableFAB from '../../components/ExpandableFAB';
 
 const HomeScreen = () => {
   const { user, points } = useAppState();
   const router = useRouter();
-  const { setFabConfig } = useFab(); // ✨ --- الإصلاح هنا --- ✨
+  const { setFabConfig } = useFab();
 
   const [pathDetails, setPathDetails] = useState(null);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- إعداد إجراءات الزر السحري ---
   useFocusEffect(
     useCallback(() => {
-      // ✨ --- والإصلاح هنا أيضًا: استخدم setFabConfig مع كائن الإعدادات الكامل --- ✨
       setFabConfig({
         component: ExpandableFAB,
         props: {
           actions: [
             { icon: 'tasks', label: 'Manage All Tasks', onPress: () => router.push('/(tabs)/tasks') },
-            { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/(modal)/ai-chatbot') },
+            { icon: 'robot', label: 'Ask EduAI', onPress: () => router.push('/ai-chatbot') },
           ],
         },
       });
@@ -40,7 +38,6 @@ const HomeScreen = () => {
     }, [router, setFabConfig])
   );
 
-  // --- جلب بيانات المسار والتقدم ---
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;

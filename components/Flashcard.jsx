@@ -32,7 +32,6 @@ const Flashcard = ({ frontText, backText }) => {
 
   return (
     <Pressable onPress={flipCard} style={styles.cardContainer}>
-      {/* Front of the card */}
       <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle]}>
         <LinearGradient
           colors={['#1E293B', '#334155']}
@@ -42,7 +41,6 @@ const Flashcard = ({ frontText, backText }) => {
         </LinearGradient>
       </Animated.View>
       
-      {/* Back of the card */}
       <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle]}>
         <LinearGradient
           colors={['#10B981', '#34D399']}
@@ -65,13 +63,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-    backfaceVisibility: 'hidden', // This is the magic that makes the flip work
+    backfaceVisibility: 'hidden',
     borderRadius: 20,
     overflow: 'hidden',
   },
-  cardFront: {
-    // No specific styles needed here
-  },
+  cardFront: {},
   cardBack: {
     transform: [{ rotateY: '180deg' }],
   },

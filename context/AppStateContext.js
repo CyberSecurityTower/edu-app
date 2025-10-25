@@ -9,10 +9,8 @@ import { auth, db } from '../firebase';
 import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
 import { POINTS_CONFIG } from '../config/points';
 
-// 1. Create the context
 const AppStateContext = createContext(null);
 
-// 2. Create the Provider component
 export function AppStateProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -26,7 +24,6 @@ export function AppStateProvider({ children }) {
     }
   }, [user]);
 
-  // Effect for Authentication and Daily Streak
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       try {
@@ -78,9 +75,8 @@ export function AppStateProvider({ children }) {
     });
 
     return () => unsubscribeAuth();
-  }, []); // Removed dependencies to run only once on mount
+  }, [refreshPoints]);
 
-  // Effect for checking onboarding status
   useEffect(() => {
     const checkOnboardingStatus = async () => {
       try {
@@ -93,7 +89,6 @@ export function AppStateProvider({ children }) {
     checkOnboardingStatus();
   }, []);
 
-  // Effect for listening to notifications
   useEffect(() => {
     if (!user?.uid) return;
 
@@ -140,7 +135,6 @@ export function AppStateProvider({ children }) {
   );
 }
 
-// 3. Create a custom hook for easy access
 export const useAppState = () => {
   const context = useContext(AppStateContext);
   if (!context) {

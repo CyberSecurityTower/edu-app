@@ -1,12 +1,12 @@
 // components/TaskItem.jsx
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
-import { MotiView, MotiText } from 'moti';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
+import { MotiText, MotiView } from 'moti';
+import React from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const ICONS = {
   review: { name: 'book-reader', color: '#60A5FA' },

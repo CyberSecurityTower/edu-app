@@ -1,5 +1,5 @@
 export const API_CONFIG = {
-  BASE_URL: 'https://eduserver-0ffm.onrender.com', // استخدم رابط الخادم النهائي هنا
+  BASE_URL: 'https://eduserver-htnt.onrender.com', // استخدم رابط الخادم النهائي هنا
 };
 
 export const STORAGE_KEYS = {

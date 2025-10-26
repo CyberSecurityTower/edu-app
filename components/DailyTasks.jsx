@@ -7,9 +7,9 @@ import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useAppState } from '../context/AppStateContext';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
-import AnimatedGradientButton from './AnimatedGradientButton';
-import { API_CONFIG } from '../config/appConfig';
-import LottieView from 'lottie-react-native';
+import { apiService } from '../config/api'; // Use apiService for consistency
+// ✨ [ENHANCED] Using the shared empty component
+import EmptyTasksComponent from './EmptyTasksComponent';
 
 const ICONS = {
   review: { name: 'book-reader', color: '#60A5FA' },
@@ -23,7 +23,6 @@ const ICONS = {
 const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
   const isCompleted = task.status === 'completed';
   const iconInfo = ICONS[task.type] || ICONS.default;
-  
   const isPressable = !!task.relatedLessonId || !!task.relatedSubjectId;
 
   return (
@@ -41,41 +40,10 @@ const TaskItem = ({ task, onToggleStatus, onNavigate }) => {
   );
 };
 
-const EmptyDailyTasks = React.memo(({ isGenerating, onGenerate }) => {
-  return (
-    <View style={[styles.container, styles.emptyContainer]}>
-      <FontAwesome5 name="clipboard-list" size={32} color="#4B5563" style={{ marginBottom: 15 }}/>
-      
-      {isGenerating ? (
-        <>
-          <Text style={styles.emptyTitle}>Generating Your Plan...</Text>
-          <Text style={styles.emptySubtitle}>EduAI is personalizing your tasks now.</Text>
-          <LottieView
-            source={require('../assets/images/task_loading.json')}
-            autoPlay loop style={styles.lottieAnimation} renderMode="hardware"
-          />
-        </>
-      ) : (
-        <>
-          <Text style={styles.emptyTitle}>Your daily plan is clear!</Text>
-          <Text style={styles.emptySubtitle}>Let EduAI create a personalized study plan for you.</Text>
-          <AnimatedGradientButton
-            text="Generate My Plan"
-            onPress={onGenerate}
-            buttonWidth={220}
-            buttonHeight={45}
-          />
-        </>
-      )}
-    </View>
-  );
-});
-
-
-const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
+const DailyTasks = ({ isCompact = false }) => {
   const { user } = useAppState();
   const router = useRouter();
-  const [tasks, setTasks] = useState(tasksProp);
+  const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -100,7 +68,6 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
 
   const displayedTasks = useMemo(() => {
     if (!isCompact) return tasks;
-
     const pinned = tasks.filter(t => t.isPinned);
     const unpinned = tasks.filter(t => !t.isPinned && t.status !== 'completed');
     let tasksToShow = [...pinned];
@@ -112,32 +79,29 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
   }, [tasks, isCompact]);
 
   const handleGenerateTasks = useCallback(async () => {
-    if (!user?.uid) return;
+    if (!user?.uid || !user.selectedPathId) return;
     setIsGenerating(true);
     try {
-      await fetch(`${API_CONFIG.BASE_URL}/generate-daily-tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, pathId: pathId }),
-      });
+      // Use the centralized apiService
+      await apiService.generateDailyTasks(user.uid, user.selectedPathId);
     } catch (error) {
       console.error("Error generating tasks:", error);
       Alert.alert("Error", "Couldn't generate new tasks at this time.");
     } finally {
       setIsGenerating(false);
     }
-  }, [user, pathId]);
+  }, [user]);
 
   const handleToggleTaskStatus = async (taskId, newStatus) => {
     if (!user?.uid) return;
     const originalTasks = tasks;
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
-    setTasks(updatedTasks);
+    setTasks(updatedTasks); // Optimistic update
     try {
       await updateDoc(doc(db, `userProgress/${user.uid}`), { 'dailyTasks.tasks': updatedTasks });
     } catch (error) {
       console.error("Failed to update task status, reverting:", error);
-      setTasks(originalTasks);
+      setTasks(originalTasks); // Revert on failure
       Alert.alert("Error", "Could not sync your changes.");
     }
   };
@@ -147,27 +111,11 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
       Alert.alert("No Path Selected", "Please complete your profile setup to navigate to tasks.");
       return;
     }
-
     if (task.relatedLessonId && task.relatedSubjectId) {
       const pathname = task.type === 'quiz' ? '/study-kit' : '/lesson-view';
-      router.push({
-        pathname,
-        params: { 
-          lessonId: task.relatedLessonId, 
-          lessonTitle: task.title,
-          pathId: user.selectedPathId,
-          subjectId: task.relatedSubjectId,
-        },
-      });
+      router.push({ pathname, params: { lessonId: task.relatedLessonId, lessonTitle: task.title, pathId: user.selectedPathId, subjectId: task.relatedSubjectId }});
     } else if (task.relatedSubjectId) {
-      router.push({
-        pathname: '/subject-details',
-        params: { 
-          id: task.relatedSubjectId,
-        },
-      });
-    } else {
-      // Button is disabled, no action needed.
+      router.push({ pathname: '/subject-details', params: { id: task.relatedSubjectId }});
     }
   };
 
@@ -176,7 +124,12 @@ const DailyTasks = ({ tasksProp = [], pathId, isCompact = false }) => {
   }
 
   if (tasks.length === 0) {
-    return <EmptyDailyTasks isGenerating={isGenerating} onGenerate={handleGenerateTasks} />;
+    // ✨ [ENHANCED] Using the shared component for a consistent look
+    return (
+        <View style={[styles.container, { paddingVertical: 30 }]}>
+            <EmptyTasksComponent isGenerating={isGenerating} onGenerate={handleGenerateTasks} />
+        </View>
+    );
   }
   
   const completedCount = tasks.filter(t => t.status === 'completed').length;
@@ -220,10 +173,6 @@ const styles = StyleSheet.create({
   taskText: { color: 'white', fontSize: 16, flex: 1 },
   taskTextCompleted: { textDecorationLine: 'line-through', color: '#6B7280' },
   checkbox: { padding: 10 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 30 },
-  emptyTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
-  emptySubtitle: { color: '#a7adb8ff', fontSize: 15, textAlign: 'center', marginTop: 8, marginBottom: 20 },
-  lottieAnimation: { width: 120, height: 120, marginTop: 10 },
   viewAllButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 15, marginTop: 5 },
   viewAllText: { color: '#34D399', fontSize: 16, fontWeight: 'bold', marginRight: 8 },
 });

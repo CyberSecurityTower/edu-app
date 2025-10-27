@@ -1,3 +1,4 @@
+// components/MainHeader.jsx
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -8,8 +9,12 @@ import Animated, {
   withSequence,
   withDelay,
 } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
+import { useAppState } from '../context/AppStateContext';
 
 const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = false }) => {
+  const router = useRouter();
+  const { unreadCount } = useAppState();
   const previousPoints = useRef(points);
   
   const scale = useSharedValue(1);
@@ -48,8 +53,13 @@ const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = 
           <Text style={styles.pointsText}>{points}</Text>
         </Animated.View>
         {!hideNotifications && (
-          <Pressable style={styles.iconButton}>
-            <FontAwesome5 name="bell" size={22} color="#a7adb8ff" />
+          <Pressable style={styles.iconButton} onPress={() => router.push('/notifications')}>
+            <FontAwesome5 name="bell" size={22} color="#a7adb8ff" solid={unreadCount > 0} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </Pressable>
         )}
       </View>
@@ -59,7 +69,6 @@ const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = 
 
 const styles = StyleSheet.create({
   headerContainer: {
-    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -100,6 +109,26 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 5,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#EF4444',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#0C0F27',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
 

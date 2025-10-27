@@ -1,6 +1,6 @@
 // context/ActionSheetContext.js
-import React, { createContext, useContext, useState, useRef, useMemo } from 'react';
-import BottomSheet from '@gorhom/bottom-sheet';
+import React, { createContext, useContext, useState, useRef, useMemo, useCallback } from 'react';
+import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { View } from 'react-native';
 
 const ActionSheetContext = createContext(null);
@@ -20,8 +20,19 @@ export const ActionSheetProvider = ({ children }) => {
   const closeSheet = () => {
     sheetRef.current?.close();
   };
+  
+  // CRITICAL FIX: Custom Backdrop to handle taps for dismissal
+  const CustomBackdrop = useCallback((props) => (
+    <BottomSheetBackdrop 
+      {...props} 
+      disappearsOnIndex={-1} 
+      appearsOnIndex={0} 
+      opacity={0.7}
+      pressBehavior='close' // Ensures tapping outside closes the sheet
+    />
+  ), []);
 
-  const value = { openSheet, closeSheet };
+  const value = useMemo(() => ({ openSheet, closeSheet }), []);
 
   return (
     <ActionSheetContext.Provider value={value}>
@@ -35,6 +46,7 @@ export const ActionSheetProvider = ({ children }) => {
         backgroundStyle={{ backgroundColor: '#1E293B' }}
         handleIndicatorStyle={{ backgroundColor: '#64748B' }}
         onClose={() => setSheetContent(null)}
+        BackdropComponent={CustomBackdrop} // Use the custom backdrop
       >
         {sheetContent && <View style={{ flex: 1 }}>{sheetContent}</View>}
       </BottomSheet>

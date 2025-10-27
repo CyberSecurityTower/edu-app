@@ -1,9 +1,9 @@
 // context/AppStateContext.js
-import React, { createContext, useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import React, { createContext, useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import { collection, onSnapshot, query, where, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 
 import { auth, db } from '../firebase';
 import { getUserProfile, getUserProgressDocument, updateUserDailyStreak } from '../services/firestoreService';
@@ -16,6 +16,11 @@ export function AppStateProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
   const [points, setPoints] = useState(0);
+
+  // ✨ [NEW] State for notifications
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const seenToastIds = useRef(new Set());
 
   const refreshPoints = useCallback(async () => {
     if (user?.uid) {
@@ -89,30 +94,49 @@ export function AppStateProvider({ children }) {
     checkOnboardingStatus();
   }, []);
 
+  // ✨ [REWRITTEN] useEffect for notifications to fix logic and add features
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
 
     const notificationsRef = collection(db, 'userNotifications', user.uid, 'inbox');
-    const q = query(notificationsRef, where('read', '==', false), orderBy('createdAt', 'desc'), limit(1));
+    const q = query(notificationsRef, orderBy('createdAt', 'desc'), limit(50));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach(async (change) => {
+      const fetchedNotifications = [];
+      let newUnreadCount = 0;
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        fetchedNotifications.push({ id: doc.id, ...data });
+        if (!data.read) {
+          newUnreadCount++;
+        }
+      });
+
+      // Show toast only for new, unread notifications that haven't been shown before
+      snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const notificationData = change.doc.data();
           const notificationId = change.doc.id;
-
-          Toast.show({
-            type: 'eduai_notification',
-            text1: 'EduAI Assistant',
-            text2: notificationData.message,
-            position: 'top',
-            visibilityTime: 8000,
-          });
-
-          const docRef = doc(db, 'userNotifications', user.uid, 'inbox', notificationId);
-          await updateDoc(docRef, { read: true }).catch(e => console.error('Failed to mark notification read:', e));
+          if (!notificationData.read && !seenToastIds.current.has(notificationId)) {
+            Toast.show({
+              type: 'eduai_notification',
+              text1: notificationData.title || 'EduAI Assistant',
+              text2: notificationData.message,
+              position: 'top',
+              visibilityTime: 8000,
+            });
+            seenToastIds.current.add(notificationId);
+          }
         }
       });
+      
+      setNotifications(fetchedNotifications);
+      setUnreadCount(newUnreadCount);
     });
 
     return () => unsubscribe();
@@ -126,7 +150,10 @@ export function AppStateProvider({ children }) {
     setUser,
     points,
     refreshPoints,
-  }), [user, authLoading, hasCompletedOnboarding, points, refreshPoints]);
+    // ✨ [NEW] Expose notification state for other components
+    notifications,
+    unreadCount,
+  }), [user, authLoading, hasCompletedOnboarding, points, refreshPoints, notifications, unreadCount]);
 
   return (
     <AppStateContext.Provider value={contextValue}>

@@ -1,10 +1,63 @@
+
 import { 
   doc, getDoc, setDoc, updateDoc, collection, getDocs, 
   arrayUnion, arrayRemove, increment, query, orderBy, 
-  limit, where 
+  limit, where, writeBatch, addDoc, serverTimestamp
 } from "firebase/firestore"; 
 import { db } from '../firebase';
+import Toast from 'react-native-toast-message';
 
+// --- ✨ [NEW] Notification Functions ---
+
+/**
+ * Sends a notification to the user's inbox in Firestore and optionally shows a Toast.
+ * @param {string} userId - The ID of the user.
+ * @param {object} payload - The notification content.
+ * @param {string} payload.title - The title for the notification.
+ * @param {string} payload.message - The main message content.
+ * @param {object} payload.meta - Metadata for navigation (e.g., { type: 'lesson', lessonId: '...' }).
+ * @param {boolean} [showToast=true] - Whether to show a pop-up toast message.
+ */
+export const sendAndDisplayNotification = async (userId, { title, message, meta }, showToast = true) => {
+  if (!userId) return;
+  try {
+    const notificationsRef = collection(db, 'userNotifications', userId, 'inbox');
+    await addDoc(notificationsRef, {
+      message,
+      meta: { ...meta, title },
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+
+    if (showToast) {
+      Toast.show({
+        type: 'eduai_notification',
+        text1: title,
+        text2: message,
+        position: 'top',
+        visibilityTime: 5000,
+      });
+    }
+  } catch (error) {
+    console.error("Error sending notification:", error);
+  }
+};
+
+export const markNotificationAsRead = async (userId, notificationId) => {
+  if (!userId || !notificationId) return;
+  const notifRef = doc(db, 'userNotifications', userId, 'inbox', notificationId);
+  await updateDoc(notifRef, { read: true });
+};
+
+export const markAllNotificationsAsRead = async (userId, notificationIds) => {
+  if (!userId || !notificationIds || notificationIds.length === 0) return;
+  const batch = writeBatch(db);
+  notificationIds.forEach(id => {
+    const notifRef = doc(db, 'userNotifications', userId, 'inbox', id);
+    batch.update(notifRef, { read: true });
+  });
+  await batch.commit();
+};
 // --- User Profile Functions ---
 export const getUserProfile = async (uid) => {
   if (!uid) return null;

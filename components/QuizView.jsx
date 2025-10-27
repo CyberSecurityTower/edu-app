@@ -5,7 +5,7 @@ import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
-
+import { useRouter } from 'expo-router';
 import AnimatedGradientButton from './AnimatedGradientButton';
 import { updateLessonMasteryScore, updateUserPoints, getUserProgressDocument } from '../services/firestoreService';
 import { useAppState } from '../context/AppStateContext';
@@ -36,7 +36,7 @@ const OptionItem = ({ option, index, onPress, disabled, showCorrect, isCorrect, 
 
 const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) => {
   const { user, refreshPoints } = useAppState();
-
+   const router = useRouter();
   if (!quizData || quizData.length === 0) {
     return (
       <View style={styles.centerAnalyzing}>
@@ -168,7 +168,22 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
       analyzeAndFinishQuiz();
     }
   }, [currentQuestionIndex, quizData.length, analyzeAndFinishQuiz]);
+    const handleExplainAnswer = () => {
+    const questionText = currentQuestion.question;
+    const correctAnswer = currentQuestion.correctAnswer;
+    const userSelected = selectedAnswer;
 
+    const contextMessage = `اشرح لي هذا السؤال من درس "${lessonTitle}":\n\nالسؤال: ${questionText}\nإجابتي: ${userSelected}\nالإجابة الصحيحة: ${correctAnswer}\n\nلماذا كانت إجابتي خاطئة وما هو الشرح المفصل للإجابة الصحيحة؟`;
+
+    router.push({
+        pathname: '/ai-chatbot',
+        params: {
+            contextLessonId: lessonId,
+            contextLessonTitle: `Explanation for: ${lessonTitle}`,
+            initialMessage: contextMessage, // ✨ نمرر الرسالة الأولية
+        }
+    });
+  };
   const handleRestart = useCallback(async () => {
     if (!user) return;
     try {
@@ -274,14 +289,29 @@ const QuizView = ({ quizData = [], lessonTitle, lessonId, pathId, subjectId }) =
         ))}
       </View>
 
-      {isAnswered && (
-        <AnimatedGradientButton
-          text={currentQuestionIndex === quizData.length - 1 ? 'Finish & Analyze' : 'Next Question'}
-          onPress={handleNext}
-          buttonWidth={'100%'}
-          buttonHeight={55}
-          fontSize={16}
-        />
+        {isAnswered && (
+        <>
+          {/* ✨ إضافة زر الشرح إذا كانت الإجابة خاطئة */}
+          {selectedAnswer !== currentQuestion.correctAnswer && (
+            <AnimatedGradientButton
+              text="Ask EduAI for Explanation"
+              onPress={handleExplainAnswer}
+              buttonWidth={'100%'}
+              buttonHeight={55}
+              fontSize={16}
+              borderRadius={12}
+              style={{ marginBottom: 10 }}
+            />
+          )}
+
+          <AnimatedGradientButton
+            text={currentQuestionIndex === quizData.length - 1 ? 'Finish & Analyze' : 'Next Question'}
+            onPress={handleNext}
+            buttonWidth={'100%'}
+            buttonHeight={55}
+            fontSize={16}
+          />
+        </>
       )}
     </View>
   );

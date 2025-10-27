@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,7 +8,7 @@ import Markdown from 'react-native-markdown-display';
 import Toast from 'react-native-toast-message';
 
 import FloatingActionButton from '../components/FloatingActionButton';
-import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints } from '../services/firestoreService';
+import { getLessonContent, updateLessonProgress, getUserProgressDocument, updateUserPoints ,sendAndDisplayNotification } from '../services/firestoreService';
 import { useAppState } from '../context/AppStateContext';
 import GenerateKitButton from '../components/GenerateKitButton';
 import { POINTS_CONFIG } from '../config/points';
@@ -75,11 +76,11 @@ export default function LessonViewScreen() {
         const points = POINTS_CONFIG.LESSON_COMPLETE_FIRST_TIME;
         await updateUserPoints(user.uid, points);
         
-        Toast.show({
-          type: 'points',
-          text1: `+${points} Points! Keep it up.`,
-          position: 'bottom',
-          visibilityTime: 2000,
+         // ✨ [MODIFIED] Use the new notification service
+        sendAndDisplayNotification(user.uid, {
+          title: `+${points} Points!`,
+          message: `You completed the lesson: "${lessonTitle}"`,
+          meta: { type: 'lesson', lessonId, lessonTitle, subjectId, pathId }
         });
       }
     } catch (error) {
@@ -141,7 +142,8 @@ export default function LessonViewScreen() {
                     pathname: '/ai-chatbot', 
                     params: { 
                         contextLessonId: lessonId, 
-                        contextLessonTitle: `About: ${lessonTitle}` 
+                        contextLessonTitle: `About: ${lessonTitle}`,
+                        lessonContentContext: lessonContent, 
                     }
                 })}
              />

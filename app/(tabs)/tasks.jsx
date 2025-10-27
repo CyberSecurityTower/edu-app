@@ -1,3 +1,4 @@
+
 // app/(tabs)/tasks.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
@@ -193,7 +194,7 @@ export default function TasksScreen() {
         params: { 
           lessonId: task.relatedLessonId, 
           lessonTitle: task.title,
-          pathId: user.selectedPathId,
+          pathId: user.selectedPathId, // ✨ تمرير Path ID
           subjectId: task.relatedSubjectId,
         },
       });

@@ -68,6 +68,8 @@ function RootLayoutNav() {
       {/* Modal screens */}
       <Stack.Screen name="ai-chatbot" options={{ presentation: 'modal' }} />
       <Stack.Screen name="chat-history" options={{ presentation: 'modal' }} />
+      {/* ✨ [CONFIRMED] The notification screen is correctly registered as a modal */}
+      <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

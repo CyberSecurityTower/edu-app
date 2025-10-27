@@ -1,10 +1,9 @@
-import React from 'react';
-import { View, Pressable, StyleSheet, Text } from 'react-native';
-import { Tabs } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, FadeIn, FadeOut } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { Tabs } from 'expo-router';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { EditModeProvider, useEditMode } from '../../context/EditModeContext';
 
 function MyCustomTabBar({ state, descriptors, navigation }) {

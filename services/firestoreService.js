@@ -2,7 +2,7 @@
 import { 
   doc, getDoc, setDoc, updateDoc, collection, getDocs, 
   arrayUnion, arrayRemove, increment, query, orderBy, 
-  limit, where, writeBatch, addDoc, serverTimestamp
+  limit, where, writeBatch, addDoc, serverTimestamp, deleteDoc 
 } from "firebase/firestore"; 
 import { db } from '../firebase';
 import Toast from 'react-native-toast-message';
@@ -320,5 +320,34 @@ export const getLeaderboard = async () => {
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     return [];
+  }
+};
+// --- ✨ [NEW] Notification Functions ---
+
+// ✨ [NEW] Function to delete a notification
+export const deleteNotification = async (userId, notificationId) => {
+  if (!userId || !notificationId) return;
+  const notifRef = doc(db, 'userNotifications', userId, 'inbox', notificationId);
+  try {
+    await deleteDoc(notifRef);
+  } catch (error) {
+    console.error(`Error deleting notification ${notificationId}:`, error);
+  }
+};
+// ✨ [NEW] Function to delete multiple notifications at once
+export const deleteAllNotifications = async (userId, notificationIds) => {
+  if (!userId || !Array.isArray(notificationIds) || notificationIds.length === 0) return;
+
+  const batch = writeBatch(db);
+  notificationIds.forEach(id => {
+    const notifRef = doc(db, 'userNotifications', userId, 'inbox', id);
+    batch.delete(notifRef);
+  });
+
+  try {
+    await batch.commit();
+    console.log(`${notificationIds.length} notifications deleted successfully.`);
+  } catch (error) {
+    console.error("Error batch deleting notifications:", error);
   }
 };

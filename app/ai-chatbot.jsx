@@ -514,7 +514,7 @@ useEffect(() => {
     botMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 8, maxWidth: '85%', alignSelf: 'flex-start' },
     userMessageWrapper: { flexDirection: 'row-reverse', alignItems: 'flex-start', marginVertical: 4, maxWidth: '80%', alignSelf: 'flex-end' },
     botAvatar: { width: 35, height: 35, borderRadius: 16, marginRight: 10, marginTop: 5, resizeMode: 'cover' },
-     botBubble: { backgroundColor: '#1F2937', borderRadius: 18, borderTopLeftRadius: 6, padding: 12 },
+    botBubble: { backgroundColor: '#ffffffd5', borderRadius: 18, borderTopLeftRadius: 6, padding: 12 },
     userBubble: { backgroundColor: '#3B82F6', borderRadius: 18, borderBottomRightRadius: 6, padding: 12 },
     errorMessageWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3c2428', borderRadius: 12, padding: 12, marginVertical: 8, marginHorizontal: 10, borderWidth: 1, borderColor: '#5c3336' },
     errorTitle: { color: '#F87171', fontWeight: 'bold' },

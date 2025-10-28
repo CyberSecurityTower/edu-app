@@ -2,15 +2,48 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSequence,
-  withDelay,
-} from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import { MotiView } from 'moti';
+
 import { useAppState } from '../context/AppStateContext';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+
+// ✨ [UPDATED] Network status indicator component with more states
+
+const NetworkIndicator = () => {
+  const networkStatus = useNetworkStatus();
+
+  const getIcon = () => {
+    switch (networkStatus) {
+      case 'strong':
+        return { name: 'wifi', color: '#34D399', key: 'strong' };
+      case 'no-internet':
+        return { name: 'wifi', color: '#EF4444', key: 'none' }; // Show red wifi with slash
+      default:
+        return { name: 'question-circle', color: '#6B7280', key: 'unknown' };
+    }
+  };
+
+  const icon = getIcon();
+
+  return (
+    <MotiView
+      key={icon.key}
+      from={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: 'timing', duration: 300 }}
+      style={styles.iconButton}
+    >
+      <FontAwesome5 name={icon.name} size={18} color={icon.color} />
+      {networkStatus === 'no-internet' && (
+        <View style={styles.wifiSlashContainer}>
+          <Text style={[styles.wifiSlashText, { color: icon.color }]}>/</Text>
+        </View>
+      )}
+    </MotiView>
+  );
+};
 
 const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = false }) => {
   const router = useRouter();
@@ -37,7 +70,7 @@ const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = 
   }, [points]);
 
   const animatedBadgeStyle = useAnimatedStyle(() => {
-    const backgroundColor = color.value === 1 ? '#EF4444' : '#1E293B';
+    const backgroundColor = color.value === 1 ? '#EF4444' : '#1E2B3B';
     return {
       backgroundColor: withTiming(backgroundColor),
       transform: [{ scale: scale.value }, { translateX: translateX.value }],
@@ -52,6 +85,9 @@ const MainHeader = ({ title, points = 0, isCompact = false, hideNotifications = 
           <FontAwesome5 name="star" size={16} color="#FFD700" solid />
           <Text style={styles.pointsText}>{points}</Text>
         </Animated.View>
+        
+        <NetworkIndicator />
+
         {!hideNotifications && (
           <Pressable style={styles.iconButton} onPress={() => router.push('/notifications')}>
             <FontAwesome5 name="bell" size={22} color="#a7adb8ff" solid={unreadCount > 0} />
@@ -91,7 +127,7 @@ const styles = StyleSheet.create({
   rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 15,
+    gap: 12,
   },
   pointsBadge: {
     flexDirection: 'row',
@@ -110,6 +146,10 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 5,
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 32,
+    height: 32,
   },
   notificationBadge: {
     position: 'absolute',
@@ -129,6 +169,21 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  wifiSlashContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wifiSlashText: {
+    fontWeight: 'bold',
+    fontSize: 24,
+    transform: [{ rotate: '-20deg' }],
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 2,
   },
 });
 

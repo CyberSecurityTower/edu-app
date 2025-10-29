@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     botBubble: { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 12, borderBottomLeftRadius: 4, padding: 10 },
     userBubble: { backgroundColor: '#3B82F6', borderRadius: 12, borderBottomRightRadius: 4, padding: 10 },
     // ✨ [IMPROVEMENT] أنماط نصوص المحادثة (عادية لـ Markdown)
-    botText: { color: 'transparent', fontSize: 14 }, // نتركها فارغة ونستخدم FastMarkdown
+    botText: { color: 'transparent', fontSize: 14 , color:"white"}, // نتركها فارغة ونستخدم FastMarkdown
     userText: { color: 'transparent', fontSize: 14, fontWeight: '500' }, // نتركها فارغة ونستخدم FastMarkdown
     // ✨ [NEW] أنماط FastMarkdownText
     botTextMarkdown: { body: { color: 'white', fontSize: 14 }, strong: { fontWeight: 'bold', color: '#34D399' } },
@@ -401,6 +401,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingBottom: 120, 
         maxHeight: '80%', 
+        
     },
     glassPane: {
         width: '100%',
@@ -412,6 +413,7 @@ const styles = StyleSheet.create({
         paddingTop: 15,
         paddingBottom: 15, 
         paddingHorizontal: 5, 
+        
         shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 24,
     },
     dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },

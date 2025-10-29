@@ -53,7 +53,7 @@ const BOTTOM_EMPTY_SPACE = 60;
 
 /* bot width percent (25%) and user width (rest) */
 const BOT_WIDTH_PERCENT = 0.75; // 25%
-const USER_WIDTH_PERCENT = auto; // ~73%
+const USER_WIDTH_PERCENT = 0.4; // ~73%
 
 const getAccentFromSubject = (subjectId) => {
   const palette = [
@@ -583,19 +583,20 @@ const styles = StyleSheet.create({
 
   /* Glass look: BlurView + translucent background + subtle border */
   glassPane: {
+    marginBottom:12,
     width: '100%',
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1.2,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.47)',
     backgroundColor: Platform.OS === 'android' ? 'rgba(255,255,255,0.02)' : 'transparent',
     paddingTop: 10,
     paddingBottom: 6,
     paddingHorizontal: 8,
-    shadowColor: "#000",
+    shadowColor: "#cec2c232",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.20,
     shadowRadius: 16,
     elevation: 20
   },

@@ -44,7 +44,7 @@ const BOT_USER = { id: 'bot-fab', firstName: 'FAB' };
 
 // helpers
 const WINDOW = Dimensions.get('window');
-const DEFAULT_VISIBLE = 12; // how many recent messages to render initially
+const DEFAULT_VISIBLE = 12; // how many recent messages to render initially (oldest-first length)
 const VISIBLE_INCREMENT = 12;
 const MAX_PANEL_RATIO = 0.72; // panel max height relative to screen
 const BASE_PANEL_RATIO = 0.38; // base panel height relative to screen
@@ -66,6 +66,22 @@ const getAccentFromSubject = (subjectId) => {
 
 // ----------------- MessageItem -----------------
 const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, isCardsMode }) {
+  // handle 'seen' marker specially
+  if (message.type === 'seen') {
+    const isUser = message.author?.id !== BOT_USER.id;
+    return (
+      <View style={[styles.seenWrapper, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
+        <View style={styles.seenBadge}>
+          <Text style={styles.seenText}>Seen</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (message.type === 'typing') {
+    return <TypingIndicator />;
+  }
+
   const isBot = message.author?.id === BOT_USER.id;
 
   const CardInner = (
@@ -76,7 +92,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
       style={isBot ? styles.botMessageWrapper : styles.userMessageWrapper}
     >
       <Pressable
-        onLongPress={() => onLongPressMessage(message)}
+        onLongPress={() => onLongPressMessage && onLongPressMessage(message)}
         android_ripple={{ color: 'rgba(255,255,255,0.02)' }}
         accessibilityLabel={isBot ? 'bot message' : 'user message'}
       >
@@ -153,13 +169,13 @@ export default function LessonViewScreen() {
   const [isChatPanelVisible, setChatPanelVisible] = useState(false);
   const [promptText, setPromptText] = useState('');
 
-  // messages stored newest-last (oldest-first array) to simplify non-inverted list
+  // messages stored oldest-first (index 0 oldest, last is newest)
   const [messages, setMessages] = useState([]); // oldest-first
   const messagesRef = useRef([]);
   const [loadedMessages, setLoadedMessages] = useState([]); // oldest-first (from storage)
   const [isSending, setIsSending] = useState(false);
 
-  // visible window (for performance)
+  // visible window (performance)
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE);
 
   // UI states
@@ -167,12 +183,17 @@ export default function LessonViewScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const toastAnim = useRef(new RNAnimated.Value(0)).current;
 
-  // references
+  // references & seen mechanics
   const translateY = useSharedValue(500);
   const flatListRef = useRef(null);
   const abortControllerRef = useRef(null);
   const mountedRef = useRef(true);
   const saveTimeoutRef = useRef(null);
+
+  // seen timers and maps
+  const seenTimersRef = useRef({});        // seenId -> timeoutId
+  const seenToTypingRef = useRef({});     // seenId -> typingId
+  const responsePendingRef = useRef({});  // seenId -> boolean
 
   // scroll tracking to avoid auto-scroll when user reading older messages
   const isAtBottomRef = useRef(true);
@@ -191,7 +212,7 @@ export default function LessonViewScreen() {
     Haptics.selectionAsync();
     setTimeout(() => {
       RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false));
-    }, 3300);
+    }, 3000);
   }, [toastAnim]);
 
   const onToastPress = useCallback(() => {
@@ -204,7 +225,7 @@ export default function LessonViewScreen() {
     try {
       const src = Array.isArray(maybeMessages) ? maybeMessages : messagesRef.current || [];
       if (!Array.isArray(src)) return;
-      const storable = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro');
+      const storable = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro' && m.type !== 'seen');
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => console.error('AsyncStorage.setItem error:', e));
@@ -220,7 +241,7 @@ export default function LessonViewScreen() {
       if (!raw) { setLoadedMessages([]); return; }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) { setLoadedMessages([]); return; }
-      setLoadedMessages(parsed);
+      setLoadedMessages(parsed); // oldest-first as stored
     } catch (e) {
       console.error('Error loading mini-chat:', e);
       setLoadedMessages([]);
@@ -242,77 +263,113 @@ export default function LessonViewScreen() {
     }
   }, [lessonId]);
 
+  // ---------- cleanup on unmount ----------
+  useEffect(() => {
+    return () => {
+      // clear seen timers
+      try {
+        Object.values(seenTimersRef.current).forEach(t => clearTimeout(t));
+      } catch (e) {}
+      // abort any pending API
+      try { if (abortControllerRef.current) abortControllerRef.current.abort(); } catch (e) {}
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
   // ---------- cancel ----------
   const handleStopGenerating = useCallback(() => {
     try { if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; } } catch (e) {}
     setIsSending(false);
-    setMessages(prev => prev.filter(m => m.type !== 'typing'));
+    // remove typing markers
+    setMessages(prev => prev.filter(m => m.type !== 'typing' && m.type !== 'seen'));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, []);
 
-  // ---------- process & respond ----------
+  // ---------- process & respond with SEEN logic ----------
   const processAndRespond = useCallback(async (userMessage, history) => {
     if (isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
-    // messages array is oldest-first: append userMessage and typing
+    const seenId = uuidv4();
+    // append userMessage then 'seen' marker
     setMessages(prev => {
-      const next = [...prev, userMessage, typingIndicator];
-      // keep saved copy
+      const next = [...prev, userMessage, { type: 'seen', id: seenId, author: userMessage.author }];
       runOnJS(saveChat)(next);
       return next;
     });
+
     setIsSending(true);
-
     abortControllerRef.current = new AbortController();
+    responsePendingRef.current[seenId] = false;
 
-    const historyForAPI = Array.isArray(history) ? history.slice(-5).map(msg => ({
-      role: msg.author?.id === BOT_USER.id ? 'model' : 'user',
-      text: msg.text || '',
-    })) : [];
+    // start API call immediately
+    const apiPromise = apiService.getInteractiveChatReply({
+      message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
+      userId: user?.uid,
+      history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
+    }, abortControllerRef.current.signal);
 
-    const contextSnippet = typeof lessonContent === 'string' ? lessonContent.substring(0, 1500) : 'No content available.';
-    const finalUserMessageText = `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${contextSnippet}...] ${userMessage.text}`;
+    // random seen delay 2000-4000ms
+    const delayMs = 2000 + Math.floor(Math.random() * 2000);
+    const t = setTimeout(() => {
+      // if response already arrived -> do nothing
+      if (responsePendingRef.current[seenId]) return;
+      // convert seen -> typing
+      const typingId = uuidv4();
+      seenToTypingRef.current[seenId] = typingId;
+      setMessages(prev => prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)));
+    }, delayMs);
+    seenTimersRef.current[seenId] = t;
 
     try {
-      const response = await apiService.getInteractiveChatReply({
-        message: finalUserMessageText,
-        userId: user?.uid,
-        history: historyForAPI,
-      }, abortControllerRef.current.signal);
+      const response = await apiPromise;
+      responsePendingRef.current[seenId] = true;
 
       const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
+      setMessages(prev => {
+        // if we've converted to typing -> replace typing id
+        const typingId = seenToTypingRef.current[seenId];
+        if (typingId) {
+          const replaced = prev.map(m => (m.id === typingId ? botResponse : m));
+          runOnJS(saveChat)(replaced);
+          return replaced;
+        }
+        // else replace seen marker directly
+        const replaced = prev.map(m => (m.id === seenId ? botResponse : m));
+        runOnJS(saveChat)(replaced);
+        return replaced;
+      });
 
       Haptics.selectionAsync();
-
-      setMessages(prev => {
-        // remove typingIndicator (last typing) and append botResponse
-        const filtered = prev.filter(m => m.id !== typingIndicator.id);
-        const next = [...filtered, botResponse];
-        runOnJS(saveChat)(next);
-        // if chat closed, notify via toast
-        if (!isChatPanelVisible) runOnJS(showToast)('FAB replied — اضغط للفتح');
-        return next;
-      });
+      if (!isChatPanelVisible) runOnJS(showToast)('FAB replied — اضغط للفتح');
     } catch (error) {
-      if (error?.name !== 'AbortError') {
+      if (error?.name === 'AbortError') {
+        // cleanup markers
+        setMessages(prev => prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]));
+      } else {
         console.error('AI Chat Error:', error);
         const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
         setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== typingIndicator.id);
-          const next = [...filtered, errorMessage];
-          runOnJS(saveChat)(next);
-          return next;
+          const typingId = seenToTypingRef.current[seenId];
+          if (typingId) {
+            const replaced = prev.map(m => (m.id === typingId ? errorMessage : m));
+            runOnJS(saveChat)(replaced);
+            return replaced;
+          }
+          const replaced = prev.map(m => (m.id === seenId ? errorMessage : m));
+          runOnJS(saveChat)(replaced);
+          return replaced;
         });
-      } else {
-        setMessages(prev => prev.filter(m => m.id !== typingIndicator.id));
       }
     } finally {
+      // cleanup
+      try { clearTimeout(seenTimersRef.current[seenId]); } catch (e) {}
+      delete seenTimersRef.current[seenId];
+      delete seenToTypingRef.current[seenId];
+      delete responsePendingRef.current[seenId];
       setIsSending(false);
       abortControllerRef.current = null;
     }
-  // intentionally don't include isSending in deps
   }, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast]);
 
   // ---------- send prompt ----------
@@ -322,9 +379,12 @@ export default function LessonViewScreen() {
     if (text.length === 0) return;
     setPromptText('');
     Keyboard.dismiss();
+
     const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text, reactions: {} };
-    const history = messagesRef.current.filter(m => m.type !== 'typing').slice(-50); // last 50 for history
+    const history = messagesRef.current.filter(m => m.type !== 'typing' && m.type !== 'seen').slice(-50);
     processAndRespond(userMessage, history);
+    // immediate light haptic to signal send
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [promptText, isSending, chatUser, processAndRespond, handleStopGenerating]);
 
   // ---------- long press options ----------
@@ -405,26 +465,23 @@ export default function LessonViewScreen() {
 
   const canLoadMore = messages.length > visibleCount || (loadedMessages.length > messages.length);
 
-  const loadMoreMessages = useCallback(() => {
-    // reveal more older messages
-    setVisibleCount(v => Math.min(messagesRef.current.length || visibleCount + VISIBLE_INCREMENT, (messagesRef.current.length || visibleCount) + VISIBLE_INCREMENT));
-  }, [visibleCount]);
-
   // ---------- auto-scroll behavior ----------
   const onScroll = useCallback((ev) => {
     const { contentOffset, layoutMeasurement, contentSize } = ev.nativeEvent;
-    // compute distance from bottom
-    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-    // if near bottom (threshold), consider at bottom
+    // distance from bottom (since list is inverted, bottom offset is different)
+    const distanceFromBottom = contentOffset.y; // when inverted, offset 0 is bottom
     isAtBottomRef.current = distanceFromBottom < 80;
   }, []);
 
   useEffect(() => {
-    // when messages change, scroll to bottom only if user is at bottom
+    // when visibleMessages change, scroll to bottom only if user is at bottom
     if (!flatListRef.current) return;
     if (isAtBottomRef.current) {
       setTimeout(() => {
-        try { flatListRef.current.scrollToEnd({ animated: true }); } catch (e) {}
+        try {
+          // for inverted FlatList, scrollToOffset({offset: 0}) scrolls to bottom
+          flatListRef.current.scrollToOffset({ offset: 0, animated: true });
+        } catch (e) {}
       }, 80);
     }
   }, [visibleMessages.length]);
@@ -432,14 +489,11 @@ export default function LessonViewScreen() {
   // ---------- render item ----------
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
-    if (item.type === 'typing') return <TypingIndicator />;
     return <MessageItem message={item} onLongPressMessage={handleLongPressMessage} isCardsMode={cardsMode} />;
   }, [handleLongPressMessage, cardsMode]);
 
   // ---------- UI: dynamic panel height calculation ----------
   const computePanelHeight = () => {
-    // base between basePanelHeight and maxPanelHeight
-    // add small extra if user typing or bot typing
     const extra = isSending ? 80 : 30;
     const desired = Math.min(maxPanelHeight, basePanelHeight + extra);
     return desired;
@@ -512,7 +566,7 @@ export default function LessonViewScreen() {
 
                       <FlatList
                         ref={flatListRef}
-                        data={visibleMessages}
+                        data={visibleMessages.slice().reverse()} // reverse so newest-last appear at bottom with inverted=true
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderMessageItem}
                         contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
@@ -522,6 +576,7 @@ export default function LessonViewScreen() {
                         maxToRenderPerBatch={6}
                         windowSize={5}
                         removeClippedSubviews={true}
+                        inverted={true}
                         onScroll={onScroll}
                       />
                     </KeyboardAvoidingView>
@@ -590,6 +645,11 @@ const styles = StyleSheet.create({
 
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8', marginHorizontal: 4 },
 
+  // seen styles
+  seenWrapper: { marginVertical: 6, maxWidth: '85%' },
+  seenBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)' },
+  seenText: { color: '#94A3B8', fontSize: 12 },
+
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
   overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent' },
   chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 0 },
@@ -616,7 +676,7 @@ const styles = StyleSheet.create({
 });
 
 const markdownStyles = StyleSheet.create({
-  heading1: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', marginBottom: 12, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 8, textAlign: 'right' },
+  heading1: { color: '#FFFFFF', fontSize: 25, fontWeight: '700', marginBottom: 12, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 8, textAlign: 'right' },
   body: { color: '#D1D5DB', fontSize: 16, lineHeight: 24, textAlign: 'right' },
   strong: { fontWeight: 'bold', color: '#10B981' },
 });

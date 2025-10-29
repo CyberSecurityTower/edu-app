@@ -52,8 +52,8 @@ const BOTTOM_EMPTY_SPACE = 60;
 const MESSAGE_HISTORY_CAP = 50; // cap messages to last 200 for performance
 
 /* bot width percent (25%) and user width (rest) */
-const BOT_WIDTH_PERCENT = 0.25;
-const USER_WIDTH_PERCENT = 0.73;
+const BOT_WIDTH_PERCENT = 0.75;
+const USER_WIDTH_PERCENT = 0.43;
 
 const getAccentFromSubject = (subjectId) => {
   const palette = [
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8', marginHorizontal: 4 },
 
   seenWrapper: { marginVertical: 6, maxWidth: '85%' },
-  seenBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)' },
+  seenBadge: { paddingVertical: 0, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(0, 0, 0, 0.19)' },
   seenText: { color: '#94A3B8', fontSize: 12 },
 
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },

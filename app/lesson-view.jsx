@@ -1,38 +1,31 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert, TextInput, Keyboard, Platform, FlatList } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
-import Markdown from 'react-native-markdown-display';
-import { MotiView, AnimatePresence } from 'moti';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, withTiming } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { v4 as uuidv4 } from 'uuid';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import FastMarkdownText from 'react-native-markdown-text'; // ✨ [NEW] بديل أسرع لعرض نصوص المحادثة
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { AnimatePresence, MotiView } from 'moti';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Markdown from 'react-native-markdown-display';
+import FastMarkdownText from 'react-native-markdown-text';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { v4 as uuidv4 } from 'uuid';
 
 import FloatingActionButton from '../components/FloatingActionButton';
-import { getLessonContent, updateLessonProgress } from '../services/firestoreService';
-import { useAppState } from '../context/AppStateContext';
 import GenerateKitButton from '../components/GenerateKitButton';
 import { apiService } from '../config/api';
-import { STORAGE_KEYS } from '../config/appConfig';
+import { useAppState } from '../context/AppStateContext';
+import { getLessonContent, updateLessonProgress } from '../services/firestoreService';
 
-// تعريف ثابت لشخصية الروبوت
 const BOT_USER = { id: 'bot-fab', firstName: 'FAB' };
 
-// --- ✨ [OPTIMIZATION] مكون الرسالة (MessageItem) معزول ومُحسّن ---
+// --- مكون الرسالة (MessageItem) معزول ومُحسّن ---
 const MessageItem = React.memo(({ message }) => {
     const isBot = message.author?.id === BOT_USER.id;
-    // استخدام FastMarkdownText لتحسين أداء العرض النصي
-    const renderMarkdown = (text) => (
-        <FastMarkdownText styles={isBot ? styles.botTextMarkdown : styles.userTextMarkdown}>
-            {text}
-        </FastMarkdownText>
-    );
-
+    const textStyle = isBot ? styles.botTextMarkdown : styles.userTextMarkdown;
+    
     return (
         <MotiView 
             from={{ opacity: 0, translateY: isBot ? 10 : 0 }} 
@@ -41,13 +34,15 @@ const MessageItem = React.memo(({ message }) => {
             style={isBot ? styles.botMessageWrapper : styles.userMessageWrapper}
         >
             <View style={isBot ? styles.botBubble : styles.userBubble}>
-                {renderMarkdown(message.text)}
+                <FastMarkdownText styles={textStyle}>
+                    {message.text}
+                </FastMarkdownText>
             </View>
         </MotiView>
     );
-});
+}, (prevProps, nextProps) => prevProps.message.id === nextProps.message.id && prevProps.message.text === nextProps.message.text); // ✨ [CRITICAL FIX] منع إعادة التصيير إلا عند الضرورة
 
-// --- ✨ [OPTIMIZATION] مكون مؤشر الكتابة (TypingIndicator) معزول ومُحسّن ---
+// --- مكون مؤشر الكتابة (TypingIndicator) معزول ومُحسّن ---
 const TypingIndicator = React.memo(() => (
     <MotiView style={styles.botMessageWrapper} from={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <View style={[styles.botBubble, { paddingVertical: 10, flexDirection: 'row' }]}>
@@ -95,7 +90,10 @@ export default function LessonViewScreen() {
             const storableMessages = currentMessages
                 .filter(m => m.type !== 'typing' && m.type !== 'intro')
                 .reverse(); 
-            await AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storableMessages));
+            // ✨ [IMPROVEMENT] استخدام setTimeout(0) لفصل عملية الكتابة في AsyncStorage عن خيط الـ UI
+            setTimeout(async () => {
+                 await AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storableMessages));
+            }, 0);
         } catch (error) {
             console.error('Error saving mini-chat:', error);
         }
@@ -118,7 +116,7 @@ export default function LessonViewScreen() {
     // ✨ [NEW] دالة لإيقاف عملية الإرسال
     const handleStopGenerating = useCallback(() => {
         if (abortControllerRef.current) {
-            abortControllerRef.current.abort(); // إلغاء طلب الشبكة
+            abortControllerRef.current.abort();
             setIsSending(false);
             setMessages(prev => prev.filter(m => m.type !== 'typing'));
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -129,11 +127,13 @@ export default function LessonViewScreen() {
     const processAndRespond = useCallback(async (userMessage, history) => {
         if (isSending) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setIsSending(true);
-        abortControllerRef.current = new AbortController();
+        
+        // ✨ [CRITICAL FIX] يتم تحديث setMessages بسرعة مع مؤشر الكتابة لتجنب التجمد
         const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
-
         setMessages(prev => [typingIndicator, userMessage, ...prev.filter(m => m.type !== 'typing' && m.type !== 'intro')]);
+        setIsSending(true); // يتم تحديثها هنا بعد تهيئة مؤشر الكتابة
+
+        abortControllerRef.current = new AbortController();
         
         const historyForAPI = history.slice(-5).map(msg => ({
             role: msg.author?.id === BOT_USER.id ? 'model' : 'user',
@@ -154,25 +154,29 @@ export default function LessonViewScreen() {
 
             const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response.reply, reactions: {} };
 
+            // 3. تحديث الرسائل وحفظها
             setMessages(prev => {
                 const newMessages = [botResponse, ...prev.filter(m => m.id !== typingIndicator.id)];
                 runOnJS(saveChat)(newMessages); 
                 return newMessages;
             });
         } catch (error) {
-            if (error.name !== 'AbortError') { // تجاهل الخطأ إذا كان سببه الإلغاء اليدوي
+            if (error.name !== 'AbortError') { 
                 console.error('AI Chat Error:', error);
-                Alert.alert("Network Error", "Could not reach EduAI tutor. Please check your connection."); // ✨ [IMPROVEMENT] رسالة خطأ واضحة
+                // ✨ [IMPROVEMENT] رسالة خطأ تُظهر سبب المشكلة
+                const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: `⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.` };
+                setMessages(prev => [errorMessage, ...prev.filter(m => m.id !== typingIndicator.id)]);
+            } else {
+                setMessages(prev => prev.filter(m => m.id !== typingIndicator.id));
             }
-            setMessages(prev => prev.filter(m => m.id !== typingIndicator.id));
         } finally {
             setIsSending(false);
         }
-    }, [isSending, user?.uid, lessonContent, lessonTitle, saveChat]);
-    
+    }, [user?.uid, lessonContent, lessonTitle, saveChat]); // ✨ أزلنا isSending من قائمة التبعيات لمنع الحلقة المفرغة
+
     // --- دالة الإرسال الرئيسية (useCallback) ---
     const handleSendPrompt = useCallback(() => {
-        if (isSending) { // ✨ [MODIFIED] إذا كان يرسل، فزر الإرسال يعمل كزر إيقاف
+        if (isSending) {
             handleStopGenerating();
             return;
         }
@@ -225,7 +229,6 @@ export default function LessonViewScreen() {
             translateY.value = withSpring(500, { damping: 18, stiffness: 120 });
             if (messages.length > 0) runOnJS(saveChat)(messages);
             runOnJS(Keyboard.dismiss)();
-            // ✨ [IMPROVEMENT] إيقاف أي عملية إرسال معلقة عند إغلاق النافذة
             handleStopGenerating();
         }
     }, [isChatPanelVisible, messages, saveChat, handleStopGenerating]);
@@ -278,7 +281,6 @@ export default function LessonViewScreen() {
                         scrollEventThrottle={400}
                     >
                         <View style={{ writingDirection: 'rtl' }}>
-                            {/* ✨ [IMPROVEMENT] استخدام Markdown للعرض الثابت أسرع من FastMarkdown */}
                             <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
                         </View>
                     </ScrollView>
@@ -331,7 +333,8 @@ export default function LessonViewScreen() {
                                                     <Pressable 
                                                         style={styles.sendButton} 
                                                         onPress={handleSendPrompt}
-                                                        disabled={promptText.trim().length === 0 && !isSending} // ✨ [FIXED] يمكن الضغط على stop حتى لو كان النص فارغًا
+                                                        // ✨ [FIXED] السماح بالضغط على زر الإرسال حتى لو كان فارغًا، إذا كان وضع الإرسال نشطًا (لزوم زر Stop)
+                                                        disabled={promptText.trim().length === 0 && !isSending} 
                                                     >
                                                         <FontAwesome5 
                                                             name={isSending ? "stop" : "paper-plane"} 
@@ -378,9 +381,6 @@ const styles = StyleSheet.create({
     userMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, maxWidth: '85%', alignSelf: 'flex-end' },
     botBubble: { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 12, borderBottomLeftRadius: 4, padding: 10 },
     userBubble: { backgroundColor: '#3B82F6', borderRadius: 12, borderBottomRightRadius: 4, padding: 10 },
-    // ✨ [IMPROVEMENT] أنماط نصوص المحادثة (عادية لـ Markdown)
-    botText: { color: 'transparent', fontSize: 14 , color:"white"}, // نتركها فارغة ونستخدم FastMarkdown
-    userText: { color: 'transparent', fontSize: 14, fontWeight: '500' }, // نتركها فارغة ونستخدم FastMarkdown
     // ✨ [NEW] أنماط FastMarkdownText
     botTextMarkdown: { body: { color: 'white', fontSize: 14 }, strong: { fontWeight: 'bold', color: '#34D399' } },
     userTextMarkdown: { body: { color: 'white', fontSize: 14, fontWeight: '500' }, strong: { fontWeight: 'bold', color: '#E5E7EB' } },
@@ -401,7 +401,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingBottom: 120, 
         maxHeight: '80%', 
-        
     },
     glassPane: {
         width: '100%',
@@ -413,7 +412,6 @@ const styles = StyleSheet.create({
         paddingTop: 15,
         paddingBottom: 15, 
         paddingHorizontal: 5, 
-        
         shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 24,
     },
     dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },

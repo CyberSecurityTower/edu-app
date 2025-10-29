@@ -605,9 +605,9 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1.0,
-    borderColor: 'rgba(247, 236, 236, 0.12)',
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
+    borderWidth: 1.9,
+    borderColor: 'rgba(255, 255, 255, 0.57)',
+    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.42)' : 'transparent',
     paddingTop: 10,
     paddingBottom: 6,
     paddingHorizontal: 8,
@@ -616,8 +616,8 @@ const styles = StyleSheet.create({
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
   dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
 
-  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
-  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: 'white', fontSize: 15 },
+  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.34)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
+  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: '#ff0000ff', fontSize: 15 , fontWeight:'bold'},
   sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 8, marginLeft: 6 },
   stopButton: { backgroundColor: '#F87171' },
 

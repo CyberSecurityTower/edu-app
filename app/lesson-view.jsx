@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   botRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '92%', alignSelf: 'flex-start' },
   userRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '92%', alignSelf: 'flex-end', justifyContent: 'flex-end' },
 
-  botBubble: { backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 50, maxWidth: '78%', shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  botBubble: { backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 50, maxWidth: '78%', shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2, width:'200%'  },
   userBubble: { backgroundColor: '#0EA5A4', borderRadius: 18, padding: 12, minWidth: 50, maxWidth: '78%', shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 4 },
 
   botTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#164E63' } },

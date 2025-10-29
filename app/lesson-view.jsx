@@ -4,7 +4,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  InteractionManager,
   Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -22,7 +24,7 @@ import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
 import * as Haptics from 'expo-haptics';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { MotiView, AnimatePresence } from 'moti';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
@@ -41,8 +43,9 @@ const MessageItem = React.memo(function MessageItem({ message }) {
     <MotiView
       from={{ opacity: 0, translateY: isBot ? 6 : 0 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 260 }}
+      transition={{ type: 'timing', duration: 220 }}
       style={isBot ? styles.botMessageWrapper : styles.userMessageWrapper}
+      accessibilityLabel={isBot ? 'bot message' : 'user message'}
     >
       <View style={isBot ? styles.botBubble : styles.userBubble}>
         <FastMarkdownText styles={isBot ? styles.botTextMarkdown : styles.userTextMarkdown}>
@@ -79,8 +82,6 @@ export default function LessonViewScreen() {
   const { lessonId, lessonTitle, subjectId, pathId, totalLessons } = params || {};
   const chatUserId = user?.uid || 'guest-user';
   const chatUser = useMemo(() => ({ id: chatUserId }), [chatUserId]);
-
-  // stable storage key
   const CHAT_KEY = useMemo(() => `mini_chat_${lessonId}_${chatUserId}`, [lessonId, chatUserId]);
 
   const [lessonContent, setLessonContent] = useState('');
@@ -88,42 +89,40 @@ export default function LessonViewScreen() {
   const [isChatPanelVisible, setChatPanelVisible] = useState(false);
   const [promptText, setPromptText] = useState('');
 
-  // messages: newest-first (0 index == newest)
+  // newest-first messages
   const [messages, setMessages] = useState([]);
-  const [loadedMessages, setLoadedMessages] = useState([]); // newest-first
   const messagesRef = useRef([]);
+  const [loadedMessages, setLoadedMessages] = useState([]); // newest-first
   const [isSending, setIsSending] = useState(false);
 
   const translateY = useSharedValue(500);
-  const context = useSharedValue({ y: 0 });
   const flatListRef = useRef(null);
   const abortControllerRef = useRef(null);
   const mountedRef = useRef(true);
 
-  // keep ref in sync
+  // debounce save (simple)
+  const saveTimeoutRef = useRef(null);
+
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // ---------- saveChat (safe) ----------
-  const saveChat = useCallback(async (maybeMessages) => {
+  // ---------- safe save with debounce ----------
+  const saveChat = useCallback((maybeMessages) => {
     try {
-      // choose source: function argument or ref
-      const src = Array.isArray(maybeMessages) ? maybeMessages : (Array.isArray(messagesRef.current) ? messagesRef.current : []);
-      // ensure array
+      const src = Array.isArray(maybeMessages) ? maybeMessages : messagesRef.current || [];
       if (!Array.isArray(src)) return;
-      // filter out ephemeral types and store oldest-first (for human-readability)
       const storable = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro').slice().reverse();
-      // offload to next tick to avoid blocking UI
-      setTimeout(() => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
         AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => {
           console.error('AsyncStorage.setItem error:', e);
         });
-      }, 0);
-    } catch (error) {
-      console.error('Error saving mini-chat:', error);
+      }, 400); // debounce 400ms
+    } catch (e) {
+      console.error('Error saving mini-chat:', e);
     }
   }, [CHAT_KEY]);
 
-  // ---------- loadChat ----------
+  // ---------- load chat ----------
   const loadChat = useCallback(async () => {
     try {
       const raw = await AsyncStorage.getItem(CHAT_KEY);
@@ -136,36 +135,32 @@ export default function LessonViewScreen() {
         setLoadedMessages([]);
         return;
       }
-      // parsed is oldest-first -> convert to newest-first
-      setLoadedMessages(parsed.slice().reverse());
-    } catch (error) {
-      console.error('Error loading mini-chat:', error);
+      setLoadedMessages(parsed.slice().reverse()); // newest-first
+    } catch (e) {
+      console.error('Error loading mini-chat:', e);
       setLoadedMessages([]);
     }
   }, [CHAT_KEY]);
 
-  // ---------- handleStopGenerating ----------
+  // ---------- cancel generation ----------
   const handleStopGenerating = useCallback(() => {
     try {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
     setIsSending(false);
     setMessages(prev => prev.filter(m => m.type !== 'typing'));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, []);
 
-  // ---------- processAndRespond ----------
+  // ---------- process & respond ----------
   const processAndRespond = useCallback(async (userMessage, history) => {
-    // don't allow overlapping sends
     if (isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
-
-    // add typing + user message (newest-first)
     setMessages(prev => [typingIndicator, userMessage, ...prev.filter(m => m.type !== 'typing' && m.type !== 'intro')]);
     setIsSending(true);
 
@@ -190,7 +185,6 @@ export default function LessonViewScreen() {
 
       setMessages(prev => {
         const newMessages = [botResponse, ...prev.filter(m => m.id !== typingIndicator.id)];
-        // save in background using ref-safe call
         runOnJS(saveChat)(newMessages);
         return newMessages;
       });
@@ -199,20 +193,18 @@ export default function LessonViewScreen() {
         console.error('AI Chat Error:', error);
         const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
         setMessages(prev => [errorMessage, ...prev.filter(m => m.id !== typingIndicator.id)]);
-        // save error state too
         runOnJS(saveChat)(messagesRef.current);
       } else {
-        // aborted
         setMessages(prev => prev.filter(m => m.id !== typingIndicator.id));
       }
     } finally {
       setIsSending(false);
       abortControllerRef.current = null;
     }
-  // intentionally excluding isSending from deps to avoid recreation loops
+  // exclude isSending to avoid recreating on every send
   }, [lessonContent, lessonTitle, saveChat, user?.uid]);
 
-  // ---------- handleSendPrompt ----------
+  // ---------- send prompt ----------
   const handleSendPrompt = useCallback(() => {
     if (isSending) {
       handleStopGenerating();
@@ -225,12 +217,11 @@ export default function LessonViewScreen() {
     Keyboard.dismiss();
 
     const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text, reactions: {} };
-    // prepare history oldest-first for API
-    const currentHistory = messagesRef.current.filter(m => m.type !== 'typing').slice().reverse();
-    processAndRespond(userMessage, currentHistory);
+    const history = messagesRef.current.filter(m => m.type !== 'typing').slice().reverse();
+    processAndRespond(userMessage, history);
   }, [promptText, isSending, chatUser, processAndRespond, handleStopGenerating]);
 
-  // ---------- initial lesson load ----------
+  // ---------- load lesson + chat ----------
   useEffect(() => {
     mountedRef.current = true;
     const load = async () => {
@@ -246,41 +237,38 @@ export default function LessonViewScreen() {
         const total = parseInt(totalLessons, 10) || 1;
         await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', total);
         await loadChat();
-      } catch (error) {
-        console.error('Failed to load lesson:', error);
+      } catch (e) {
+        console.error('Failed to load lesson:', e);
         Alert.alert('Error', 'Could not load lesson content or progress.');
       } finally {
         if (mountedRef.current) setIsLoading(false);
       }
     };
     load();
-    return () => { mountedRef.current = false; };
+    return () => { mountedRef.current = false; if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [lessonId, user?.uid, subjectId, pathId, totalLessons, loadChat]);
 
   // ---------- open/close chat panel ----------
   useEffect(() => {
     if (isChatPanelVisible) {
-      // only populate messages state if it is currently empty
-      setMessages(prev => {
-        if (Array.isArray(prev) && prev.length > 0) return prev;
-        if (Array.isArray(loadedMessages) && loadedMessages.length > 0) return loadedMessages;
-        return prev;
+      // avoid heavy setState during animation/interaction — use InteractionManager
+      InteractionManager.runAfterInteractions(() => {
+        setMessages(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)));
       });
       translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     } else {
       translateY.value = withSpring(500, { damping: 18, stiffness: 120 });
-      // save using ref (safe)
       runOnJS(saveChat)(messagesRef.current);
       runOnJS(Keyboard.dismiss)();
       handleStopGenerating();
     }
-    // loadedMessages in deps so that when they become available they are used on open
   }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY]);
 
-  // ---------- Gesture + animated style ----------
-  const gesture = Gesture.Pan()
+  // ---------- drag gesture (only on handle) ----------
+  const context = useSharedValue({ y: 0 });
+  const dragGesture = Gesture.Pan()
     .onStart(() => { context.value = { y: translateY.value }; })
-    .onUpdate(ev => { translateY.value = Math.max(0, context.value.y + ev.translationY); })
+    .onUpdate((ev) => { translateY.value = Math.max(0, context.value.y + ev.translationY); })
     .onEnd(() => {
       if (translateY.value > 140) {
         runOnJS(setChatPanelVisible)(false);
@@ -289,11 +277,9 @@ export default function LessonViewScreen() {
       }
     });
 
-  const animatedPanelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const animatedPanelStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
 
-  // ---------- intro & final messages ----------
+  // ---------- intro/final messages ----------
   const introMessage = useMemo(() => ({
     type: 'bot',
     id: 'intro',
@@ -309,18 +295,18 @@ export default function LessonViewScreen() {
     return <MessageItem message={item} />;
   }, []);
 
-  // auto-scroll newest on messages change
+  // auto-scroll newest (index 0) when message count changes
   useEffect(() => {
     if (!flatListRef.current) return;
     setTimeout(() => {
-      try { flatListRef.current?.scrollToOffset?.({ offset: 0, animated: true }); } catch (e) { /* ignore */ }
-    }, 120);
+      try { flatListRef.current?.scrollToOffset?.({ offset: 0, animated: true }); } catch (e) {}
+    }, 90);
   }, [finalMessages.length]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerIcon}>
+        <Pressable onPress={() => router.back()} style={styles.headerIcon} accessibilityLabel="back">
           <FontAwesome5 name="arrow-left" size={22} color="white" />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
@@ -342,58 +328,69 @@ export default function LessonViewScreen() {
 
           <AnimatePresence>
             {isChatPanelVisible && (
-              <Pressable style={styles.overlay} onPress={() => setChatPanelVisible(false)}>
-                <GestureDetector gesture={gesture}>
-                  <Animated.View style={[styles.chatPanelContainer, animatedPanelStyle]}>
-                    <Pressable onPress={() => {}} style={{ width: '100%' }}>
-                      <BlurView intensity={Platform.OS === 'ios' ? 70 : 100} tint="dark" style={styles.glassPane}>
-                        <View style={styles.dragHandleContainer}><View style={styles.dragHandle} /></View>
+              <View style={styles.overlayContainer} pointerEvents="box-none">
+                {/* background to close when tapping outside */}
+                <Pressable style={styles.overlayBackground} onPress={() => setChatPanelVisible(false)} accessibilityLabel="close chat background" />
 
-                        <FlatList
-                          ref={flatListRef}
-                          data={finalMessages}
-                          keyExtractor={(item) => String(item.id)}
-                          renderItem={renderMessageItem}
-                          contentContainerStyle={styles.messagesListContent}
-                          inverted
-                          keyboardShouldPersistTaps="handled"
-                          style={styles.messagesList}
-                          initialNumToRender={8}
-                          maxToRenderPerBatch={6}
-                          windowSize={10}
-                          removeClippedSubviews={true}
+                {/* chat panel above background */}
+                <Animated.View style={[styles.chatPanelContainer, animatedPanelStyle]}>
+                  <BlurView intensity={Platform.OS === 'ios' ? 70 : 100} tint="dark" style={styles.glassPane}>
+                    {/* drag handle (only this element handles the pan gesture) */}
+                    <GestureDetector gesture={dragGesture}>
+                      <View style={styles.dragHandleContainer} accessible accessibilityRole="button" accessibilityLabel="drag handle to close">
+                        <View style={styles.dragHandle} />
+                      </View>
+                    </GestureDetector>
+
+                    {/* messages: user can freely scroll here */}
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+                      <FlatList
+                        ref={flatListRef}
+                        data={finalMessages}
+                        keyExtractor={(item) => String(item.id)}
+                        renderItem={renderMessageItem}
+                        contentContainerStyle={styles.messagesListContent}
+                        inverted
+                        keyboardShouldPersistTaps="handled"
+                        style={styles.messagesList}
+                        initialNumToRender={8}
+                        maxToRenderPerBatch={6}
+                        windowSize={10}
+                        removeClippedSubviews={true}
+                        accessibilityLabel="chat messages"
+                      />
+                    </KeyboardAvoidingView>
+
+                    {/* input */}
+                    <View style={styles.promptContainer}>
+                      <TextInput
+                        style={styles.promptInput}
+                        placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
+                        placeholderTextColor="#9CA3AF"
+                        value={promptText}
+                        onChangeText={setPromptText}
+                        onSubmitEditing={handleSendPrompt}
+                        editable={!isSending}
+                        returnKeyType="send"
+                        accessibilityLabel="Chat input"
+                      />
+                      <Pressable
+                        style={[styles.sendButton, isSending ? styles.stopButton : null]}
+                        onPress={handleSendPrompt}
+                        disabled={promptText.trim().length === 0 && !isSending}
+                        accessibilityLabel={isSending ? 'stop generating' : 'send message'}
+                      >
+                        <FontAwesome5
+                          name={isSending ? "stop" : "paper-plane"}
+                          size={18}
+                          color="white"
+                          solid
                         />
-
-                        <View style={styles.promptContainer}>
-                          <TextInput
-                            style={styles.promptInput}
-                            placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
-                            placeholderTextColor="#9CA3AF"
-                            value={promptText}
-                            onChangeText={setPromptText}
-                            onSubmitEditing={handleSendPrompt}
-                            editable={!isSending}
-                            returnKeyType="send"
-                          />
-                          <Pressable
-                            style={styles.sendButton}
-                            onPress={handleSendPrompt}
-                            disabled={promptText.trim().length === 0 && !isSending}
-                          >
-                            <FontAwesome5
-                              name={isSending ? "stop" : "paper-plane"}
-                              size={20}
-                              color={isSending ? "#F87171" : "white"}
-                              solid
-                            />
-                          </Pressable>
-                        </View>
-
-                      </BlurView>
-                    </Pressable>
-                  </Animated.View>
-                </GestureDetector>
-              </Pressable>
+                      </Pressable>
+                    </View>
+                  </BlurView>
+                </Animated.View>
+              </View>
             )}
           </AnimatePresence>
         </View>
@@ -404,39 +401,47 @@ export default function LessonViewScreen() {
 
 // ----------------- Styles -----------------
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0C0F27' },
+  container: { flex: 1, backgroundColor: '#0B1220' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
   headerIcon: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', flex: 1, textAlign: 'center' },
+  headerTitle: { color: 'white', fontSize: 20, fontWeight: '700', flex: 1, textAlign: 'center' },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   contentContainer: { padding: 20, paddingBottom: 220 },
 
-  messagesList: { flexGrow: 0, maxHeight: 220, minHeight: 40, paddingHorizontal: 10 },
-  messagesListContent: { paddingTop: 5, paddingBottom: 5 },
+  // messages
+  messagesList: { flexGrow: 0, maxHeight: 320, minHeight: 80, paddingHorizontal: 10 },
+  messagesListContent: { paddingTop: 8, paddingBottom: 8 },
 
-  botMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, maxWidth: '85%', alignSelf: 'flex-start' },
-  userMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, maxWidth: '85%', alignSelf: 'flex-end' },
-  botBubble: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, borderBottomLeftRadius: 4, padding: 10 },
-  userBubble: { backgroundColor: '#3B82F6', borderRadius: 12, borderBottomRightRadius: 4, padding: 10 },
+  botMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '85%', alignSelf: 'flex-start' },
+  userMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '85%', alignSelf: 'flex-end' },
 
-  botTextMarkdown: { body: { color: 'white', fontSize: 14 }, strong: { fontWeight: 'bold', color: '#34D399' } },
-  userTextMarkdown: { body: { color: 'white', fontSize: 14, fontWeight: '500' }, strong: { fontWeight: 'bold', color: '#E5E7EB' } },
+  // new high-contrast colors
+  botBubble: { backgroundColor: '#0F1724', borderRadius: 14, borderBottomLeftRadius: 6, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  userBubble: { backgroundColor: '#0EA5A4', borderRadius: 14, borderBottomRightRadius: 6, padding: 12 },
 
-  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9CA3AF', marginHorizontal: 3 },
+  botTextMarkdown: { body: { color: '#F8FAFC', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#7EE787' } },
+  userTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22, fontWeight: '600' }, strong: { fontWeight: '700', color: '#052427' } },
 
-  overlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'flex-end', alignItems: 'center', backgroundColor: 'transparent' },
-  chatPanelContainer: { width: '100%', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 120, maxHeight: '80%' },
-  glassPane: { width: '100%', borderRadius: 25, overflow: 'hidden', borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: Platform.OS === 'android' ? 'rgba(30,41,59,0.75)' : 'transparent', paddingTop: 15, paddingBottom: 15, paddingHorizontal: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 18 },
+  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8', marginHorizontal: 4 },
+
+  // overlay + panel
+  overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
+  overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent' },
+  chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 40, maxHeight: '82%' },
+
+  glassPane: { width: '100%', borderRadius: 20, overflow: 'hidden', borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: Platform.OS === 'android' ? 'rgba(8,10,18,0.88)' : 'transparent', paddingTop: 10, paddingBottom: 10, paddingHorizontal: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 20 },
+
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
-  dragHandle: { width: 40, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255, 255, 255, 0.25)' },
+  dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
 
-  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginTop: 10, marginHorizontal: 10 },
-  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 16, color: 'white', fontSize: 15 },
-  sendButton: { padding: 14, backgroundColor: '#3B82F6', borderRadius: 12, marginRight: 5, marginLeft: 5 },
+  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', marginTop: 10, marginHorizontal: 10 },
+  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: 'white', fontSize: 15 },
+  sendButton: { paddingVertical: 12, paddingHorizontal: 14, backgroundColor: '#0EA5A4', borderRadius: 12, marginRight: 8, marginLeft: 6 },
+  stopButton: { backgroundColor: '#F87171' },
 });
 
 const markdownStyles = StyleSheet.create({
-  heading1: { color: '#FFFFFF', fontSize: 28, fontWeight: 'bold', marginBottom: 15, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 10, textAlign: 'right' },
-  body: { color: '#D1D5DB', fontSize: 17, lineHeight: 28, textAlign: 'right' },
+  heading1: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', marginBottom: 12, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 8, textAlign: 'right' },
+  body: { color: '#D1D5DB', fontSize: 16, lineHeight: 24, textAlign: 'right' },
   strong: { fontWeight: 'bold', color: '#10B981' },
 });

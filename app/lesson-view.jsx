@@ -37,25 +37,21 @@ const BOT_USER = { id: 'bot-fab', firstName: 'FAB' };
 // ----------------- MessageItem -----------------
 const MessageItem = React.memo(function MessageItem({ message }) {
   const isBot = message.author?.id === BOT_USER.id;
-  const textStyles = isBot ? styles.botTextMarkdown : styles.userTextMarkdown;
-  const wrapperStyle = isBot ? styles.botMessageWrapper : styles.userMessageWrapper;
-  const bubbleStyle = isBot ? styles.botBubble : styles.userBubble;
-
   return (
     <MotiView
       from={{ opacity: 0, translateY: isBot ? 6 : 0 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 260 }}
-      style={wrapperStyle}
+      style={isBot ? styles.botMessageWrapper : styles.userMessageWrapper}
     >
-      <View style={bubbleStyle}>
-        <FastMarkdownText styles={textStyles}>
+      <View style={isBot ? styles.botBubble : styles.userBubble}>
+        <FastMarkdownText styles={isBot ? styles.botTextMarkdown : styles.userTextMarkdown}>
           {message.text}
         </FastMarkdownText>
       </View>
     </MotiView>
   );
-}, (prev, next) => prev.message.id === next.message.id && prev.message.text === next.message.text);
+}, (prev, next) => prev.message?.id === next.message?.id && prev.message?.text === next.message?.text);
 
 // ----------------- TypingIndicator -----------------
 const TypingIndicator = React.memo(() => (
@@ -83,15 +79,19 @@ export default function LessonViewScreen() {
   const { lessonId, lessonTitle, subjectId, pathId, totalLessons } = params || {};
   const chatUserId = user?.uid || 'guest-user';
   const chatUser = useMemo(() => ({ id: chatUserId }), [chatUserId]);
-  const CHAT_KEY = `mini_chat_${lessonId}_${chatUserId}`;
+
+  // stable storage key
+  const CHAT_KEY = useMemo(() => `mini_chat_${lessonId}_${chatUserId}`, [lessonId, chatUserId]);
 
   const [lessonContent, setLessonContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isChatPanelVisible, setChatPanelVisible] = useState(false);
   const [promptText, setPromptText] = useState('');
 
-  const [messages, setMessages] = useState([]); // newest-first
-  const [loadedMessages, setLoadedMessages] = useState([]); // messages loaded from storage (newest-first)
+  // messages: newest-first (0 index == newest)
+  const [messages, setMessages] = useState([]);
+  const [loadedMessages, setLoadedMessages] = useState([]); // newest-first
+  const messagesRef = useRef([]);
   const [isSending, setIsSending] = useState(false);
 
   const translateY = useSharedValue(500);
@@ -100,65 +100,81 @@ export default function LessonViewScreen() {
   const abortControllerRef = useRef(null);
   const mountedRef = useRef(true);
 
-  // ---------- Storage helpers ----------
-  const saveChat = useCallback(async (currentMessages) => {
+  // keep ref in sync
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // ---------- saveChat (safe) ----------
+  const saveChat = useCallback(async (maybeMessages) => {
     try {
-      // keep only persistent types, reverse to store oldest-first (for readability)
-      const storable = currentMessages.filter(m => m.type !== 'typing' && m.type !== 'intro').reverse();
+      // choose source: function argument or ref
+      const src = Array.isArray(maybeMessages) ? maybeMessages : (Array.isArray(messagesRef.current) ? messagesRef.current : []);
+      // ensure array
+      if (!Array.isArray(src)) return;
+      // filter out ephemeral types and store oldest-first (for human-readability)
+      const storable = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro').slice().reverse();
       // offload to next tick to avoid blocking UI
-      setTimeout(async () => {
-        try { await AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)); } catch (e) { /* ignore */ }
+      setTimeout(() => {
+        AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => {
+          console.error('AsyncStorage.setItem error:', e);
+        });
       }, 0);
     } catch (error) {
       console.error('Error saving mini-chat:', error);
     }
   }, [CHAT_KEY]);
 
+  // ---------- loadChat ----------
   const loadChat = useCallback(async () => {
     try {
       const raw = await AsyncStorage.getItem(CHAT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // store as newest-first in state for faster updates
-        setLoadedMessages(parsed.reverse());
-      } else {
+      if (!raw) {
         setLoadedMessages([]);
+        return;
       }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setLoadedMessages([]);
+        return;
+      }
+      // parsed is oldest-first -> convert to newest-first
+      setLoadedMessages(parsed.slice().reverse());
     } catch (error) {
       console.error('Error loading mini-chat:', error);
       setLoadedMessages([]);
     }
   }, [CHAT_KEY]);
 
-  // ---------- Cancel generation ----------
+  // ---------- handleStopGenerating ----------
   const handleStopGenerating = useCallback(() => {
-    if (abortControllerRef.current) {
-      try { abortControllerRef.current.abort(); } catch (e) {}
-      abortControllerRef.current = null;
-    }
+    try {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    } catch (e) { /* ignore */ }
     setIsSending(false);
-    // remove typing indicator
     setMessages(prev => prev.filter(m => m.type !== 'typing'));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, []);
 
-  // ---------- Process & respond ----------
+  // ---------- processAndRespond ----------
   const processAndRespond = useCallback(async (userMessage, history) => {
-    // prevent concurrent sends
+    // don't allow overlapping sends
     if (isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
-    // put typing + user message at top (newest-first)
+
+    // add typing + user message (newest-first)
     setMessages(prev => [typingIndicator, userMessage, ...prev.filter(m => m.type !== 'typing' && m.type !== 'intro')]);
     setIsSending(true);
 
     abortControllerRef.current = new AbortController();
 
-    const historyForAPI = history.slice(-5).map(msg => ({
+    const historyForAPI = Array.isArray(history) ? history.slice(-5).map(msg => ({
       role: msg.author?.id === BOT_USER.id ? 'model' : 'user',
       text: msg.text || '',
-    }));
+    })) : [];
 
     const contextSnippet = typeof lessonContent === 'string' ? lessonContent.substring(0, 1500) : 'No content available.';
     const finalUserMessageText = `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${contextSnippet}...] ${userMessage.text}`;
@@ -170,11 +186,11 @@ export default function LessonViewScreen() {
         history: historyForAPI,
       }, abortControllerRef.current.signal);
 
-      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response.reply, reactions: {} };
+      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
 
       setMessages(prev => {
         const newMessages = [botResponse, ...prev.filter(m => m.id !== typingIndicator.id)];
-        // save in background
+        // save in background using ref-safe call
         runOnJS(saveChat)(newMessages);
         return newMessages;
       });
@@ -183,37 +199,41 @@ export default function LessonViewScreen() {
         console.error('AI Chat Error:', error);
         const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
         setMessages(prev => [errorMessage, ...prev.filter(m => m.id !== typingIndicator.id)]);
+        // save error state too
+        runOnJS(saveChat)(messagesRef.current);
       } else {
-        // aborted: just remove typing indicator
+        // aborted
         setMessages(prev => prev.filter(m => m.id !== typingIndicator.id));
       }
     } finally {
       setIsSending(false);
       abortControllerRef.current = null;
     }
-  }, [isSending, lessonContent, lessonTitle, saveChat, user?.uid]);
+  // intentionally excluding isSending from deps to avoid recreation loops
+  }, [lessonContent, lessonTitle, saveChat, user?.uid]);
 
-  // ---------- Handle send button ----------
+  // ---------- handleSendPrompt ----------
   const handleSendPrompt = useCallback(() => {
     if (isSending) {
       handleStopGenerating();
       return;
     }
-    const trimmed = promptText.trim();
-    if (trimmed.length === 0) return;
+    const text = (promptText || '').trim();
+    if (text.length === 0) return;
 
     setPromptText('');
     Keyboard.dismiss();
 
-    const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text: trimmed, reactions: {} };
-    const currentMessages = messages.filter(m => m.type !== 'typing').reverse(); // oldest-first for history
-    processAndRespond(userMessage, currentMessages);
-  }, [promptText, isSending, chatUser, messages, processAndRespond, handleStopGenerating]);
+    const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text, reactions: {} };
+    // prepare history oldest-first for API
+    const currentHistory = messagesRef.current.filter(m => m.type !== 'typing').slice().reverse();
+    processAndRespond(userMessage, currentHistory);
+  }, [promptText, isSending, chatUser, processAndRespond, handleStopGenerating]);
 
-  // ---------- Initial lesson + load chat ----------
+  // ---------- initial lesson load ----------
   useEffect(() => {
     mountedRef.current = true;
-    const loadLessonData = async () => {
+    const load = async () => {
       if (!user?.uid || !lessonId || !subjectId || !pathId) {
         if (mountedRef.current) setIsLoading(false);
         return;
@@ -233,31 +253,34 @@ export default function LessonViewScreen() {
         if (mountedRef.current) setIsLoading(false);
       }
     };
-    loadLessonData();
+    load();
     return () => { mountedRef.current = false; };
   }, [lessonId, user?.uid, subjectId, pathId, totalLessons, loadChat]);
 
-  // ---------- Show/hide chat panel ----------
+  // ---------- open/close chat panel ----------
   useEffect(() => {
-  if (isChatPanelVisible) {
-    // نستخدم النسخة الوظيفية: نتحقق من الحالة السابقة داخلياً دون إضافة messages كتبعّي
-    setMessages(prev => (prev.length === 0 ? loadedMessages : prev));
-    translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
-  } else {
-    translateY.value = withSpring(500, { damping: 18, stiffness: 120 });
-    // نحفظ المحادثة الحالية إن وجدت
-    runOnJS(saveChat)(/* نرغب بحفظ أحدث الرسائل إذا كانت موجودة */);
-    runOnJS(Keyboard.dismiss)();
-    handleStopGenerating();
-  }
-  // ملاحظة: لا تُدرج `messages` هنا — هذا يمنع الحلقة.
-}, [isChatPanelVisible, loadedMessages, translateY, saveChat, handleStopGenerating]);
+    if (isChatPanelVisible) {
+      // only populate messages state if it is currently empty
+      setMessages(prev => {
+        if (Array.isArray(prev) && prev.length > 0) return prev;
+        if (Array.isArray(loadedMessages) && loadedMessages.length > 0) return loadedMessages;
+        return prev;
+      });
+      translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
+    } else {
+      translateY.value = withSpring(500, { damping: 18, stiffness: 120 });
+      // save using ref (safe)
+      runOnJS(saveChat)(messagesRef.current);
+      runOnJS(Keyboard.dismiss)();
+      handleStopGenerating();
+    }
+    // loadedMessages in deps so that when they become available they are used on open
+  }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY]);
 
-
-  // ---------- Gesture & animated style ----------
+  // ---------- Gesture + animated style ----------
   const gesture = Gesture.Pan()
     .onStart(() => { context.value = { y: translateY.value }; })
-    .onUpdate((ev) => { translateY.value = Math.max(0, context.value.y + ev.translationY); })
+    .onUpdate(ev => { translateY.value = Math.max(0, context.value.y + ev.translationY); })
     .onEnd(() => {
       if (translateY.value > 140) {
         runOnJS(setChatPanelVisible)(false);
@@ -270,7 +293,7 @@ export default function LessonViewScreen() {
     transform: [{ translateY: translateY.value }],
   }));
 
-  // ---------- Intro & final messages ----------
+  // ---------- intro & final messages ----------
   const introMessage = useMemo(() => ({
     type: 'bot',
     id: 'intro',
@@ -278,7 +301,7 @@ export default function LessonViewScreen() {
     author: BOT_USER,
   }), [lessonTitle]);
 
-  const finalMessages = useMemo(() => (messages.length === 0 ? [introMessage] : messages), [messages, introMessage]);
+  const finalMessages = useMemo(() => (Array.isArray(messages) && messages.length > 0 ? messages : [introMessage]), [messages, introMessage]);
 
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
@@ -286,18 +309,14 @@ export default function LessonViewScreen() {
     return <MessageItem message={item} />;
   }, []);
 
-  // ---------- auto-scroll to top (newest) when messages change ----------
+  // auto-scroll newest on messages change
   useEffect(() => {
     if (!flatListRef.current) return;
-    try {
-      // small delay to let list layout
-      setTimeout(() => {
-        flatListRef.current?.scrollToOffset?.({ offset: 0, animated: true });
-      }, 80);
-    } catch (e) { /* ignore */ }
+    setTimeout(() => {
+      try { flatListRef.current?.scrollToOffset?.({ offset: 0, animated: true }); } catch (e) { /* ignore */ }
+    }, 120);
   }, [finalMessages.length]);
 
-  // ---------- UI ----------
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -328,9 +347,7 @@ export default function LessonViewScreen() {
                   <Animated.View style={[styles.chatPanelContainer, animatedPanelStyle]}>
                     <Pressable onPress={() => {}} style={{ width: '100%' }}>
                       <BlurView intensity={Platform.OS === 'ios' ? 70 : 100} tint="dark" style={styles.glassPane}>
-                        <View style={styles.dragHandleContainer}>
-                          <View style={styles.dragHandle} />
-                        </View>
+                        <View style={styles.dragHandleContainer}><View style={styles.dragHandle} /></View>
 
                         <FlatList
                           ref={flatListRef}
@@ -399,7 +416,7 @@ const styles = StyleSheet.create({
 
   botMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, maxWidth: '85%', alignSelf: 'flex-start' },
   userMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, maxWidth: '85%', alignSelf: 'flex-end' },
-  botBubble: { backgroundColor: 'rgba(255, 255, 255, 0.06)', borderRadius: 12, borderBottomLeftRadius: 4, padding: 10 },
+  botBubble: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, borderBottomLeftRadius: 4, padding: 10 },
   userBubble: { backgroundColor: '#3B82F6', borderRadius: 12, borderBottomRightRadius: 4, padding: 10 },
 
   botTextMarkdown: { body: { color: 'white', fontSize: 14 }, strong: { fontWeight: 'bold', color: '#34D399' } },

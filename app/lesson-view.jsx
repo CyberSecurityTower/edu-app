@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
 
   seenWrapper: { marginVertical: 6, maxWidth: '85%' },
   seenBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)' },
-  seenText: { color: '#94A3B8', fontSize: 12 },
+  seenText: { color: '#0e0e0fff', fontSize: 12 },
 
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
   overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent' },
@@ -589,8 +589,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.47)',
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.27)' : 'transparent',
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.5)' : 'transparent',
     paddingTop: 10,
     paddingBottom: 6,
     paddingHorizontal: 8,

@@ -22,7 +22,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
-import FastMarkdownText from 'react-native-markdown-text';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
@@ -50,10 +49,11 @@ const VISIBLE_INCREMENT = 12;
 const MAX_PANEL_RATIO = 0.72;
 const BASE_PANEL_RATIO = 0.38;
 const BOTTOM_EMPTY_SPACE = 60;
+const MESSAGE_HISTORY_CAP = 50; // cap messages to last 200 for performance
 
 /* bot width percent (25%) and user width (rest) */
-const BOT_WIDTH_PERCENT = 0.75; // 25%
-const USER_WIDTH_PERCENT = 0.4; // ~73%
+const BOT_WIDTH_PERCENT = 0.25;
+const USER_WIDTH_PERCENT = 0.73;
 
 const getAccentFromSubject = (subjectId) => {
   const palette = [
@@ -69,17 +69,39 @@ const getAccentFromSubject = (subjectId) => {
   return palette[hash % palette.length];
 };
 
-/* ---------------- MessageItem (no avatars) ---------------- */
+/* ---------------- Lightweight MessageText ----------------
+   Simple parser: supports **bold** and plain text.
+   Much faster than full markdown renderer for many messages.
+----------------------------------------------------------*/
+const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
+  if (!text) return null;
+  // parse **bold** segments (simple)
+  const parts = [];
+  const regex = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push({ t: 'text', v: text.slice(lastIndex, match.index) });
+    parts.push({ t: 'bold', v: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) parts.push({ t: 'text', v: text.slice(lastIndex) });
+
+  return (
+    <Text style={[style?.body ?? styles.bodyText, { color: isBot ? '#042C2B' : '#F8FAFC' }]}>
+      {parts.map((p, i) => p.t === 'text' ? <Text key={i}>{p.v}</Text> : <Text key={i} style={strongStyle}>{p.v}</Text>)}
+    </Text>
+  );
+});
+
+/* ---------------- MessageItem (optimized) ---------------- */
 const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, isCardsMode }) {
   if (!message) return null;
 
+  // small translate up when seenAnimated true
   const slideY = useRef(new RNAnimated.Value(0)).current;
   useEffect(() => {
-    if (message.seenAnimated) {
-      RNAnimated.timing(slideY, { toValue: -8, duration: 200, useNativeDriver: true }).start();
-    } else {
-      RNAnimated.timing(slideY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    }
+    RNAnimated.timing(slideY, { toValue: message.seenAnimated ? -6 : 0, duration: 180, useNativeDriver: true }).start();
   }, [message.seenAnimated]);
 
   if (message.type === 'seen') {
@@ -91,23 +113,22 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
     );
   }
 
-  if (message.type === 'typing') return <TypingIndicator />;
+  if (message.type === 'typing') return (
+    <MotiView style={styles.botRow} from={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <View style={[styles.botBubble, { paddingVertical: 10, flexDirection: 'row' }]}>
+        {[0, 1, 2].map(i => <MotiView key={i} from={{ translateY: 0 }} animate={{ translateY: -5 }} transition={{ type: 'timing', duration: 320, delay: i * 140, loop: true, repeatReverse: true }} style={styles.typingDot} />)}
+      </View>
+    </MotiView>
+  );
 
   const isBot = message.author?.id === BOT_USER.id;
 
-  const bubble = (
+  const content = (
     <RNAnimated.View style={{ transform: [{ translateY: slideY }], width: '100%' }}>
-      <MotiView
-        from={{ opacity: 0, translateY: isBot ? 8 : 6, scale: 0.99 }}
-        animate={{ opacity: 1, translateY: 0, scale: 1 }}
-        transition={{ type: 'timing', duration: 220 }}
-        style={isBot ? styles.botRow : styles.userRow}
-      >
+      <MotiView from={{ opacity: 0, translateY: isBot ? 8 : 6 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 220 }} style={isBot ? styles.botRow : styles.userRow}>
         <Pressable onLongPress={() => onLongPressMessage && onLongPressMessage(message)} android_ripple={{ color: 'rgba(255,255,255,0.02)' }}>
           <View style={isBot ? styles.botBubble : styles.userBubble}>
-            <FastMarkdownText styles={isBot ? styles.botTextMarkdown : styles.userTextMarkdown}>
-              {message.text}
-            </FastMarkdownText>
+            <MessageText text={message.text} isBot={isBot} style={isBot ? styles.botTextMarkdown : styles.userTextMarkdown} strongStyle={isBot ? styles.botStrong : styles.userStrong} />
           </View>
         </Pressable>
       </MotiView>
@@ -115,32 +136,13 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   );
 
   if (isCardsMode) {
-    const renderLeftActions = () => (
-      <View style={styles.swipeLeft}><FontAwesome5 name="star" size={18} color="white" /><Text style={{ color: 'white', marginLeft: 8 }}>Save</Text></View>
-    );
-    const renderRightActions = () => (
-      <View style={styles.swipeRight}><FontAwesome5 name="copy" size={18} color="#042C2B" /><Text style={{ color: '#042C2B', marginLeft: 8 }}>Copy</Text></View>
-    );
-    return <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootRight={false} overshootLeft={false}>{bubble}</Swipeable>;
+    const renderLeftActions = () => (<View style={styles.swipeLeft}><FontAwesome5 name="star" size={18} color="white" /><Text style={{ color: 'white', marginLeft: 8 }}>Save</Text></View>);
+    const renderRightActions = () => (<View style={styles.swipeRight}><FontAwesome5 name="copy" size={18} color="#042C2B" /><Text style={{ color: '#042C2B', marginLeft: 8 }}>Copy</Text></View>);
+    return <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootRight={false} overshootLeft={false}>{content}</Swipeable>;
   }
 
-  return bubble;
-}, (a, b) =>
-  a.message?.id === b.message?.id &&
-  a.message?.text === b.message?.text &&
-  a.message?.seenAnimated === b.message?.seenAnimated
-);
-
-/* ---------------- TypingIndicator ---------------- */
-const TypingIndicator = React.memo(() => (
-  <MotiView style={styles.botRow} from={{ opacity: 0 }} animate={{ opacity: 1 }}>
-    <View style={[styles.botBubble, { paddingVertical: 10, flexDirection: 'row' }]}>
-      {[0, 1, 2].map(i => (
-        <MotiView key={i} from={{ translateY: 0 }} animate={{ translateY: -5 }} transition={{ type: 'timing', duration: 320, delay: i * 140, loop: true, repeatReverse: true }} style={styles.typingDot} />
-      ))}
-    </View>
-  </MotiView>
-));
+  return content;
+}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated);
 
 /* ---------------- Screen ---------------- */
 export default function LessonViewScreen() {
@@ -184,6 +186,17 @@ export default function LessonViewScreen() {
   const maxPanelHeight = Math.round(windowHeight * MAX_PANEL_RATIO);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // safe setter that caps history size
+  const setMessagesSafe = useCallback((updater) => {
+    setMessages(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (!Array.isArray(next)) return next;
+      // keep oldest-first, cap to last MESSAGE_HISTORY_CAP
+      const capped = next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
+      return capped;
+    });
+  }, []);
 
   const showToast = useCallback((text = 'FAB sent a reply') => {
     setToastVisible(true);
@@ -248,17 +261,17 @@ export default function LessonViewScreen() {
   const handleStopGenerating = useCallback(() => {
     try { if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; } } catch (e) {}
     setIsSending(false);
-    setMessages(prev => prev.filter(m => m.type !== 'typing' && m.type !== 'seen'));
+    setMessagesSafe(prev => prev.filter(m => m.type !== 'typing' && m.type !== 'seen'));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-  }, []);
+  }, [setMessagesSafe]);
 
   /* ---------- process & respond with SEEN flow ---------- */
   const processAndRespond = useCallback(async (userMessage, history) => {
     if (isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // append user message immediately
-    setMessages(prev => {
+    // append user message
+    setMessagesSafe(prev => {
       const next = [...prev, userMessage];
       runOnJS(saveChat)(next);
       return next;
@@ -275,9 +288,9 @@ export default function LessonViewScreen() {
       history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
     }, abortControllerRef.current.signal);
 
-    // 1s lift + seen
+    // schedule seen after 1s
     const seenTimer = setTimeout(() => {
-      setMessages(prev => {
+      setMessagesSafe(prev => {
         const next = prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m));
         const withSeen = [...next, { type: 'seen', id: seenId, author: userMessage.author }];
         runOnJS(saveChat)(withSeen);
@@ -290,7 +303,7 @@ export default function LessonViewScreen() {
         if (responsePendingRef.current[seenId]) return;
         const typingId = uuidv4();
         seenToTypingRef.current[seenId] = typingId;
-        setMessages(prev => prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)));
+        setMessagesSafe(prev => prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)));
       }, delayMs);
 
       seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
@@ -303,7 +316,7 @@ export default function LessonViewScreen() {
       responsePendingRef.current[seenId] = true;
       const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
 
-      setMessages(prev => {
+      setMessagesSafe(prev => {
         const typingId = seenToTypingRef.current[seenId];
         if (typingId) {
           const replaced = prev.map(m => (m.id === typingId ? botResponse : m));
@@ -319,11 +332,11 @@ export default function LessonViewScreen() {
       if (!isChatPanelVisible) runOnJS(showToast)('FAB replied — اضغط للفتح');
     } catch (error) {
       if (error?.name === 'AbortError') {
-        setMessages(prev => prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]));
+        setMessagesSafe(prev => prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]));
       } else {
         console.error('AI Chat Error:', error);
         const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
-        setMessages(prev => {
+        setMessagesSafe(prev => {
           const typingId = seenToTypingRef.current[seenId];
           if (typingId) {
             const replaced = prev.map(m => (m.id === typingId ? errorMessage : m));
@@ -346,7 +359,7 @@ export default function LessonViewScreen() {
       setIsSending(false);
       abortControllerRef.current = null;
     }
-  }, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast]);
+  }, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast, setMessagesSafe]);
 
   const handleSendPrompt = useCallback(() => {
     if (isSending) { handleStopGenerating(); return; }
@@ -359,12 +372,10 @@ export default function LessonViewScreen() {
     processAndRespond(userMessage, history);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // small offset to show top of message rather than jumping
     setTimeout(() => {
       try {
-        if (flatListRef.current) {
-          // offset small so the top of new bubble is visible (prevents jumping to bottom)
-          flatListRef.current.scrollToOffset({ offset: 20, animated: true });
-        }
+        if (flatListRef.current) flatListRef.current.scrollToOffset({ offset: 20, animated: true });
       } catch (e) {}
     }, 120);
   }, [promptText, isSending, chatUser, processAndRespond, handleStopGenerating]);
@@ -372,7 +383,7 @@ export default function LessonViewScreen() {
   const handleLongPressMessage = useCallback((message) => {
     Alert.alert('اختيارات الرسالة', 'اختر إجراء', [
       { text: 'نسخ', onPress: async () => { await Clipboard.setStringAsync(message.text || ''); Alert.alert('Copied'); } },
-      { text: 'حفظ كملاحظة', onPress: () => saveMessageToNotes(message) },
+      { text: 'حفظ كملاحظه', onPress: () => saveMessageToNotes(message) },
       { text: 'إعادة السؤال', onPress: () => { setPromptText(message.text || ''); setChatPanelVisible(true); } },
       { text: 'إلغاء', style: 'cancel' },
     ], { cancelable: true });
@@ -404,7 +415,7 @@ export default function LessonViewScreen() {
   useEffect(() => {
     if (isChatPanelVisible) {
       InteractionManager.runAfterInteractions(() => {
-        setMessages(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)));
+        setMessagesSafe(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)));
       });
       translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     } else {
@@ -412,7 +423,7 @@ export default function LessonViewScreen() {
       runOnJS(Keyboard.dismiss)();
       handleStopGenerating();
     }
-  }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY]);
+  }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY, setMessagesSafe]);
 
   const context = useSharedValue({ y: 0 });
   const dragGesture = Gesture.Pan()
@@ -432,8 +443,8 @@ export default function LessonViewScreen() {
 
   const onScroll = useCallback((ev) => {
     const { contentOffset } = ev.nativeEvent;
-    const distanceFromBottom = contentOffset.y;
-    isAtBottomRef.current = distanceFromBottom < 80;
+    // for non-inverted (we invert list), scroll offset semantics differ — keep simple heuristic
+    isAtBottomRef.current = contentOffset.y < 80;
   }, []);
 
   useEffect(() => {
@@ -488,15 +499,16 @@ export default function LessonViewScreen() {
           <AnimatePresence>
             {isChatPanelVisible && (
               <View style={styles.overlayContainer} pointerEvents="box-none">
+                {/* full-screen subtle blur/backdrop */}
+                <BlurView intensity={Platform.OS === 'ios' ? 70 : 36} tint="dark" style={styles.backdropBlur} pointerEvents="none" />
                 <Pressable style={styles.overlayBackground} onPress={() => setChatPanelVisible(false)} />
 
                 <Animated.View style={[styles.chatPanelContainer, animatedPanelStyle, { height: panelHeight }]}>
-                  {/* Glass background: BlurView + translucent overlay + subtle gradient to simulate frosted glass */}
-                  <BlurView intensity={Platform.OS === 'ios' ? 80 : 60} tint="dark" style={styles.glassPane}>
-                    <LinearGradient colors={['rgba(255,255,255,0.02)', 'rgba(0,0,0,0.26)']} start={[0,0]} end={[0,1]} style={StyleSheet.absoluteFill} />
+                  <BlurView intensity={Platform.OS === 'ios' ? 80 : 48} tint="dark" style={styles.glassPane}>
+                    <LinearGradient colors={['rgba(255,255,255,0.02)', 'rgba(0,0,0,0.22)']} start={[0,0]} end={[0,1]} style={StyleSheet.absoluteFill} />
 
                     <GestureDetector gesture={dragGesture}>
-                      <View style={styles.dragHandleContainer}><View style={[styles.dragHandle, { backgroundColor: 'rgba(255,255,255,0.14)' }]} /></View>
+                      <View style={styles.dragHandleContainer}><View style={[styles.dragHandle, { backgroundColor: 'rgba(255,255,255,0.12)' }]} /></View>
                     </GestureDetector>
 
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90} style={{ flex: 1 }}>
@@ -508,7 +520,7 @@ export default function LessonViewScreen() {
 
                       <FlatList
                         ref={flatListRef}
-                        data={visibleMessages.slice().reverse()} // newest-first for inverted
+                        data={visibleMessages.slice().reverse()}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderMessageItem}
                         contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
@@ -520,7 +532,6 @@ export default function LessonViewScreen() {
                         removeClippedSubviews={true}
                         inverted={true}
                         onScroll={onScroll}
-                        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                       />
                     </KeyboardAvoidingView>
 
@@ -564,20 +575,26 @@ const styles = StyleSheet.create({
   userRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '100%', alignSelf: 'flex-end', justifyContent: 'flex-end' },
 
   /* IMPORTANT: bot bubble fixed to 25% of screen width, user bubble ~73% */
-  botBubble: { width: Math.round(WINDOW.width * BOT_WIDTH_PERCENT), backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 60, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  userBubble: { width: Math.round(WINDOW.width * USER_WIDTH_PERCENT), backgroundColor: '#0EA5A4', borderRadius: 18, padding: 12, minWidth: 60, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 4 },
+  botBubble: { width: Math.round(WINDOW.width * BOT_WIDTH_PERCENT), backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 60 },
+  userBubble: { width: Math.round(WINDOW.width * USER_WIDTH_PERCENT), backgroundColor: '#0EA5A4', borderRadius: 18, padding: 12, minWidth: 60 },
 
   botTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#164E63' } },
   userTextMarkdown: { body: { color: '#F8FAFC', fontSize: 15, lineHeight: 22, fontWeight: '600' }, strong: { fontWeight: '700', color: '#E6FFFB' } },
+
+  botStrong: { fontWeight: '700', color: '#164E63' },
+  userStrong: { fontWeight: '700', color: '#E6FFFB' },
+
+  bodyText: { fontSize: 15, lineHeight: 20 },
 
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8', marginHorizontal: 4 },
 
   seenWrapper: { marginVertical: 6, maxWidth: '85%' },
   seenBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)' },
-  seenText: { color: '#0e0e0fff', fontSize: 12 },
+  seenText: { color: '#94A3B8', fontSize: 12 },
 
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
-  overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent' },
+  backdropBlur: { ...StyleSheet.absoluteFillObject, zIndex: 8, backgroundColor: 'rgba(0,0,0,0.18)' },
+  overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
 
   chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'stretch', paddingHorizontal: 15, paddingBottom: 0 },
 
@@ -588,23 +605,18 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.5)' : 'transparent',
+    borderWidth: 1.0,
+    borderColor: 'rgba(247, 236, 236, 0.12)',
+    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
     paddingTop: 10,
     paddingBottom: 6,
     paddingHorizontal: 8,
-    shadowColor: "#cec2c21d",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.10,
-    shadowRadius: 16,
-    elevation: 20
   },
 
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
-  dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
+  dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
 
-  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.22)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
+  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
   promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: 'white', fontSize: 15 },
   sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 8, marginLeft: 6 },
   stopButton: { backgroundColor: '#F87171' },

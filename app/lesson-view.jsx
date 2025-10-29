@@ -482,7 +482,8 @@ export default function LessonViewScreen() {
                         initialNumToRender={6}
                         maxToRenderPerBatch={6}
                         windowSize={5}
-                        removeClippedSubviews={true}
+                        removeClippedSubviews={false}
+
                         inverted={true}
                         onScroll={onScroll}
                       />

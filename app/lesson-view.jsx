@@ -482,8 +482,7 @@ export default function LessonViewScreen() {
                         initialNumToRender={6}
                         maxToRenderPerBatch={6}
                         windowSize={5}
-                        removeClippedSubviews={false}
-
+                        removeClippedSubviews={true}
                         inverted={true}
                         onScroll={onScroll}
                       />
@@ -520,11 +519,11 @@ const styles = StyleSheet.create({
   headerTitle: { color: 'white', fontSize: 20, fontWeight: '700', textAlign: 'center' },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   contentContainer: { padding: 20, paddingBottom: 220 },
-  messagesList: { flex: 1.1, paddingHorizontal: 10 },
+  messagesList: { flex: 1, paddingHorizontal: 10 },
   messagesListContent: { paddingTop: 8, paddingBottom: 8 },
   botMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '85%', alignSelf: 'flex-start' },
   userMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '85%', alignSelf: 'flex-end' },
-  botBubble: { backgroundColor: '#0F1724', borderRadius: 14, borderBottomLeftRadius: 6, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  botBubble: { backgroundColor: '#c4d0e5ff', borderRadius: 14, borderBottomLeftRadius: 6, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
   userBubble: { backgroundColor: '#0EA5A4', borderRadius: 14, borderBottomRightRadius: 6, padding: 12 },
   botTextMarkdown: { body: { color: '#F8FAFC', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#7EE787' } },
   userTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22, fontWeight: '600' }, strong: { fontWeight: '700', color: '#052427' } },
@@ -534,8 +533,8 @@ const styles = StyleSheet.create({
   seenText: { color: '#94A3B8', fontSize: 12 },
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
   overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent' },
-  chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 0 },
-  glassPane: { width: '100%', borderRadius: 20, overflow: 'hidden', borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: Platform.OS === 'android' ? 'rgba(8,10,18,0.88)' : 'transparent', paddingTop: 10, paddingBottom: 6, paddingHorizontal: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 20 },
+  chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'stretch', paddingHorizontal: 15, paddingBottom: 0 },
+  glassPane: { width: '100%', flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: Platform.OS === 'android' ? 'rgba(8,10,18,0.88)' : 'transparent', paddingTop: 10, paddingBottom: 6, paddingHorizontal: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 20 },
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
   dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
   promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },

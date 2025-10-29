@@ -63,40 +63,64 @@ const getAccentFromSubject = (subjectId) => {
   return palette[hash % palette.length];
 };
 
-// MessageItem (handles seen, typing, user, bot)
+// ----------------- MessageItem (Instagram-like) -----------------
 const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, isCardsMode }) {
   if (!message) return null;
 
+  // Animated y-offset for the message (lift when seenAnimated=true)
+  const slideY = useRef(new RNAnimated.Value(0)).current;
+  useEffect(() => {
+    if (message.seenAnimated) {
+      RNAnimated.timing(slideY, { toValue: -8, duration: 200, useNativeDriver: true }).start();
+    } else {
+      RNAnimated.timing(slideY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [message.seenAnimated]);
+
+  // seen / typing markers
   if (message.type === 'seen') {
     const isUser = message.author?.id !== BOT_USER.id;
     return (
       <View style={[styles.seenWrapper, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
-        <View style={styles.seenBadge}>
-          <Text style={styles.seenText}>Seen</Text>
-        </View>
+        <View style={styles.seenBadge}><Text style={styles.seenText}>Seen</Text></View>
       </View>
     );
   }
-
   if (message.type === 'typing') return <TypingIndicator />;
 
   const isBot = message.author?.id === BOT_USER.id;
+  const avatarInitial = (message.author?.firstName || message.author?.id || 'U').charAt(0).toUpperCase();
 
-  const inner = (
-    <MotiView
-      from={{ opacity: 0, translateY: isBot ? 8 : 6, scale: 0.985 }}
-      animate={{ opacity: 1, translateY: 0, scale: 1 }}
-      transition={{ type: 'timing', duration: 300 }}
-      style={isBot ? styles.botMessageWrapper : styles.userMessageWrapper}
-    >
-      <Pressable onLongPress={() => onLongPressMessage && onLongPressMessage(message)} android_ripple={{ color: 'rgba(255,255,255,0.02)' }}>
-        <View style={isBot ? styles.botBubble : styles.userBubble}>
-          <FastMarkdownText styles={isBot ? styles.botTextMarkdown : styles.userTextMarkdown}>
-            {message.text}
-          </FastMarkdownText>
-        </View>
-      </Pressable>
-    </MotiView>
+  // Instagram-like bubble: avatar + bubble on same row
+  const Bubble = (
+    <RNAnimated.View style={{ transform: [{ translateY: slideY }], width: '100%' }}>
+      <MotiView
+        from={{ opacity: 0, translateY: isBot ? 8 : 6, scale: 0.99 }}
+        animate={{ opacity: 1, translateY: 0, scale: 1 }}
+        transition={{ type: 'timing', duration: 220 }}
+        style={isBot ? styles.botRow : styles.userRow}
+      >
+        {isBot && (
+          <View style={styles.avatarLeft}>
+            <Text style={styles.avatarText}>{avatarInitial}</Text>
+          </View>
+        )}
+
+        <Pressable onLongPress={() => onLongPressMessage && onLongPressMessage(message)} android_ripple={{ color: 'rgba(255,255,255,0.02)' }}>
+          <View style={isBot ? styles.botBubble : styles.userBubble}>
+            <FastMarkdownText styles={isBot ? styles.botTextMarkdown : styles.userTextMarkdown}>
+              {message.text}
+            </FastMarkdownText>
+          </View>
+        </Pressable>
+
+        {!isBot && (
+          <View style={styles.avatarRight}>
+            <Text style={styles.avatarText}>{avatarInitial}</Text>
+          </View>
+        )}
+      </MotiView>
+    </RNAnimated.View>
   );
 
   if (isCardsMode) {
@@ -106,14 +130,20 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
     const renderRightActions = () => (
       <View style={styles.swipeRight}><FontAwesome5 name="copy" size={18} color="#042C2B" /><Text style={{ color: '#042C2B', marginLeft: 8 }}>Copy</Text></View>
     );
-    return <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootRight={false} overshootLeft={false}>{inner}</Swipeable>;
+    return <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootRight={false} overshootLeft={false}>{Bubble}</Swipeable>;
   }
 
-  return inner;
-}, (p, n) => p.message?.id === n.message?.id && p.message?.text === n.message?.text);
+  return Bubble;
+}, (prev, next) =>
+  prev.message?.id === next.message?.id &&
+  prev.message?.text === next.message?.text &&
+  prev.message?.seenAnimated === next.message?.seenAnimated
+);
 
+// ----------------- TypingIndicator -----------------
 const TypingIndicator = React.memo(() => (
-  <MotiView style={styles.botMessageWrapper} from={{ opacity: 0 }} animate={{ opacity: 1 }}>
+  <MotiView style={styles.botRow} from={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <View style={{ width: 36 }} />{/* avatar placeholder spacing */}
     <View style={[styles.botBubble, { paddingVertical: 10, flexDirection: 'row' }]}>
       {[0, 1, 2].map(i => (
         <MotiView key={i} from={{ translateY: 0 }} animate={{ translateY: -5 }} transition={{ type: 'timing', duration: 320, delay: i * 140, loop: true, repeatReverse: true }} style={styles.typingDot} />
@@ -122,13 +152,14 @@ const TypingIndicator = React.memo(() => (
   </MotiView>
 ));
 
+// ----------------- Screen -----------------
 export default function LessonViewScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAppState();
   const { lessonId, lessonTitle, subjectId, pathId, totalLessons } = params || {};
   const chatUserId = user?.uid || 'guest-user';
-  const chatUser = useMemo(() => ({ id: chatUserId }), [chatUserId]);
+  const chatUser = useMemo(() => ({ id: chatUserId, firstName: (user?.displayName || 'You') }), [chatUserId, user?.displayName]);
   const CHAT_KEY = useMemo(() => `mini_chat_${lessonId}_${chatUserId}`, [lessonId, chatUserId]);
   const accent = useMemo(() => getAccentFromSubject(subjectId), [subjectId]);
 
@@ -154,7 +185,7 @@ export default function LessonViewScreen() {
   const mountedRef = useRef(true);
   const saveTimeoutRef = useRef(null);
 
-  // seen refs
+  // seen refs: map seenId -> { seenTimer, typingTimer }
   const seenTimersRef = useRef({});
   const seenToTypingRef = useRef({});
   const responsePendingRef = useRef({});
@@ -166,14 +197,13 @@ export default function LessonViewScreen() {
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // toast helpers
+  // toast
   const showToast = useCallback((text = 'FAB sent a reply') => {
     setToastVisible(true);
     RNAnimated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     Haptics.selectionAsync();
     setTimeout(() => RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)), 3000);
   }, [toastAnim]);
-
   const onToastPress = useCallback(() => { setChatPanelVisible(true); RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)); }, [toastAnim]);
 
   // saveChat: store newest-first (so JSON in storage is newest-first), we'll reverse on load
@@ -182,7 +212,6 @@ export default function LessonViewScreen() {
       const src = Array.isArray(maybeMessages) ? maybeMessages : messagesRef.current || [];
       if (!Array.isArray(src)) return;
       const storableOldestFirst = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro' && m.type !== 'seen');
-      // store newest-first to keep latest writes small
       const storable = storableOldestFirst.slice().reverse();
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
@@ -193,14 +222,13 @@ export default function LessonViewScreen() {
     }
   }, [CHAT_KEY]);
 
-  // loadChat: robustly reverse stored newest-first -> oldest-first internally
+  // loadChat: reverse newest-first -> oldest-first
   const loadChat = useCallback(async () => {
     try {
       const raw = await AsyncStorage.getItem(CHAT_KEY);
       if (!raw) { setLoadedMessages([]); return; }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) { setLoadedMessages([]); return; }
-      // parsed is expected newest-first (we store that way), so reverse to oldest-first
       setLoadedMessages(parsed.slice().reverse());
     } catch (e) {
       console.error('Error loading mini-chat:', e);
@@ -208,7 +236,6 @@ export default function LessonViewScreen() {
     }
   }, [CHAT_KEY]);
 
-  // notes
   const saveMessageToNotes = useCallback(async (message) => {
     try {
       const raw = await AsyncStorage.getItem(NOTES_KEY);
@@ -223,10 +250,10 @@ export default function LessonViewScreen() {
     }
   }, [lessonId]);
 
-  // cleanup
+  // cleanup on unmount
   useEffect(() => {
     return () => {
-      try { Object.values(seenTimersRef.current).forEach(t => clearTimeout(t)); } catch(e){}
+      try { Object.values(seenTimersRef.current).forEach(o => { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }); } catch(e){}
       try { if (abortControllerRef.current) abortControllerRef.current.abort(); } catch(e){}
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
@@ -240,42 +267,64 @@ export default function LessonViewScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, []);
 
-  // process & respond w/ seen logic
+  // ---------- process & respond with SEEN flow (1s delay before showing seen, then 2-4s random before typing) ----------
   const processAndRespond = useCallback(async (userMessage, history) => {
     if (isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const seenId = uuidv4();
+    // append user message immediately (oldest-first)
     setMessages(prev => {
-      const next = [...prev, userMessage, { type: 'seen', id: seenId, author: userMessage.author }];
+      const next = [...prev, userMessage];
       runOnJS(saveChat)(next);
       return next;
     });
 
     setIsSending(true);
+    const seenId = uuidv4();
     abortControllerRef.current = new AbortController();
     responsePendingRef.current[seenId] = false;
 
+    // start API call immediately
     const apiPromise = apiService.getInteractiveChatReply({
       message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
       userId: user?.uid,
       history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
     }, abortControllerRef.current.signal);
 
-    const delayMs = 2000 + Math.floor(Math.random() * 2000);
-    const t = setTimeout(() => {
-      if (responsePendingRef.current[seenId]) return;
-      const typingId = uuidv4();
-      seenToTypingRef.current[seenId] = typingId;
-      setMessages(prev => prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)));
-    }, delayMs);
-    seenTimersRef.current[seenId] = t;
+    // after 1s: mark user's message seenAnimated + append 'seen' marker, then schedule typing timer (2-4s)
+    const seenTimer = setTimeout(() => {
+      // lift the specific user message (mark seenAnimated)
+      setMessages(prev => {
+        const next = prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m));
+        // append seen marker after lift
+        const withSeen = [...next, { type: 'seen', id: seenId, author: userMessage.author }];
+        runOnJS(saveChat)(withSeen);
+        return withSeen;
+      });
+
+      // schedule conversion to typing after random 2-4s
+      const delayMs = 2000 + Math.floor(Math.random() * 2000);
+      const typingTimer = setTimeout(() => {
+        if (responsePendingRef.current[seenId]) return;
+        const typingId = uuidv4();
+        seenToTypingRef.current[seenId] = typingId;
+        setMessages(prev => prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)));
+      }, delayMs);
+
+      // save timers
+      seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
+      // (we set seenTimer=null because it's already fired)
+    }, 1000);
+
+    // store initial seenTimer reference (so we can clear if aborted before 1s)
+    seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
 
     try {
       const response = await apiPromise;
       responsePendingRef.current[seenId] = true;
       const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
 
+      // replace typing or seen marker with bot response
       setMessages(prev => {
         const typingId = seenToTypingRef.current[seenId];
         if (typingId) {
@@ -284,6 +333,14 @@ export default function LessonViewScreen() {
           return replaced;
         }
         const replaced = prev.map(m => (m.id === seenId ? botResponse : m));
+        // if seen marker not present (rare), just append
+        if (!replaced.some(m => m.id === botResponse.id)) {
+          // remove any leftover seen marker and append bot
+          const cleaned = replaced.filter(m => m.type !== 'seen' && m.type !== 'typing');
+          const next = [...cleaned, botResponse];
+          runOnJS(saveChat)(next);
+          return next;
+        }
         runOnJS(saveChat)(replaced);
         return replaced;
       });
@@ -292,6 +349,7 @@ export default function LessonViewScreen() {
       if (!isChatPanelVisible) runOnJS(showToast)('FAB replied — اضغط للفتح');
     } catch (error) {
       if (error?.name === 'AbortError') {
+        // remove any seen/typing placeholder for this conversation
         setMessages(prev => prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]));
       } else {
         console.error('AI Chat Error:', error);
@@ -309,7 +367,11 @@ export default function LessonViewScreen() {
         });
       }
     } finally {
-      try { clearTimeout(seenTimersRef.current[seenId]); } catch(e){}
+      // clear timers
+      try {
+        const o = seenTimersRef.current[seenId];
+        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+      } catch (e) {}
       delete seenTimersRef.current[seenId];
       delete seenToTypingRef.current[seenId];
       delete responsePendingRef.current[seenId];
@@ -340,7 +402,7 @@ export default function LessonViewScreen() {
     ], { cancelable: true });
   }, [saveMessageToNotes]);
 
-  // load initial lesson + chat
+  // initial load lesson + chat
   useEffect(() => {
     mountedRef.current = true;
     const load = async () => {
@@ -389,14 +451,14 @@ export default function LessonViewScreen() {
     });
   const animatedPanelStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
 
-  // visible messages window (oldest-first, show last visibleCount)
+  // visible portion (oldest-first -> show last visibleCount)
   const visibleMessages = useMemo(() => {
     if (!Array.isArray(messages) || messages.length === 0) return [];
     const start = Math.max(0, messages.length - visibleCount);
     return messages.slice(start);
   }, [messages, visibleCount]);
 
-  // onScroll for inverted list (offset 0 is bottom)
+  // onScroll (inverted list: offset 0 is bottom)
   const onScroll = useCallback((ev) => {
     const { contentOffset } = ev.nativeEvent;
     const distanceFromBottom = contentOffset.y;
@@ -431,9 +493,7 @@ export default function LessonViewScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => setCardsMode(v => !v)} style={{ marginRight: 10 }}>
-            <FontAwesome5 name={cardsMode ? 'th-large' : 'list'} size={18} color="white" />
-          </Pressable>
+          <Pressable onPress={() => setCardsMode(v => !v)} style={{ marginRight: 10 }}><FontAwesome5 name={cardsMode ? 'th-large' : 'list'} size={18} color="white" /></Pressable>
           <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }} style={styles.headerIcon}><FontAwesome5 name="comments" size={18} color="white" /></Pressable>
         </View>
       </View>
@@ -473,7 +533,7 @@ export default function LessonViewScreen() {
 
                       <FlatList
                         ref={flatListRef}
-                        data={visibleMessages.slice().reverse()} // ensure newest-first for inverted
+                        data={visibleMessages.slice().reverse()} // newest-first for inverted
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderMessageItem}
                         contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
@@ -511,7 +571,7 @@ export default function LessonViewScreen() {
   );
 }
 
-// styles & markdownStyles (same as before, omitted here for brevity — keep your existing styles)
+// ----------------- styles -----------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B1220' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
@@ -519,33 +579,52 @@ const styles = StyleSheet.create({
   headerTitle: { color: 'white', fontSize: 20, fontWeight: '700', textAlign: 'center' },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   contentContainer: { padding: 20, paddingBottom: 220 },
+
   messagesList: { flex: 1, paddingHorizontal: 10, width: '100%' },
   messagesListContent: { paddingTop: 8, paddingBottom: 8, flexGrow: 1 },
-  botMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '85%', alignSelf: 'flex-start' },
-  userMessageWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '85%', alignSelf: 'flex-end' },
-  botBubble: { backgroundColor: '#c4d0e5ff', borderRadius: 14, borderBottomLeftRadius: 6, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  userBubble: { backgroundColor: '#0EA5A4', borderRadius: 14, borderBottomRightRadius: 6, padding: 12 },
-  botTextMarkdown: { body: { color: '#F8FAFC', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#7EE787' } },
-  userTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22, fontWeight: '600' }, strong: { fontWeight: '700', color: '#052427' } },
+
+  // Instagram-like rows
+  botRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '92%', alignSelf: 'flex-start' },
+  userRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '92%', alignSelf: 'flex-end', justifyContent: 'flex-end' },
+
+  avatarLeft: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#2b394b', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  avatarRight: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#0EA5A4', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
+  avatarText: { color: 'white', fontWeight: '700' },
+
+  botBubble: { backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 50, maxWidth: '78%', shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  userBubble: { backgroundColor: '#0EA5A4', borderRadius: 18, padding: 12, minWidth: 50, maxWidth: '78%', shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 4 },
+
+  botTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#164E63' } },
+  userTextMarkdown: { body: { color: '#F8FAFC', fontSize: 15, lineHeight: 22, fontWeight: '600' }, strong: { fontWeight: '700', color: '#E6FFFB' } },
+
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8', marginHorizontal: 4 },
+
+  // seen styles
   seenWrapper: { marginVertical: 6, maxWidth: '85%' },
   seenBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)' },
   seenText: { color: '#94A3B8', fontSize: 12 },
+
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
   overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent' },
   chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'stretch', paddingHorizontal: 15, paddingBottom: 0 },
+
   glassPane: { width: '100%', flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: Platform.OS === 'android' ? 'rgba(8,10,18,0.88)' : 'transparent', paddingTop: 10, paddingBottom: 6, paddingHorizontal: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 20 },
+
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
   dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
+
   promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
   promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: 'white', fontSize: 15 },
   sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 8, marginLeft: 6 },
   stopButton: { backgroundColor: '#F87171' },
+
   swipeLeft: { backgroundColor: '#F59E0B', justifyContent: 'center', padding: 12, alignItems: 'center', flexDirection: 'row' },
   swipeRight: { backgroundColor: '#BBF7D0', justifyContent: 'center', padding: 12, alignItems: 'center', flexDirection: 'row' },
+
   toast: { position: 'absolute', top: 18, alignSelf: 'center', zIndex: 40 },
   toastInner: { backgroundColor: 'rgba(20,20,30,0.95)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, flexDirection: 'row', alignItems: 'center' },
   toastText: { color: 'white', fontSize: 13 },
+
   loadMore: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', marginBottom: 6 },
   loadMoreText: { color: '#D1D5DB' },
 });

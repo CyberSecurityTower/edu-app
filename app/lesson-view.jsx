@@ -536,7 +536,7 @@ export default function LessonViewScreen() {
                     </KeyboardAvoidingView>
 
                     <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
-                      <TextInput style={styles.promptInput} placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."} placeholderTextColor="#9CA3AF" value={promptText} onChangeText={setPromptText} onSubmitEditing={handleSendPrompt} editable={!isSending} returnKeyType="send" />
+                      <TextInput style={styles.promptInput} placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."} placeholderTextColor="#000001c8" value={promptText} onChangeText={setPromptText} onSubmitEditing={handleSendPrompt} editable={!isSending} returnKeyType="send" />
                       <Pressable style={[styles.sendButton, isSending ? styles.stopButton : null, { backgroundColor: accent[0] }]} onPress={handleSendPrompt} disabled={promptText.trim().length === 0 && !isSending}>
                         <FontAwesome5 name={isSending ? "stop" : "paper-plane"} size={18} color="white" solid />
                       </Pressable>
@@ -616,8 +616,8 @@ const styles = StyleSheet.create({
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
   dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
 
-  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.34)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
-  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: '#ff0000ff', fontSize: 15 , fontWeight:'bold'},
+  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.49)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
+  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: '#000000d3', fontSize: 15, fontWeight:"400"},
   sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 8, marginLeft: 6 },
   stopButton: { backgroundColor: '#F87171' },
 

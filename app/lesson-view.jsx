@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
 });
 
 const markdownStyles = StyleSheet.create({
-  heading1: { color: '#FFFFFF', fontSize: 25, fontWeight: '700', marginBottom: 12, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 8, textAlign: 'right' },
+  heading1: { color: '#FFFFFF', fontSize: 25, fontWeight: '700', marginBottom: 10, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 8, textAlign: 'right' },
   body: { color: '#D1D5DB', fontSize: 16, lineHeight: 24, textAlign: 'right' },
   strong: { fontWeight: 'bold', color: '#10B981' },
 });

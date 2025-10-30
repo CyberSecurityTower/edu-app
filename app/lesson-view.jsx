@@ -1,15 +1,5 @@
 // LessonViewScreen.jsx
-import { FontAwesome5 } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
-import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import LottieView from 'lottie-react-native';
-import { AnimatePresence, MotiView } from 'moti';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
+import React from 'react'; {
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -19,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  RNAnimated,
+  Animated as RNAnimated,
   ScrollView,
   StyleSheet,
   Text,
@@ -117,12 +107,12 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   }
 
   if (message.type === 'typing') {
-    // replaced Lottie typing with a lightweight dots placeholder to avoid heavy rendering
+    // only render typing Lottie when allowed (i.e. chat panel visible)
     if (!showTyping) return null;
     return (
       <View style={styles.botRow}>
-        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60, alignItems: 'flex-start' }]}> 
-          <Text style={{ fontSize: 20, lineHeight: 22, fontWeight: '700', color: '#164E63' }}>...</Text>
+        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}> 
+          <LottieView source={require('../assets/images/typing.json')} autoPlay loop style={styles.typingLottie} />
         </View>
       </View>
     );

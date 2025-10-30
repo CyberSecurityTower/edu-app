@@ -1,4 +1,13 @@
 // LessonViewScreen.jsx
+import { FontAwesome5 } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import LottieView from 'lottie-react-native';
+import { AnimatePresence, MotiView } from 'moti';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,28 +19,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Animated as RNAnimated,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Animated as RNAnimated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Gesture, GestureDetector, Swipeable } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
-import { BlurView } from 'expo-blur';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Clipboard from 'expo-clipboard';
-import { v4 as uuidv4 } from 'uuid';
-import * as Haptics from 'expo-haptics';
-import { GestureDetector, Gesture, Swipeable } from 'react-native-gesture-handler';
-import { MotiView, AnimatePresence } from 'moti';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import LottieView from 'lottie-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { v4 as uuidv4 } from 'uuid';
 
 import FloatingActionButton from '../components/FloatingActionButton';
 import GenerateKitButton from '../components/GenerateKitButton';
@@ -44,16 +44,16 @@ const NOTES_KEY = 'edu_notes_v1';
 const BOT_USER = { id: 'bot-fab', firstName: 'FAB' };
 
 const WINDOW = Dimensions.get('window');
-const DEFAULT_VISIBLE = 12;
-const VISIBLE_INCREMENT = 12;
+const DEFAULT_VISIBLE = 6;           // smaller initial window -> faster
+const VISIBLE_INCREMENT = 8;
 const MAX_PANEL_RATIO = 0.72;
 const BASE_PANEL_RATIO = 0.38;
 const BOTTOM_EMPTY_SPACE = 60;
-const MESSAGE_HISTORY_CAP = 50; // cap messages to last 200 for performance
+const MESSAGE_HISTORY_CAP = 120;     // cap messages in memory
 
-/* bot width percent (25%) and user width (rest) */
-const BOT_WIDTH_PERCENT = 0.75;
-const USER_WIDTH_PERCENT = 0.43;
+/* display widths (use maxWidth so height automatic) */
+const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.25);
+const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.73);
 
 const getAccentFromSubject = (subjectId) => {
   const palette = [
@@ -69,13 +69,11 @@ const getAccentFromSubject = (subjectId) => {
   return palette[hash % palette.length];
 };
 
-/* ---------------- Lightweight MessageText ----------------
-   Simple parser: supports **bold** and plain text.
-   Much faster than full markdown renderer for many messages.
-----------------------------------------------------------*/
-const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
-  if (!text) return null;
-  // parse **bold** segments (simple)
+/* ---------------- parse cache for MessageText (fast) ---------------- */
+const _parseCache = new Map();
+function parseBoldSegments(text) {
+  if (!text) return [];
+  if (_parseCache.has(text)) return _parseCache.get(text);
   const parts = [];
   const regex = /\*\*(.+?)\*\*/g;
   let lastIndex = 0;
@@ -86,22 +84,29 @@ const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) parts.push({ t: 'text', v: text.slice(lastIndex) });
+  _parseCache.set(text, parts);
+  return parts;
+}
 
+/* ---------------- Lightweight MessageText ---------------- */
+const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
+  if (!text) return null;
+  const parts = parseBoldSegments(text);
   return (
     <Text style={[style?.body ?? styles.bodyText, { color: isBot ? '#042C2B' : '#F8FAFC' }]}>
-      {parts.map((p, i) => p.t === 'text' ? <Text key={i}>{p.v}</Text> : <Text key={i} style={strongStyle}>{p.v}</Text>)}
+      {parts.map((p, i) => (p.t === 'text' ? <Text key={i}>{p.v}</Text> : <Text key={i} style={strongStyle}>{p.v}</Text>))}
     </Text>
   );
 });
 
-/* ---------------- MessageItem (optimized) ---------------- */
-const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, isCardsMode }) {
+/* ---------------- MessageItem (optimized, memoized) ---------------- */
+const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, disableAnim }) {
   if (!message) return null;
 
-  // small translate up when seenAnimated true
+  // small translate for seen animation (lightweight)
   const slideY = useRef(new RNAnimated.Value(0)).current;
   useEffect(() => {
-    RNAnimated.timing(slideY, { toValue: message.seenAnimated ? -6 : 0, duration: 180, useNativeDriver: true }).start();
+    RNAnimated.timing(slideY, { toValue: message.seenAnimated ? -6 : 0, duration: 160, useNativeDriver: true }).start();
   }, [message.seenAnimated]);
 
   if (message.type === 'seen') {
@@ -113,19 +118,36 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
     );
   }
 
-  if (message.type === 'typing') return (
-    <MotiView style={styles.botRow} from={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <View style={[styles.botBubble, { paddingVertical: 10, flexDirection: 'row' }]}>
-        {[0, 1, 2].map(i => <MotiView key={i} from={{ translateY: 0 }} animate={{ translateY: -5 }} transition={{ type: 'timing', duration: 320, delay: i * 140, loop: true, repeatReverse: true }} style={styles.typingDot} />)}
+  if (message.type === 'typing') {
+    return (
+      <View style={styles.botRow}>
+        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}> 
+          <LottieView source={require('../assets/images/typing.json')} autoPlay loop style={styles.typingLottie} />
+        </View>
       </View>
-    </MotiView>
-  );
+    );
+  }
 
   const isBot = message.author?.id === BOT_USER.id;
 
+  // when disableAnim is true we avoid Moti/animated wrappers to cut CPU
+  if (disableAnim) {
+    return (
+      <View style={{ transform: [{ translateY: 0 }], width: '100%' }}>
+        <View style={isBot ? styles.botRow : styles.userRow}>
+          <Pressable onLongPress={() => onLongPressMessage && onLongPressMessage(message)} android_ripple={{ color: 'rgba(255,255,255,0.02)' }}>
+            <View style={isBot ? styles.botBubble : styles.userBubble}>
+              <MessageText text={message.text} isBot={isBot} style={isBot ? styles.botTextMarkdown : styles.userTextMarkdown} strongStyle={isBot ? styles.botStrong : styles.userStrong} />
+            </View>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   const content = (
     <RNAnimated.View style={{ transform: [{ translateY: slideY }], width: '100%' }}>
-      <MotiView from={{ opacity: 0, translateY: isBot ? 8 : 6 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 220 }} style={isBot ? styles.botRow : styles.userRow}>
+      <MotiView from={{ opacity: 0, translateY: isBot ? 6 : 4 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 160 }} style={isBot ? styles.botRow : styles.userRow}>
         <Pressable onLongPress={() => onLongPressMessage && onLongPressMessage(message)} android_ripple={{ color: 'rgba(255,255,255,0.02)' }}>
           <View style={isBot ? styles.botBubble : styles.userBubble}>
             <MessageText text={message.text} isBot={isBot} style={isBot ? styles.botTextMarkdown : styles.userTextMarkdown} strongStyle={isBot ? styles.botStrong : styles.userStrong} />
@@ -135,14 +157,8 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
     </RNAnimated.View>
   );
 
-  if (isCardsMode) {
-    const renderLeftActions = () => (<View style={styles.swipeLeft}><FontAwesome5 name="star" size={18} color="white" /><Text style={{ color: 'white', marginLeft: 8 }}>Save</Text></View>);
-    const renderRightActions = () => (<View style={styles.swipeRight}><FontAwesome5 name="copy" size={18} color="#042C2B" /><Text style={{ color: '#042C2B', marginLeft: 8 }}>Copy</Text></View>);
-    return <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootRight={false} overshootLeft={false}>{content}</Swipeable>;
-  }
-
   return content;
-}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated);
+}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated && a.disableAnim === b.disableAnim);
 
 /* ---------------- Screen ---------------- */
 export default function LessonViewScreen() {
@@ -166,14 +182,46 @@ export default function LessonViewScreen() {
   const [isSending, setIsSending] = useState(false);
 
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE);
-  const [cardsMode, setCardsMode] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const toastAnim = useRef(new RNAnimated.Value(0)).current;
+
+  const backgroundLottieRef = useRef(null); // control background Lottie
 
   const translateY = useSharedValue(500);
   const flatListRef = useRef(null);
   const abortControllerRef = useRef(null);
   const mountedRef = useRef(true);
+   // ---------- performance helpers ----------
+  const suspendBackgroundRef = useRef(false); // when true: suspend saves/heavy work
+  const messageUpdateQueueRef = useRef(null); // holds a queued updater to batch multiple updates
+  const batchedFlushTimeoutRef = useRef(null);
+
+  // enqueue state update to batch multiple rapid updates into one setState
+  const enqueueMessageUpdate = useCallback((updater, options = { save: true }) => {
+    // store latest updater (we'll collapse them; updater can be function or array)
+    messageUpdateQueueRef.current = { updater, options };
+    if (batchedFlushTimeoutRef.current) return;
+    // flush on next animation frame -> reduces re-renders
+    batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
+      try {
+        const queued = messageUpdateQueueRef.current;
+        messageUpdateQueueRef.current = null;
+        batchedFlushTimeoutRef.current = null;
+        if (!queued) return;
+        setMessages(prev => {
+          const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
+          const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
+          messagesRef.current = capped;
+          return capped;
+        });
+        // saveChat but skip when suspended
+        if (queued.options?.save !== false && !suspendBackgroundRef.current) {
+          // debounce saving to AsyncStorage (we already have a debounced save, but guard here too)
+          saveChat(messagesRef.current);
+        }
+      } catch (e) { console.error('enqueueMessageUpdate error', e); }
+    });
+  }, [saveChat]);
   const saveTimeoutRef = useRef(null);
 
   const seenTimersRef = useRef({});
@@ -187,41 +235,41 @@ export default function LessonViewScreen() {
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // safe setter that caps history size
-  const setMessagesSafe = useCallback((updater) => {
-    setMessages(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (!Array.isArray(next)) return next;
-      // keep oldest-first, cap to last MESSAGE_HISTORY_CAP
-      const capped = next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
-      return capped;
-    });
-  }, []);
+  // safe setter that caps history size and updates ref
+   // safe setter that caps history size and updates ref
+  const setMessagesSafe = useCallback((updater, options = { save: true }) => {
+    // funnel through queue to batch rapid changes
+    enqueueMessageUpdate(updater, options);
+  }, [enqueueMessageUpdate]);
+
 
   const showToast = useCallback((text = 'FAB sent a reply') => {
     setToastVisible(true);
-    RNAnimated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    RNAnimated.timing(toastAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
     Haptics.selectionAsync();
-    setTimeout(() => RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)), 3000);
+    setTimeout(() => RNAnimated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setToastVisible(false)), 3000);
   }, [toastAnim]);
 
   const onToastPress = useCallback(() => { setChatPanelVisible(true); RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)); }, [toastAnim]);
 
   /* ---------- save/load ---------- */
-  const saveChat = useCallback((maybeMessages) => {
+    const saveChat = useCallback((maybeMessages) => {
     try {
+      if (suspendBackgroundRef.current) return; // don't save while suspended (mini-chat open heavy mode)
       const src = Array.isArray(maybeMessages) ? maybeMessages : messagesRef.current || [];
       if (!Array.isArray(src)) return;
       const storableOldestFirst = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro' && m.type !== 'seen');
-      const storable = storableOldestFirst.slice().reverse(); // store newest-first
+      const storable = storableOldestFirst.slice().reverse();
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      // slightly longer debounce to avoid frequent disk writes under chat activity
       saveTimeoutRef.current = setTimeout(() => {
         AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => console.error('AsyncStorage.setItem error:', e));
-      }, 300);
+      }, 600); // 600ms
     } catch (e) {
       console.error('Error saving mini-chat:', e);
     }
   }, [CHAT_KEY]);
+
 
   const loadChat = useCallback(async () => {
     try {
@@ -265,101 +313,93 @@ export default function LessonViewScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [setMessagesSafe]);
 
-  /* ---------- process & respond with SEEN flow ---------- */
-  const processAndRespond = useCallback(async (userMessage, history) => {
-    if (isSending) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  /* ---------- process & respond with SEEN flow (fixed + batched updates) ---------- */
+const processAndRespond = useCallback(async (userMessage, history) => {
+  if (isSending) return;
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // append user message
+  // append user message immediately (batched via setMessagesSafe)
+  setMessagesSafe(prev => {
+    const next = Array.isArray(prev) ? [...prev, userMessage] : [userMessage];
+    return next;
+  });
+
+  setIsSending(true);
+  const seenId = uuidv4();
+  abortControllerRef.current = new AbortController();
+  responsePendingRef.current[seenId] = false;
+
+  const apiPromise = apiService.getInteractiveChatReply({
+    message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
+    userId: user?.uid,
+    history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
+  }, abortControllerRef.current.signal);
+
+  // schedule seen after 1s (kept short)
+  const seenTimer = setTimeout(() => {
+    // mark the user's message seenAnimated and append a 'seen' indicator
     setMessagesSafe(prev => {
-      const next = [...prev, userMessage];
-      runOnJS(saveChat)(next);
-      return next;
+      const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
+      return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
     });
 
-    setIsSending(true);
-    const seenId = uuidv4();
-    abortControllerRef.current = new AbortController();
-    responsePendingRef.current[seenId] = false;
+    // schedule typing after 2-4s (if response hasn't arrived)
+    const delayMs = 2000 + Math.floor(Math.random() * 2000);
+    const typingTimer = setTimeout(() => {
+      if (responsePendingRef.current[seenId]) return; // response already arrived
+      const typingId = uuidv4();
+      seenToTypingRef.current[seenId] = typingId;
+      setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
+    }, delayMs);
 
-    const apiPromise = apiService.getInteractiveChatReply({
-      message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
-      userId: user?.uid,
-      history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
-    }, abortControllerRef.current.signal);
+    seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
+  }, 1000);
 
-    // schedule seen after 1s
-    const seenTimer = setTimeout(() => {
-      setMessagesSafe(prev => {
-        const next = prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m));
-        const withSeen = [...next, { type: 'seen', id: seenId, author: userMessage.author }];
-        runOnJS(saveChat)(withSeen);
-        return withSeen;
-      });
+  seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
 
-      // schedule typing after 2-4s
-      const delayMs = 2000 + Math.floor(Math.random() * 2000);
-      const typingTimer = setTimeout(() => {
-        if (responsePendingRef.current[seenId]) return;
-        const typingId = uuidv4();
-        seenToTypingRef.current[seenId] = typingId;
-        setMessagesSafe(prev => prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)));
-      }, delayMs);
+  try {
+    const response = await apiPromise;
+    responsePendingRef.current[seenId] = true;
 
-      seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
-    }, 1000);
+    const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
 
-    seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
+    // replace typing or seen with bot response (batched)
+    setMessagesSafe(prev => {
+      const typingId = seenToTypingRef.current[seenId];
+      if (typingId) {
+        return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? botResponse : m)) : [botResponse];
+      }
+      return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? botResponse : m)) : [botResponse];
+    });
 
-    try {
-      const response = await apiPromise;
-      responsePendingRef.current[seenId] = true;
-      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
-
+    Haptics.selectionAsync();
+    if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      // user cancelled — remove the seen/typing placeholders
+      setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
+    } else {
+      console.error('AI Chat Error:', error);
+      const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
       setMessagesSafe(prev => {
         const typingId = seenToTypingRef.current[seenId];
-        if (typingId) {
-          const replaced = prev.map(m => (m.id === typingId ? botResponse : m));
-          runOnJS(saveChat)(replaced);
-          return replaced;
-        }
-        const replaced = prev.map(m => (m.id === seenId ? botResponse : m));
-        runOnJS(saveChat)(replaced);
-        return replaced;
+        if (typingId) return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? errorMessage : m)) : [errorMessage];
+        return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? errorMessage : m)) : [errorMessage];
       });
-
-      Haptics.selectionAsync();
-      if (!isChatPanelVisible) runOnJS(showToast)('FAB replied — اضغط للفتح');
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        setMessagesSafe(prev => prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]));
-      } else {
-        console.error('AI Chat Error:', error);
-        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
-        setMessagesSafe(prev => {
-          const typingId = seenToTypingRef.current[seenId];
-          if (typingId) {
-            const replaced = prev.map(m => (m.id === typingId ? errorMessage : m));
-            runOnJS(saveChat)(replaced);
-            return replaced;
-          }
-          const replaced = prev.map(m => (m.id === seenId ? errorMessage : m));
-          runOnJS(saveChat)(replaced);
-          return replaced;
-        });
-      }
-    } finally {
-      try {
-        const o = seenTimersRef.current[seenId];
-        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-      } catch (e) {}
-      delete seenTimersRef.current[seenId];
-      delete seenToTypingRef.current[seenId];
-      delete responsePendingRef.current[seenId];
-      setIsSending(false);
-      abortControllerRef.current = null;
     }
-  }, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast, setMessagesSafe]);
+  } finally {
+    try {
+      const o = seenTimersRef.current[seenId];
+      if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+    } catch (e) {}
+    delete seenTimersRef.current[seenId];
+    delete seenToTypingRef.current[seenId];
+    delete responsePendingRef.current[seenId];
+    setIsSending(false);
+    abortControllerRef.current = null;
+  }
+}, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast, setMessagesSafe]);
+
 
   const handleSendPrompt = useCallback(() => {
     if (isSending) { handleStopGenerating(); return; }
@@ -372,7 +412,7 @@ export default function LessonViewScreen() {
     processAndRespond(userMessage, history);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // small offset to show top of message rather than jumping
+    // small offset to show top of new bubble rather than jumping to bottom
     setTimeout(() => {
       try {
         if (flatListRef.current) flatListRef.current.scrollToOffset({ offset: 20, animated: true });
@@ -413,17 +453,24 @@ export default function LessonViewScreen() {
   }, [lessonId, user?.uid, subjectId, pathId, totalLessons, loadChat]);
 
   useEffect(() => {
+    // when mini-chat opens: pause or unmount background Lottie and stop heavy animations
     if (isChatPanelVisible) {
+      suspendBackgroundRef.current = true; // suspend saves/background work
+      try { if (backgroundLottieRef.current && backgroundLottieRef.current.pause) backgroundLottieRef.current.pause(); } catch (e) {}
       InteractionManager.runAfterInteractions(() => {
-        setMessagesSafe(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)));
+        // only set messages from loadedMessages after interactions to avoid blocking UI
+        setMessagesSafe(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)), { save: false });
       });
       translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     } else {
+      suspendBackgroundRef.current = false;
+      try { if (backgroundLottieRef.current && backgroundLottieRef.current.play) backgroundLottieRef.current.play(); } catch (e) {}
       translateY.value = withTiming(500, { duration: 260 }, (finished) => { if (finished) runOnJS(saveChat)(messagesRef.current); });
       runOnJS(Keyboard.dismiss)();
       handleStopGenerating();
     }
   }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY, setMessagesSafe]);
+
 
   const context = useSharedValue({ y: 0 });
   const dragGesture = Gesture.Pan()
@@ -443,7 +490,6 @@ export default function LessonViewScreen() {
 
   const onScroll = useCallback((ev) => {
     const { contentOffset } = ev.nativeEvent;
-    // for non-inverted (we invert list), scroll offset semantics differ — keep simple heuristic
     isAtBottomRef.current = contentOffset.y < 80;
   }, []);
 
@@ -456,16 +502,23 @@ export default function LessonViewScreen() {
     }
   }, [visibleMessages.length]);
 
+  // disable animations when messages get large to save CPU
+  const disableAnimations = messages.length > 20;
+
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
-    return <MessageItem message={item} onLongPressMessage={handleLongPressMessage} isCardsMode={cardsMode} />;
-  }, [handleLongPressMessage, cardsMode]);
+    return <MessageItem message={item} onLongPressMessage={handleLongPressMessage} disableAnim={disableAnimations} />;
+  }, [handleLongPressMessage, disableAnimations]);
 
   const computePanelHeight = () => {
     const extra = isSending ? 80 : 30;
     return Math.min(maxPanelHeight, basePanelHeight + extra);
   };
   const panelHeight = computePanelHeight();
+
+  // input text color based on panel background (Android translucent -> dark text)
+  const inputTextColor = Platform.OS === 'android' ? '#0b1220' : '#FFFFFF';
+  const placeholderColor = '#9CA3AF';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -475,14 +528,19 @@ export default function LessonViewScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => setCardsMode(v => !v)} style={{ marginRight: 10 }}><FontAwesome5 name={cardsMode ? 'th-large' : 'list'} size={18} color="white" /></Pressable>
-          <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }} style={styles.headerIcon}><FontAwesome5 name="comments" size={18} color="white" /></Pressable>
+          {/* removed card-mode toggle as requested */}
+          <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }} style={styles.headerIcon}>
+            <FontAwesome5 name="comments" size={18} color="white" />
+          </Pressable>
         </View>
       </View>
 
       {isLoading ? (
         <View style={styles.centerContent}>
-          <LottieView source={require('../assets/images/empty-content.json')} autoPlay loop style={{ width: 220, height: 220 }} />
+          {/* background Lottie paused/hidden while chat open */}
+          {!isChatPanelVisible && (
+            <LottieView ref={backgroundLottieRef} source={require('../assets/images/empty-content.json')} autoPlay loop style={{ width: 220, height: 220 }} />
+          )}
           <ActivityIndicator size="large" color={accent[0]} style={{ marginTop: 8 }} />
         </View>
       ) : (
@@ -499,49 +557,112 @@ export default function LessonViewScreen() {
           <AnimatePresence>
             {isChatPanelVisible && (
               <View style={styles.overlayContainer} pointerEvents="box-none">
-                {/* full-screen subtle blur/backdrop */}
-                <BlurView intensity={Platform.OS === 'ios' ? 70 : 36} tint="dark" style={styles.backdropBlur} pointerEvents="none" />
+                {/* backdrop: light blur on iOS, simple translucent on Android */}
+                {Platform.OS === 'ios' ? (
+                  <BlurView intensity={60} tint="dark" style={styles.backdropBlur} pointerEvents="none" />
+                ) : (
+                  <View style={styles.backdropSimple} pointerEvents="none" />
+                )}
                 <Pressable style={styles.overlayBackground} onPress={() => setChatPanelVisible(false)} />
 
                 <Animated.View style={[styles.chatPanelContainer, animatedPanelStyle, { height: panelHeight }]}>
-                  <BlurView intensity={Platform.OS === 'ios' ? 80 : 48} tint="dark" style={styles.glassPane}>
-                    <LinearGradient colors={['rgba(255,255,255,0.02)', 'rgba(0,0,0,0.22)']} start={[0,0]} end={[0,1]} style={StyleSheet.absoluteFill} />
+                  {Platform.OS === 'ios' ? (
+                    <BlurView intensity={80} tint="dark" style={styles.glassPane}>
+                      <LinearGradient colors={['rgba(255,255,255,0.02)', 'rgba(0,0,0,0.22)']} start={[0,0]} end={[0,1]} style={StyleSheet.absoluteFill} />
+                      <GestureDetector gesture={dragGesture}>
+                        <View style={styles.dragHandleContainer}><View style={[styles.dragHandle, { backgroundColor: 'rgba(255,255,255,0.12)' }]} /></View>
+                      </GestureDetector>
 
-                    <GestureDetector gesture={dragGesture}>
-                      <View style={styles.dragHandleContainer}><View style={[styles.dragHandle, { backgroundColor: 'rgba(255,255,255,0.12)' }]} /></View>
-                    </GestureDetector>
+                      <KeyboardAvoidingView behavior={'padding'} keyboardVerticalOffset={90} style={{ flex: 1 }}>
+                        { (messagesRef.current.length > visibleMessages.length) && (
+                          <Pressable onPress={() => { setVisibleCount(v => v + VISIBLE_INCREMENT); Haptics.selectionAsync(); }} style={styles.loadMore}>
+                            <Text style={styles.loadMoreText}>تحميل رسائل أقدم</Text>
+                          </Pressable>
+                        )}
 
-                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90} style={{ flex: 1 }}>
-                      { (messagesRef.current.length > visibleMessages.length) && (
-                        <Pressable onPress={() => { setVisibleCount(v => v + VISIBLE_INCREMENT); Haptics.selectionAsync(); }} style={styles.loadMore}>
-                          <Text style={styles.loadMoreText}>تحميل رسائل أقدم</Text>
+                        <FlatList
+                          ref={flatListRef}
+                          data={visibleMessages.slice().reverse()}
+                          keyExtractor={(item) => String(item.id)}
+                          renderItem={renderMessageItem}
+                          contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
+                          keyboardShouldPersistTaps="handled"
+                          style={styles.messagesList}
+                          initialNumToRender={2}
+                          maxToRenderPerBatch={2}
+                          windowSize={3}
+                          removeClippedSubviews={true}
+                          inverted={true}
+                          onScroll={onScroll}
+                          maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+                        />
+                      </KeyboardAvoidingView>
+
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
+                        <TextInput
+                          style={[styles.promptInput, { color: inputTextColor }]}
+                          placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
+                          placeholderTextColor={placeholderColor}
+                          value={promptText}
+                          onChangeText={setPromptText}
+                          onSubmitEditing={handleSendPrompt}
+                          editable={!isSending}
+                          returnKeyType="send"
+                        />
+                        <Pressable style={[styles.sendButton, isSending ? styles.stopButton : null, { backgroundColor: accent[0], marginLeft: 10 }]} onPress={handleSendPrompt} disabled={promptText.trim().length === 0 && !isSending}>
+                          <FontAwesome5 name={isSending ? "stop" : "paper-plane"} size={18} color="white" solid />
                         </Pressable>
-                      )}
+                      </View>
+                    </BlurView>
+                  ) : (
+                    <View style={styles.glassPaneAndroid}>
+                      <LinearGradient colors={['rgba(255,255,255,0.02)', 'rgba(0,0,0,0.18)']} start={[0,0]} end={[0,1]} style={StyleSheet.absoluteFill} />
+                      <GestureDetector gesture={dragGesture}>
+                        <View style={styles.dragHandleContainer}><View style={[styles.dragHandle, { backgroundColor: 'rgba(255,255,255,0.10)' }]} /></View>
+                      </GestureDetector>
 
-                      <FlatList
-                        ref={flatListRef}
-                        data={visibleMessages.slice().reverse()}
-                        keyExtractor={(item) => String(item.id)}
-                        renderItem={renderMessageItem}
-                        contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
-                        keyboardShouldPersistTaps="handled"
-                        style={styles.messagesList}
-                        initialNumToRender={6}
-                        maxToRenderPerBatch={6}
-                        windowSize={5}
-                        removeClippedSubviews={true}
-                        inverted={true}
-                        onScroll={onScroll}
-                      />
-                    </KeyboardAvoidingView>
+                      <KeyboardAvoidingView behavior={'height'} keyboardVerticalOffset={90} style={{ flex: 1 }}>
+                        { (messagesRef.current.length > visibleMessages.length) && (
+                          <Pressable onPress={() => { setVisibleCount(v => v + VISIBLE_INCREMENT); Haptics.selectionAsync(); }} style={styles.loadMore}>
+                            <Text style={styles.loadMoreText}>تحميل رسائل أقدم</Text>
+                          </Pressable>
+                        )}
 
-                    <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
-                      <TextInput style={styles.promptInput} placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."} placeholderTextColor="#000001c8" value={promptText} onChangeText={setPromptText} onSubmitEditing={handleSendPrompt} editable={!isSending} returnKeyType="send" />
-                      <Pressable style={[styles.sendButton, isSending ? styles.stopButton : null, { backgroundColor: accent[0] }]} onPress={handleSendPrompt} disabled={promptText.trim().length === 0 && !isSending}>
-                        <FontAwesome5 name={isSending ? "stop" : "paper-plane"} size={18} color="white" solid />
-                      </Pressable>
+                        <FlatList
+                          ref={flatListRef}
+                          data={visibleMessages.slice().reverse()}
+                          keyExtractor={(item) => String(item.id)}
+                          renderItem={renderMessageItem}
+                          contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
+                          keyboardShouldPersistTaps="handled"
+                          style={styles.messagesList}
+                          initialNumToRender={2}
+                          maxToRenderPerBatch={2}
+                          windowSize={3}
+                          removeClippedSubviews={true}
+                          inverted={true}
+                          onScroll={onScroll}
+                          maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+                        />
+                      </KeyboardAvoidingView>
+
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
+                        <TextInput
+                          style={[styles.promptInput, { color: inputTextColor }]}
+                          placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
+                          placeholderTextColor={placeholderColor}
+                          value={promptText}
+                          onChangeText={setPromptText}
+                          onSubmitEditing={handleSendPrompt}
+                          editable={!isSending}
+                          returnKeyType="send"
+                        />
+                        <Pressable style={[styles.sendButton, isSending ? styles.stopButton : null, { backgroundColor: accent[0], marginLeft: 10 }]} onPress={handleSendPrompt} disabled={promptText.trim().length === 0 && !isSending}>
+                          <FontAwesome5 name={isSending ? "stop" : "paper-plane"} size={18} color="white" solid />
+                        </Pressable>
+                      </View>
                     </View>
-                  </BlurView>
+                  )}
                 </Animated.View>
               </View>
             )}
@@ -570,13 +691,11 @@ const styles = StyleSheet.create({
   messagesList: { flex: 1, paddingHorizontal: 10, width: '100%' },
   messagesListContent: { paddingTop: 8, paddingBottom: 8, flexGrow: 1 },
 
-  // rows
   botRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '100%', alignSelf: 'flex-start' },
   userRow: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 6, maxWidth: '100%', alignSelf: 'flex-end', justifyContent: 'flex-end' },
 
-  /* IMPORTANT: bot bubble fixed to 25% of screen width, user bubble ~73% */
-  botBubble: { width: Math.round(WINDOW.width * BOT_WIDTH_PERCENT), backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 60 },
-  userBubble: { width: Math.round(WINDOW.width * USER_WIDTH_PERCENT), backgroundColor: '#0EA5A4', borderRadius: 18, padding: 12, minWidth: 60 },
+  botBubble: { maxWidth: BOT_MAX_WIDTH, backgroundColor: '#c4d0e5ff', borderRadius: 18, padding: 12, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)', minWidth: 44 },
+  userBubble: { maxWidth: USER_MAX_WIDTH, backgroundColor: '#0EA5A4', borderRadius: 18, padding: 12, minWidth: 44 },
 
   botTextMarkdown: { body: { color: '#042C2B', fontSize: 15, lineHeight: 22 }, strong: { fontWeight: '700', color: '#164E63' } },
   userTextMarkdown: { body: { color: '#F8FAFC', fontSize: 15, lineHeight: 22, fontWeight: '600' }, strong: { fontWeight: '700', color: '#E6FFFB' } },
@@ -586,39 +705,52 @@ const styles = StyleSheet.create({
 
   bodyText: { fontSize: 15, lineHeight: 20 },
 
-  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8', marginHorizontal: 4 },
+  typingLottie: { width: 75, height: 75 },
 
   seenWrapper: { marginVertical: 6, maxWidth: '85%' },
-  seenBadge: { paddingVertical: 0, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(0, 0, 0, 0.19)' },
+  seenBadge: { paddingVertical: 2, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(0, 0, 0, 0.22)' },
   seenText: { color: '#94A3B8', fontSize: 12 },
 
   overlayContainer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
-  backdropBlur: { ...StyleSheet.absoluteFillObject, zIndex: 8, backgroundColor: 'rgba(0,0,0,0.18)' },
+  backdropBlur: { ...StyleSheet.absoluteFillObject, zIndex: 8 },
+  backdropSimple: { ...StyleSheet.absoluteFillObject, zIndex: 8, backgroundColor: 'rgba(0,0,0,0.18)' },
   overlayBackground: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
 
   chatPanelContainer: { position: 'absolute', bottom: 0, width: '100%', alignItems: 'stretch', paddingHorizontal: 15, paddingBottom: 0 },
 
-  /* Glass look: BlurView + translucent background + subtle border */
   glassPane: {
-    marginBottom:12,
+    marginBottom: 12,
     width: '100%',
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1.9,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.42)' : 'transparent',
+    borderWidth: 1.0,
+    borderColor: 'rgba(255, 255, 255, 0.70)',
+    backgroundColor: 'transparent',
     paddingTop: 10,
     paddingBottom: 6,
+    paddingHorizontal: 8,
+  },
+
+  glassPaneAndroid: {
+    marginBottom: 12,
+    width: '100%',
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1.0,
+    borderColor: 'rgba(255, 255, 255, 0.71)',
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    paddingBottom: 10,
     paddingHorizontal: 8,
   },
 
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
   dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
 
-  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.49)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
-  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, color: '#000000d3', fontSize: 15, fontWeight:"400"},
-  sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 8, marginLeft: 6 },
+  promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.56)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
+  promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, fontSize: 15 },
+  sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 0, marginLeft: 0 },
   stopButton: { backgroundColor: '#F87171' },
 
   swipeLeft: { backgroundColor: '#F59E0B', justifyContent: 'center', padding: 12, alignItems: 'center', flexDirection: 'row' },

@@ -1,4 +1,3 @@
-// LessonViewScreen.jsx
 import { FontAwesome5 } from '@expo/vector-icons'; // <--- تم استيراد FontAwesome5
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur'; // <--- تم استيراد BlurView
@@ -93,7 +92,7 @@ const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
   if (!text) return null;
   const parts = parseBoldSegments(text);
   return (
-    <Text style={[style?.body ?? styles.bodyText, { color: isBot ? '#042C2B' : '#F8FAFC' }]}> 
+    <Text style={[style?.body ?? styles.bodyText, { color: isBot ? '#042C2B' : '#F8FAFC' }]}>
       {parts.map((p, i) => (p.t === 'text' ? <Text key={i}>{p.v}</Text> : <Text key={i} style={strongStyle}>{p.v}</Text>))}
     </Text>
   );
@@ -110,7 +109,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   if (message.type === 'seen') {
     const isUser = message.author?.id !== BOT_USER.id;
     return (
-      <View style={[styles.seenWrapper, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}> 
+      <View style={[styles.seenWrapper, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
         <View style={styles.seenBadge}><Text style={styles.seenText}>Seen</Text></View>
       </View>
     );
@@ -121,7 +120,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
     if (!showTyping) return null;
     return (
       <View style={styles.botRow}>
-        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}> 
+        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}>
           <LottieView source={require('../assets/images/typing.json')} autoPlay loop style={styles.typingLottie} />
         </View>
       </View>
@@ -350,7 +349,7 @@ export default function LessonViewScreen() {
         if (responsePendingRef.current[seenId]) return;
         const typingId = uuidv4();
         seenToTypingRef.current[seenId] = typingId;
-        // insert a lightweight typing placeholder (no Lottie) to avoid heavy rendering
+        // ✨ [FIX] Replace 'seen' with 'typing' instead of just mapping
         setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
       }, delayMs);
 
@@ -370,35 +369,30 @@ export default function LessonViewScreen() {
       } catch (e) {}
 
       const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
-
-      // replace typing/seen if present, otherwise append bot response
+      
+      // ✨ [FIXED] Robustly replace typing/seen placeholders by filtering them out first
       setMessagesSafe(prev => {
-        if (!Array.isArray(prev) || prev.length === 0) return [botResponse];
-        const typingId = seenToTypingRef.current[seenId];
-        if (typingId && prev.some(m => m.id === typingId)) {
-          return prev.map(m => (m.id === typingId ? botResponse : m));
-        }
-        if (prev.some(m => m.id === seenId)) {
-          return prev.map(m => (m.id === seenId ? botResponse : m));
-        }
-        return [...prev, botResponse];
+          if (!Array.isArray(prev)) return [botResponse];
+          const typingId = seenToTypingRef.current[seenId];
+          // Filter out ANY related placeholders for this response
+          const filtered = prev.filter(m => m.id !== seenId && m.id !== typingId);
+          // Add the new bot response
+          return [...filtered, botResponse];
       });
 
       Haptics.selectionAsync();
       if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
     } catch (error) {
-      if (error?.name === 'AbortError') {
-        setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
-      } else {
-        console.error('AI Chat Error:', error);
-        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
-        setMessagesSafe(prev => {
+      const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
+
+      // ✨ [FIXED] Robustly replace typing/seen placeholders with an error message
+      setMessagesSafe(prev => {
+          if (!Array.isArray(prev)) return [errorMessage];
           const typingId = seenToTypingRef.current[seenId];
-          if (typingId && Array.isArray(prev) && prev.some(m => m.id === typingId)) return prev.map(m => (m.id === typingId ? errorMessage : m));
-          if (Array.isArray(prev) && prev.some(m => m.id === seenId)) return prev.map(m => (m.id === seenId ? errorMessage : m));
-          return Array.isArray(prev) ? [...prev, errorMessage] : [errorMessage];
-        });
-      }
+          const filtered = prev.filter(m => m.id !== seenId && m.id !== typingId && m.id !== userMessage.id);
+          return [...filtered, userMessage, errorMessage]; // Re-add user message for context
+      });
+
     } finally {
       try {
         const o = seenTimersRef.current[seenId];
@@ -537,11 +531,11 @@ export default function LessonViewScreen() {
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
     // ✨ [FIXED] تمرير isChatPanelVisible كـ showTyping
-    return <MessageItem 
-        message={item} 
-        onLongPressMessage={handleLongPressMessage} 
-        disableAnim={disableAnimations} 
-        showTyping={isChatPanelVisible} 
+    return <MessageItem
+        message={item}
+        onLongPressMessage={handleLongPressMessage}
+        disableAnim={disableAnimations}
+        showTyping={isChatPanelVisible}
     />;
   }, [handleLongPressMessage, disableAnimations, isChatPanelVisible]); // ✨ [FIXED] إضافة isChatPanelVisible للاعتمادية
 
@@ -555,7 +549,7 @@ export default function LessonViewScreen() {
   const placeholderColor = '#9CA3AF';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}> 
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
@@ -579,29 +573,21 @@ export default function LessonViewScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* show simplified preview while chat is open to reduce rendering cost */}
-          {!isChatPanelVisible ? (
-            <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
-              <View style={{ writingDirection: 'rtl' }}>
-                <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
-              </View>
-
-              {/* background robot Lottie visible when chat is closed - press to open chat */}
-              <View style={{ alignItems: 'center', marginTop: 8 }}>
-                {!isChatPanelVisible && (
-                  <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>
-                    <LottieView ref={backgroundLottieRef} source={require('../assets/images/robot.json')} autoPlay loop style={{ width: 160, height: 160 }} />
-                  </Pressable>
-                )}
-              </View>
-
-            </ScrollView>
-          ) : (
-            <View style={{ padding: 18 }}>
-              <Text style={{ color: '#D1D5DB', fontSize: 18, fontWeight: '700', textAlign: 'right' }}>{lessonTitle || 'Lesson'}</Text>
-              <Text numberOfLines={6} ellipsizeMode="tail" style={{ color: '#9CA3AF', marginTop: 8, textAlign: 'right' }}>{lessonContent || 'No content available.'}</Text>
+          {/* ✨ [FIXED] Always render the full markdown view for a consistent UX */}
+          <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
+            <View style={{ writingDirection: 'rtl' }}>
+              <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
             </View>
-          )}
+
+            {/* background robot Lottie visible when chat is closed - press to open chat */}
+            <View style={{ alignItems: 'center', marginTop: 8 }}>
+              {!isChatPanelVisible && (
+                <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>
+                  <LottieView ref={backgroundLottieRef} source={require('../assets/images/robot.json')} autoPlay loop style={{ width: 160, height: 160 }} />
+                </Pressable>
+              )}
+            </View>
+          </ScrollView>
 
           <GenerateKitButton onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle, subjectId, pathId } })} />
           <FloatingActionButton onPress={() => setChatPanelVisible(true)} />
@@ -650,7 +636,7 @@ export default function LessonViewScreen() {
                         />
                       </KeyboardAvoidingView>
 
-                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
                         <TextInput
                           style={[styles.promptInput, { color: inputTextColor }]}
                           placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
@@ -699,7 +685,7 @@ export default function LessonViewScreen() {
                         />
                       </KeyboardAvoidingView>
 
-                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
                         <TextInput
                           style={[styles.promptInput, { color: inputTextColor }]}
                           placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
@@ -722,7 +708,7 @@ export default function LessonViewScreen() {
           </AnimatePresence>
 
           {toastVisible && (
-            <RNAnimated.View style={[styles.toast, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate ? toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) : 0 }] }]}> 
+            <RNAnimated.View style={[styles.toast, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate ? toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) : 0 }] }]}>
               <TouchableOpacity onPress={onToastPress} style={styles.toastInner}><Text style={styles.toastText}>FAB replied — اضغط للفتح</Text></TouchableOpacity>
             </RNAnimated.View>
           )}

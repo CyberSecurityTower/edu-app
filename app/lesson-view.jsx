@@ -52,8 +52,8 @@ const BOTTOM_EMPTY_SPACE = 60;
 const MESSAGE_HISTORY_CAP = 120;
 
 /* display widths */
-const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.75);
-const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.73);
+const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.65);
+const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.70);
 
 const getAccentFromSubject = (subjectId) => {
   const palette = [
@@ -100,7 +100,7 @@ const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
 });
 
 /* ---------------- MessageItem (memo) ---------------- */
-const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, disableAnim }) {
+const MessageItem = React.memo(function MessageItem({ message, onLongPressMessage, disableAnim, showTyping }) {
   if (!message) return null;
   const slideY = useRef(new RNAnimated.Value(0)).current;
   useEffect(() => {
@@ -117,6 +117,8 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   }
 
   if (message.type === 'typing') {
+    // only render typing Lottie when allowed (i.e. chat panel visible)
+    if (!showTyping) return null;
     return (
       <View style={styles.botRow}>
         <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}>
@@ -211,7 +213,7 @@ export default function LessonViewScreen() {
       if (!Array.isArray(src)) return;
       const storableOldestFirst = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro' && m.type !== 'seen');
       const storable = storableOldestFirst.slice().reverse();
-      // single immediate write (we will call saveChat after closing chat)
+      // immediate write (we call saveChat when chat closed)
       AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => console.error('AsyncStorage.setItem error:', e));
     } catch (e) {
       console.error('Error saving mini-chat:', e);
@@ -246,50 +248,45 @@ export default function LessonViewScreen() {
   }, [lessonId]);
 
   // batching updates to reduce renders & disk writes
-  // replace existing enqueueMessageUpdate with this corrected version
-const enqueueMessageUpdate = useCallback((updater, options = { save: false }) => {
-  // if there's no queued updater, set it
-  if (!messageUpdateQueueRef.current) {
-    messageUpdateQueueRef.current = { updater, options };
-  } else {
-    // compose the new updater after the existing one so order is preserved
-    const existing = messageUpdateQueueRef.current;
-    const prevUpdater = existing.updater;
-    const newUpdater = updater;
-    const combinedUpdater = (prev) => {
-      const intermediate = typeof prevUpdater === 'function' ? prevUpdater(prev) : prevUpdater;
-      return typeof newUpdater === 'function' ? newUpdater(intermediate) : newUpdater;
-    };
-    // if any queued option requested save, keep it true
-    const combinedOptions = { save: Boolean((existing.options && existing.options.save) || options.save) };
-    messageUpdateQueueRef.current = { updater: combinedUpdater, options: combinedOptions };
-  }
-
-  if (batchedFlushTimeoutRef.current) return;
-
-  // flush on next animation frame (still batched), but now composed updates won't overwrite each other
-  batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
-    try {
-      const queued = messageUpdateQueueRef.current;
-      messageUpdateQueueRef.current = null;
-      batchedFlushTimeoutRef.current = null;
-      if (!queued) return;
-      setMessages(prev => {
-        const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
-        const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
-        messagesRef.current = capped;
-        return capped;
-      });
-      // we intentionally avoid saving while chat is open; only save if explicitly requested and not suspended
-      if (queued.options?.save && !suspendBackgroundRef.current) {
-        saveChat(messagesRef.current);
-      }
-    } catch (e) {
-      console.error('enqueueMessageUpdate error', e);
+  const enqueueMessageUpdate = useCallback((updater, options = { save: false }) => {
+    // compose updates instead of overwriting to preserve order
+    if (!messageUpdateQueueRef.current) {
+      messageUpdateQueueRef.current = { updater, options };
+    } else {
+      const existing = messageUpdateQueueRef.current;
+      const prevUpdater = existing.updater;
+      const newUpdater = updater;
+      const combinedUpdater = (prev) => {
+        const intermediate = typeof prevUpdater === 'function' ? prevUpdater(prev) : prevUpdater;
+        return typeof newUpdater === 'function' ? newUpdater(intermediate) : newUpdater;
+      };
+      const combinedOptions = { save: Boolean((existing.options && existing.options.save) || options.save) };
+      messageUpdateQueueRef.current = { updater: combinedUpdater, options: combinedOptions };
     }
-  });
-}, [saveChat]);
 
+    if (batchedFlushTimeoutRef.current) return;
+
+    batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
+      try {
+        const queued = messageUpdateQueueRef.current;
+        messageUpdateQueueRef.current = null;
+        batchedFlushTimeoutRef.current = null;
+        if (!queued) return;
+        setMessages(prev => {
+          const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
+          const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
+          messagesRef.current = capped;
+          return capped;
+        });
+        // only save if explicitly requested and not suspended
+        if (queued.options?.save && !suspendBackgroundRef.current) {
+          saveChat(messagesRef.current);
+        }
+      } catch (e) {
+        console.error('enqueueMessageUpdate error', e);
+      }
+    });
+  }, [saveChat]);
 
   const setMessagesSafe = useCallback((updater, options = { save: false }) => {
     enqueueMessageUpdate(updater, options);
@@ -315,112 +312,104 @@ const enqueueMessageUpdate = useCallback((updater, options = { save: false }) =>
   const handleStopGenerating = useCallback(() => {
     try { if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; } } catch (e) {}
     setIsSending(false);
-    setMessagesSafe(prev => prev.filter(m => m.type !== 'typing' && m.type !== 'seen'));
+    // remove typing/seen placeholders (don't save here)
+    setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.type !== 'typing' && m.type !== 'seen') : prev));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [setMessagesSafe]);
 
-  /* ---------- process & respond with SEEN flow (fixed + batched updates) ---------- */
   /* ---------- process & respond with SEEN flow (fixed + robust) ---------- */
-const processAndRespond = useCallback(async (userMessage, history) => {
-  if (isSending) return;
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const processAndRespond = useCallback(async (userMessage, history) => {
+    if (isSending) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-  // append user message immediately (batched)
-  setMessagesSafe(prev => (Array.isArray(prev) ? [...prev, userMessage] : [userMessage]));
+    // append user message immediately (batched, no save while chat open)
+    setMessagesSafe(prev => (Array.isArray(prev) ? [...prev, userMessage] : [userMessage]));
 
-  setIsSending(true);
-  const seenId = uuidv4();
-  abortControllerRef.current = new AbortController();
-  responsePendingRef.current[seenId] = false;
+    setIsSending(true);
+    const seenId = uuidv4();
+    abortControllerRef.current = new AbortController();
+    responsePendingRef.current[seenId] = false;
 
-  const apiPromise = apiService.getInteractiveChatReply({
-    message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
-    userId: user?.uid,
-    history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
-  }, abortControllerRef.current.signal);
+    const apiPromise = apiService.getInteractiveChatReply({
+      message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
+      userId: user?.uid,
+      history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
+    }, abortControllerRef.current.signal);
 
-  // schedule seen after 1s (but skip if response already arrived)
-  const seenTimer = setTimeout(() => {
-    // if response already arrived, don't add seen/typing placeholders
-    if (responsePendingRef.current[seenId]) return;
-
-    setMessagesSafe(prev => {
-      const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
-      return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
-    });
-
-    // schedule typing after 2-4s (only if response not arrived by then)
-    const delayMs = 2000 + Math.floor(Math.random() * 2000);
-    const typingTimer = setTimeout(() => {
+    // schedule seen after 1s (but skip if response already arrived)
+    const seenTimer = setTimeout(() => {
       if (responsePendingRef.current[seenId]) return;
-      const typingId = uuidv4();
-      seenToTypingRef.current[seenId] = typingId;
-      // replace the seen placeholder with a typing placeholder
-      setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
-    }, delayMs);
 
-    seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
-  }, 2500);
-
-  // store the timer object so we can clear it if response arrives early
-  seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
-
-  try {
-    const response = await apiPromise;
-    // mark as responded (prevents later timers from adding typing/seen)
-    responsePendingRef.current[seenId] = true;
-
-    // clear any scheduled timers (defensive)
-    try {
-      const o = seenTimersRef.current[seenId];
-      if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-    } catch (e) {}
-
-    const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
-
-    // replace typing/seen if present, otherwise append bot response
-    setMessagesSafe(prev => {
-      if (!Array.isArray(prev) || prev.length === 0) return [botResponse];
-      const typingId = seenToTypingRef.current[seenId];
-      if (typingId && prev.some(m => m.id === typingId)) {
-        return prev.map(m => (m.id === typingId ? botResponse : m));
-      }
-      if (prev.some(m => m.id === seenId)) {
-        return prev.map(m => (m.id === seenId ? botResponse : m));
-      }
-      // fallback: append to the end
-      return [...prev, botResponse];
-    });
-
-    Haptics.selectionAsync();
-    if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
-  } catch (error) {
-    // if aborted, remove placeholders; otherwise show error message
-    if (error?.name === 'AbortError') {
-      setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
-    } else {
-      console.error('AI Chat Error:', error);
-      const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
       setMessagesSafe(prev => {
-        const typingId = seenToTypingRef.current[seenId];
-        if (typingId && Array.isArray(prev) && prev.some(m => m.id === typingId)) return prev.map(m => (m.id === typingId ? errorMessage : m));
-        if (Array.isArray(prev) && prev.some(m => m.id === seenId)) return prev.map(m => (m.id === seenId ? errorMessage : m));
-        return Array.isArray(prev) ? [...prev, errorMessage] : [errorMessage];
+        const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
+        return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
       });
-    }
-  } finally {
-    // cleanup timers & maps
+
+      const delayMs = 2000 + Math.floor(Math.random() * 2000);
+      const typingTimer = setTimeout(() => {
+        if (responsePendingRef.current[seenId]) return;
+        const typingId = uuidv4();
+        seenToTypingRef.current[seenId] = typingId;
+        setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
+      }, delayMs);
+
+      seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
+    }, 2500);
+
+    seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
+
     try {
-      const o = seenTimersRef.current[seenId];
-      if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-    } catch (e) {}
-    delete seenTimersRef.current[seenId];
-    delete seenToTypingRef.current[seenId];
-    delete responsePendingRef.current[seenId];
-    setIsSending(false);
-    abortControllerRef.current = null;
-  }
-}, [lessonContent, lessonTitle, user?.uid, isChatPanelVisible, showToast, setMessagesSafe, isSending]);
+      const response = await apiPromise;
+      responsePendingRef.current[seenId] = true;
+
+      // clear any scheduled timers (defensive)
+      try {
+        const o = seenTimersRef.current[seenId];
+        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+      } catch (e) {}
+
+      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
+
+      // replace typing/seen if present, otherwise append bot response
+      setMessagesSafe(prev => {
+        if (!Array.isArray(prev) || prev.length === 0) return [botResponse];
+        const typingId = seenToTypingRef.current[seenId];
+        if (typingId && prev.some(m => m.id === typingId)) {
+          return prev.map(m => (m.id === typingId ? botResponse : m));
+        }
+        if (prev.some(m => m.id === seenId)) {
+          return prev.map(m => (m.id === seenId ? botResponse : m));
+        }
+        return [...prev, botResponse];
+      });
+
+      Haptics.selectionAsync();
+      if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
+      } else {
+        console.error('AI Chat Error:', error);
+        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
+        setMessagesSafe(prev => {
+          const typingId = seenToTypingRef.current[seenId];
+          if (typingId && Array.isArray(prev) && prev.some(m => m.id === typingId)) return prev.map(m => (m.id === typingId ? errorMessage : m));
+          if (Array.isArray(prev) && prev.some(m => m.id === seenId)) return prev.map(m => (m.id === seenId ? errorMessage : m));
+          return Array.isArray(prev) ? [...prev, errorMessage] : [errorMessage];
+        });
+      }
+    } finally {
+      try {
+        const o = seenTimersRef.current[seenId];
+        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+      } catch (e) {}
+      delete seenTimersRef.current[seenId];
+      delete seenToTypingRef.current[seenId];
+      delete responsePendingRef.current[seenId];
+      setIsSending(false);
+      abortControllerRef.current = null;
+    }
+  }, [lessonContent, lessonTitle, user?.uid, isChatPanelVisible, showToast, setMessagesSafe, isSending]);
 
   const handleSendPrompt = useCallback(() => {
     if (isSending) { handleStopGenerating(); return; }
@@ -470,26 +459,43 @@ const processAndRespond = useCallback(async (userMessage, history) => {
     return () => { mountedRef.current = false; };
   }, [lessonId, user?.uid, subjectId, pathId, totalLessons, loadChat]);
 
+  /* ---------- background Lottie control: pause/reset on open, play on close ---------- */
+  useEffect(() => {
+    try {
+      const l = backgroundLottieRef.current;
+      if (!l) return;
+      if (isChatPanelVisible) {
+        suspendBackgroundRef.current = true;
+        if (typeof l.pause === 'function') l.pause();
+        // defensive: reset if available to free frames
+        if (typeof l.reset === 'function') l.reset();
+      } else {
+        suspendBackgroundRef.current = false;
+        if (typeof l.play === 'function') l.play();
+      }
+    } catch (err) {
+      console.warn('background Lottie control error', err);
+    }
+  }, [isChatPanelVisible]);
+
   /* ---------- chat panel open/close behavior ---------- */
   useEffect(() => {
     if (isChatPanelVisible) {
-      // suspend background saves/expensive rendering while chatting
+      // suspend saves/expensive rendering while chat open
       suspendBackgroundRef.current = true;
-      try { if (backgroundLottieRef.current && backgroundLottieRef.current.pause) backgroundLottieRef.current.pause(); } catch (e) {}
       InteractionManager.runAfterInteractions(() => {
         setMessagesSafe(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)), { save: false });
       });
       translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     } else {
-      // when closing: resume background and persist chat ONCE
+      // when closing: persist chat ONCE and resume background
       suspendBackgroundRef.current = false;
-      try { if (backgroundLottieRef.current && backgroundLottieRef.current.play) backgroundLottieRef.current.play(); } catch (e) {}
       translateY.value = withTiming(500, { duration: 260 }, (finished) => {
         if (finished) {
-          // run saving on JS thread (we saved only when chat closed)
           runOnJS(saveChat)(messagesRef.current);
         }
       });
+      try { if (backgroundLottieRef.current && typeof backgroundLottieRef.current.play === 'function') backgroundLottieRef.current.play(); } catch (e) {}
       runOnJS(Keyboard.dismiss)();
       handleStopGenerating();
     }
@@ -525,12 +531,12 @@ const processAndRespond = useCallback(async (userMessage, history) => {
     }
   }, [visibleMessages.length]);
 
-  const disableAnimations = messages.length > 12; // lower threshold for smoother experience on weak devices
+  const disableAnimations = messages.length > 12; // lower threshold for weaker devices
 
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
-    return <MessageItem message={item} onLongPressMessage={handleLongPressMessage} disableAnim={disableAnimations} />;
-  }, [handleLongPressMessage, disableAnimations]);
+    return <MessageItem message={item} onLongPressMessage={handleLongPressMessage} disableAnim={disableAnimations} showTyping={isChatPanelVisible} />;
+  }, [handleLongPressMessage, disableAnimations, isChatPanelVisible]);
 
   const computePanelHeight = () => {
     const extra = isSending ? 80 : 30;

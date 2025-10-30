@@ -13,7 +13,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  FlatList,
   InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
@@ -27,11 +26,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector, Swipeable } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
+import { FlashList } from '@shopify/flash-list';
 
 import FloatingActionButton from '../components/FloatingActionButton';
 import GenerateKitButton from '../components/GenerateKitButton';
@@ -121,7 +121,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   if (message.type === 'typing') {
     return (
       <View style={styles.botRow}>
-        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}> 
+        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}>
           <LottieView source={require('../assets/images/typing.json')} autoPlay loop style={styles.typingLottie} />
         </View>
       </View>
@@ -145,7 +145,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
     );
   }
 
-  const content = (
+  return (
     <RNAnimated.View style={{ transform: [{ translateY: slideY }], width: '100%' }}>
       <MotiView from={{ opacity: 0, translateY: isBot ? 6 : 4 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 160 }} style={isBot ? styles.botRow : styles.userRow}>
         <Pressable onLongPress={() => onLongPressMessage && onLongPressMessage(message)} android_ripple={{ color: 'rgba(255,255,255,0.02)' }}>
@@ -156,8 +156,6 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
       </MotiView>
     </RNAnimated.View>
   );
-
-  return content;
 }, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated && a.disableAnim === b.disableAnim);
 
 /* ---------------- Screen ---------------- */
@@ -191,37 +189,11 @@ export default function LessonViewScreen() {
   const flatListRef = useRef(null);
   const abortControllerRef = useRef(null);
   const mountedRef = useRef(true);
-   // ---------- performance helpers ----------
+
+  // ---------- performance helpers ----------
   const suspendBackgroundRef = useRef(false); // when true: suspend saves/heavy work
   const messageUpdateQueueRef = useRef(null); // holds a queued updater to batch multiple updates
   const batchedFlushTimeoutRef = useRef(null);
-
-  // enqueue state update to batch multiple rapid updates into one setState
-  const enqueueMessageUpdate = useCallback((updater, options = { save: true }) => {
-    // store latest updater (we'll collapse them; updater can be function or array)
-    messageUpdateQueueRef.current = { updater, options };
-    if (batchedFlushTimeoutRef.current) return;
-    // flush on next animation frame -> reduces re-renders
-    batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
-      try {
-        const queued = messageUpdateQueueRef.current;
-        messageUpdateQueueRef.current = null;
-        batchedFlushTimeoutRef.current = null;
-        if (!queued) return;
-        setMessages(prev => {
-          const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
-          const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
-          messagesRef.current = capped;
-          return capped;
-        });
-        // saveChat but skip when suspended
-        if (queued.options?.save !== false && !suspendBackgroundRef.current) {
-          // debounce saving to AsyncStorage (we already have a debounced save, but guard here too)
-          saveChat(messagesRef.current);
-        }
-      } catch (e) { console.error('enqueueMessageUpdate error', e); }
-    });
-  }, [saveChat]);
   const saveTimeoutRef = useRef(null);
 
   const seenTimersRef = useRef({});
@@ -235,41 +207,24 @@ export default function LessonViewScreen() {
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // safe setter that caps history size and updates ref
-   // safe setter that caps history size and updates ref
-  const setMessagesSafe = useCallback((updater, options = { save: true }) => {
-    // funnel through queue to batch rapid changes
-    enqueueMessageUpdate(updater, options);
-  }, [enqueueMessageUpdate]);
-
-
-  const showToast = useCallback((text = 'FAB sent a reply') => {
-    setToastVisible(true);
-    RNAnimated.timing(toastAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-    Haptics.selectionAsync();
-    setTimeout(() => RNAnimated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setToastVisible(false)), 3000);
-  }, [toastAnim]);
-
-  const onToastPress = useCallback(() => { setChatPanelVisible(true); RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)); }, [toastAnim]);
-
   /* ---------- save/load ---------- */
-    const saveChat = useCallback((maybeMessages) => {
+  const saveChat = useCallback((maybeMessages) => {
     try {
-      if (suspendBackgroundRef.current) return; // don't save while suspended (mini-chat open heavy mode)
+      // if suspended we *do not* save now (we will save after closing panel)
+      if (suspendBackgroundRef.current) return;
       const src = Array.isArray(maybeMessages) ? maybeMessages : messagesRef.current || [];
       if (!Array.isArray(src)) return;
       const storableOldestFirst = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro' && m.type !== 'seen');
       const storable = storableOldestFirst.slice().reverse();
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      // slightly longer debounce to avoid frequent disk writes under chat activity
+      // debounce disk write
       saveTimeoutRef.current = setTimeout(() => {
         AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => console.error('AsyncStorage.setItem error:', e));
-      }, 600); // 600ms
+      }, 600);
     } catch (e) {
       console.error('Error saving mini-chat:', e);
     }
   }, [CHAT_KEY]);
-
 
   const loadChat = useCallback(async () => {
     try {
@@ -298,13 +253,52 @@ export default function LessonViewScreen() {
     }
   }, [lessonId]);
 
+  // enqueue state update to batch multiple rapid updates into one setState
+  const enqueueMessageUpdate = useCallback((updater, options = { save: true }) => {
+    messageUpdateQueueRef.current = { updater, options };
+    if (batchedFlushTimeoutRef.current) return;
+    batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
+      try {
+        const queued = messageUpdateQueueRef.current;
+        messageUpdateQueueRef.current = null;
+        batchedFlushTimeoutRef.current = null;
+        if (!queued) return;
+        setMessages(prev => {
+          const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
+          const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
+          messagesRef.current = capped;
+          return capped;
+        });
+        // save only when not suspended (we mostly rely on saving when closing the panel)
+        if (queued.options?.save !== false && !suspendBackgroundRef.current) {
+          saveChat(messagesRef.current);
+        }
+      } catch (e) { console.error('enqueueMessageUpdate error', e); }
+    });
+  }, [saveChat]);
+
+  // safe setter that caps history size and updates ref (batched)
+  const setMessagesSafe = useCallback((updater, options = { save: true }) => {
+    enqueueMessageUpdate(updater, options);
+  }, [enqueueMessageUpdate]);
+
   useEffect(() => {
     return () => {
       try { Object.values(seenTimersRef.current).forEach(o => { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }); } catch(e){}
       try { if (abortControllerRef.current) abortControllerRef.current.abort(); } catch(e){}
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (batchedFlushTimeoutRef.current) cancelAnimationFrame(batchedFlushTimeoutRef.current);
     };
   }, []);
+
+  const showToast = useCallback((text = 'FAB sent a reply') => {
+    setToastVisible(true);
+    RNAnimated.timing(toastAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    Haptics.selectionAsync();
+    setTimeout(() => RNAnimated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setToastVisible(false)), 3000);
+  }, [toastAnim]);
+
+  const onToastPress = useCallback(() => { setChatPanelVisible(true); RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)); }, [toastAnim]);
 
   const handleStopGenerating = useCallback(() => {
     try { if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; } } catch (e) {}
@@ -314,92 +308,88 @@ export default function LessonViewScreen() {
   }, [setMessagesSafe]);
 
   /* ---------- process & respond with SEEN flow (fixed + batched updates) ---------- */
-const processAndRespond = useCallback(async (userMessage, history) => {
-  if (isSending) return;
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const processAndRespond = useCallback(async (userMessage, history) => {
+    if (isSending) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-  // append user message immediately (batched via setMessagesSafe)
-  setMessagesSafe(prev => {
-    const next = Array.isArray(prev) ? [...prev, userMessage] : [userMessage];
-    return next;
-  });
+    // append user message immediately (batched via setMessagesSafe)
+    setMessagesSafe(prev => (Array.isArray(prev) ? [...prev, userMessage] : [userMessage]));
 
-  setIsSending(true);
-  const seenId = uuidv4();
-  abortControllerRef.current = new AbortController();
-  responsePendingRef.current[seenId] = false;
+    setIsSending(true);
+    const seenId = uuidv4();
+    abortControllerRef.current = new AbortController();
+    responsePendingRef.current[seenId] = false;
 
-  const apiPromise = apiService.getInteractiveChatReply({
-    message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
-    userId: user?.uid,
-    history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
-  }, abortControllerRef.current.signal);
+    const apiPromise = apiService.getInteractiveChatReply({
+      message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
+      userId: user?.uid,
+      history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
+    }, abortControllerRef.current.signal);
 
-  // schedule seen after 1s (kept short)
-  const seenTimer = setTimeout(() => {
-    // mark the user's message seenAnimated and append a 'seen' indicator
-    setMessagesSafe(prev => {
-      const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
-      return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
-    });
+    // schedule seen after 1s (kept short)
+    const seenTimer = setTimeout(() => {
+      // mark the user's message seenAnimated and append a 'seen' indicator
+      setMessagesSafe(prev => {
+        const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
+        return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
+      });
 
-    // schedule typing after 2-4s (if response hasn't arrived)
-    const delayMs = 2000 + Math.floor(Math.random() * 2000);
-    const typingTimer = setTimeout(() => {
-      if (responsePendingRef.current[seenId]) return; // response already arrived
-      const typingId = uuidv4();
-      seenToTypingRef.current[seenId] = typingId;
-      setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
-    }, delayMs);
+      // schedule typing after 2-4s (if response hasn't arrived)
+      const delayMs = 2000 + Math.floor(Math.random() * 2000);
+      const typingTimer = setTimeout(() => {
+        if (responsePendingRef.current[seenId]) return; // response already arrived
+        const typingId = uuidv4();
+        seenToTypingRef.current[seenId] = typingId;
+        setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
+      }, delayMs);
 
-    seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
-  }, 1000);
+      seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
+    }, 1000);
 
-  seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
+    seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
 
-  try {
-    const response = await apiPromise;
-    responsePendingRef.current[seenId] = true;
+    try {
+      const response = await apiPromise;
+      responsePendingRef.current[seenId] = true;
 
-    const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
+      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
 
-    // replace typing or seen with bot response (batched)
-    setMessagesSafe(prev => {
-      const typingId = seenToTypingRef.current[seenId];
-      if (typingId) {
-        return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? botResponse : m)) : [botResponse];
-      }
-      return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? botResponse : m)) : [botResponse];
-    });
-
-    Haptics.selectionAsync();
-    if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      // user cancelled — remove the seen/typing placeholders
-      setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
-    } else {
-      console.error('AI Chat Error:', error);
-      const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
+      // replace typing or seen with bot response (batched)
       setMessagesSafe(prev => {
         const typingId = seenToTypingRef.current[seenId];
-        if (typingId) return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? errorMessage : m)) : [errorMessage];
-        return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? errorMessage : m)) : [errorMessage];
+        if (typingId) {
+          return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? botResponse : m)) : [botResponse];
+        }
+        return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? botResponse : m)) : [botResponse];
       });
-    }
-  } finally {
-    try {
-      const o = seenTimersRef.current[seenId];
-      if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-    } catch (e) {}
-    delete seenTimersRef.current[seenId];
-    delete seenToTypingRef.current[seenId];
-    delete responsePendingRef.current[seenId];
-    setIsSending(false);
-    abortControllerRef.current = null;
-  }
-}, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast, setMessagesSafe]);
 
+      Haptics.selectionAsync();
+      if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        // user cancelled — remove the seen/typing placeholders
+        setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
+      } else {
+        console.error('AI Chat Error:', error);
+        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
+        setMessagesSafe(prev => {
+          const typingId = seenToTypingRef.current[seenId];
+          if (typingId) return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? errorMessage : m)) : [errorMessage];
+          return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? errorMessage : m)) : [errorMessage];
+        });
+      }
+    } finally {
+      try {
+        const o = seenTimersRef.current[seenId];
+        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+      } catch (e) {}
+      delete seenTimersRef.current[seenId];
+      delete seenToTypingRef.current[seenId];
+      delete responsePendingRef.current[seenId];
+      setIsSending(false);
+      abortControllerRef.current = null;
+    }
+  }, [lessonContent, lessonTitle, saveChat, user?.uid, isChatPanelVisible, showToast, setMessagesSafe]);
 
   const handleSendPrompt = useCallback(() => {
     if (isSending) { handleStopGenerating(); return; }
@@ -415,7 +405,7 @@ const processAndRespond = useCallback(async (userMessage, history) => {
     // small offset to show top of new bubble rather than jumping to bottom
     setTimeout(() => {
       try {
-        if (flatListRef.current) flatListRef.current.scrollToOffset({ offset: 20, animated: true });
+        if (flatListRef.current && flatListRef.current.scrollToOffset) flatListRef.current.scrollToOffset({ offset: 20, animated: true });
       } catch (e) {}
     }, 120);
   }, [promptText, isSending, chatUser, processAndRespond, handleStopGenerating]);
@@ -463,21 +453,37 @@ const processAndRespond = useCallback(async (userMessage, history) => {
       });
       translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     } else {
+      // panel closing -> re-enable background ops and save chat immediately
       suspendBackgroundRef.current = false;
       try { if (backgroundLottieRef.current && backgroundLottieRef.current.play) backgroundLottieRef.current.play(); } catch (e) {}
-      translateY.value = withTiming(500, { duration: 260 }, (finished) => { if (finished) runOnJS(saveChat)(messagesRef.current); });
-      runOnJS(Keyboard.dismiss)();
+      // force flush any queued updates before saving
+      if (messageUpdateQueueRef.current) {
+        // apply queued update synchronously by calling setMessages with the queued updater
+        const queued = messageUpdateQueueRef.current;
+        messageUpdateQueueRef.current = null;
+        if (queued && typeof queued.updater === 'function') {
+          setMessages(prev => {
+            const next = queued.updater(prev);
+            const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
+            messagesRef.current = capped;
+            return capped;
+          });
+        }
+      }
+      // save now (use messagesRef which is up-to-date)
+      saveChat(messagesRef.current);
+      translateY.value = withTiming(500, { duration: 260 });
+      Keyboard.dismiss();
       handleStopGenerating();
     }
   }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY, setMessagesSafe]);
-
 
   const context = useSharedValue({ y: 0 });
   const dragGesture = Gesture.Pan()
     .onStart(() => { context.value = { y: translateY.value }; })
     .onUpdate((ev) => { translateY.value = Math.max(0, context.value.y + ev.translationY); })
     .onEnd(() => {
-      if (translateY.value > 140) runOnJS(setChatPanelVisible)(false);
+      if (translateY.value > 140) setChatPanelVisible(false);
       else translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     });
   const animatedPanelStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
@@ -497,7 +503,7 @@ const processAndRespond = useCallback(async (userMessage, history) => {
     if (!flatListRef.current) return;
     if (isAtBottomRef.current) {
       setTimeout(() => {
-        try { flatListRef.current.scrollToOffset({ offset: 0, animated: true }); } catch (e) {}
+        try { if (flatListRef.current.scrollToOffset) flatListRef.current.scrollToOffset({ offset: 0, animated: true }); } catch (e) {}
       }, 80);
     }
   }, [visibleMessages.length]);
@@ -545,11 +551,19 @@ const processAndRespond = useCallback(async (userMessage, history) => {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
-            <View style={{ writingDirection: 'rtl' }}>
-              <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
+          {/* show simplified lesson content while chat is open to reduce rendering cost */}
+          {!isChatPanelVisible ? (
+            <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
+              <View style={{ writingDirection: 'rtl' }}>
+                <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={{ padding: 20 }}>
+              <Text style={{ color: '#D1D5DB', fontWeight: '700' }}>{lessonTitle || 'Lesson'}</Text>
+              <Text numberOfLines={6} ellipsizeMode="tail" style={{ color: '#9CA3AF', marginTop: 8 }}>{lessonContent || 'No content available.'}</Text>
             </View>
-          </ScrollView>
+          )}
 
           <GenerateKitButton onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle, subjectId, pathId } })} />
           <FloatingActionButton onPress={() => setChatPanelVisible(true)} />
@@ -580,25 +594,22 @@ const processAndRespond = useCallback(async (userMessage, history) => {
                           </Pressable>
                         )}
 
-                        <FlatList
+                        <FlashList
                           ref={flatListRef}
                           data={visibleMessages.slice().reverse()}
-                          keyExtractor={(item) => String(item.id)}
                           renderItem={renderMessageItem}
+                          estimatedItemSize={80}
+                          keyExtractor={(item) => String(item.id)}
                           contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
                           keyboardShouldPersistTaps="handled"
                           style={styles.messagesList}
-                          initialNumToRender={2}
-                          maxToRenderPerBatch={2}
-                          windowSize={3}
-                          removeClippedSubviews={true}
                           inverted={true}
                           onScroll={onScroll}
                           maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
                         />
                       </KeyboardAvoidingView>
 
-                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
                         <TextInput
                           style={[styles.promptInput, { color: inputTextColor }]}
                           placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
@@ -628,25 +639,22 @@ const processAndRespond = useCallback(async (userMessage, history) => {
                           </Pressable>
                         )}
 
-                        <FlatList
+                        <FlashList
                           ref={flatListRef}
                           data={visibleMessages.slice().reverse()}
-                          keyExtractor={(item) => String(item.id)}
                           renderItem={renderMessageItem}
+                          estimatedItemSize={80}
+                          keyExtractor={(item) => String(item.id)}
                           contentContainerStyle={[styles.messagesListContent, { paddingBottom: BOTTOM_EMPTY_SPACE }]}
                           keyboardShouldPersistTaps="handled"
                           style={styles.messagesList}
-                          initialNumToRender={2}
-                          maxToRenderPerBatch={2}
-                          windowSize={3}
-                          removeClippedSubviews={true}
                           inverted={true}
                           onScroll={onScroll}
                           maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
                         />
                       </KeyboardAvoidingView>
 
-                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
                         <TextInput
                           style={[styles.promptInput, { color: inputTextColor }]}
                           placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
@@ -759,7 +767,6 @@ const styles = StyleSheet.create({
   toast: { position: 'absolute', top: 18, alignSelf: 'center', zIndex: 40 },
   toastInner: { backgroundColor: 'rgba(20,20,30,0.95)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, flexDirection: 'row', alignItems: 'center' },
   toastText: { color: 'white', fontSize: 13 },
-
   loadMore: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', marginBottom: 6 },
   loadMoreText: { color: '#D1D5DB' },
 });

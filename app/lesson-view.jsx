@@ -52,7 +52,7 @@ const BOTTOM_EMPTY_SPACE = 60;
 const MESSAGE_HISTORY_CAP = 120;
 
 /* display widths */
-const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.25);
+const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.75);
 const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.73);
 
 const getAccentFromSubject = (subjectId) => {
@@ -320,82 +320,107 @@ const enqueueMessageUpdate = useCallback((updater, options = { save: false }) =>
   }, [setMessagesSafe]);
 
   /* ---------- process & respond with SEEN flow (fixed + batched updates) ---------- */
-  const processAndRespond = useCallback(async (userMessage, history) => {
-    if (isSending) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  /* ---------- process & respond with SEEN flow (fixed + robust) ---------- */
+const processAndRespond = useCallback(async (userMessage, history) => {
+  if (isSending) return;
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // append user message immediately (batched)
-    setMessagesSafe(prev => (Array.isArray(prev) ? [...prev, userMessage] : [userMessage]));
+  // append user message immediately (batched)
+  setMessagesSafe(prev => (Array.isArray(prev) ? [...prev, userMessage] : [userMessage]));
 
-    setIsSending(true);
-    const seenId = uuidv4();
-    abortControllerRef.current = new AbortController();
-    responsePendingRef.current[seenId] = false;
+  setIsSending(true);
+  const seenId = uuidv4();
+  abortControllerRef.current = new AbortController();
+  responsePendingRef.current[seenId] = false;
 
-    const apiPromise = apiService.getInteractiveChatReply({
-      message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
-      userId: user?.uid,
-      history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
-    }, abortControllerRef.current.signal);
+  const apiPromise = apiService.getInteractiveChatReply({
+    message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
+    userId: user?.uid,
+    history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
+  }, abortControllerRef.current.signal);
 
-    // schedule seen after 1s
-    const seenTimer = setTimeout(() => {
-      setMessagesSafe(prev => {
-        const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
-        return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
-      });
+  // schedule seen after 1s (but skip if response already arrived)
+  const seenTimer = setTimeout(() => {
+    // if response already arrived, don't add seen/typing placeholders
+    if (responsePendingRef.current[seenId]) return;
 
-      const delayMs = 2000 + Math.floor(Math.random() * 2000);
-      const typingTimer = setTimeout(() => {
-        if (responsePendingRef.current[seenId]) return;
-        const typingId = uuidv4();
-        seenToTypingRef.current[seenId] = typingId;
-        setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
-      }, delayMs);
+    setMessagesSafe(prev => {
+      const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
+      return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
+    });
 
-      seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
-    }, 1000);
+    // schedule typing after 2-4s (only if response not arrived by then)
+    const delayMs = 2000 + Math.floor(Math.random() * 2000);
+    const typingTimer = setTimeout(() => {
+      if (responsePendingRef.current[seenId]) return;
+      const typingId = uuidv4();
+      seenToTypingRef.current[seenId] = typingId;
+      // replace the seen placeholder with a typing placeholder
+      setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
+    }, delayMs);
 
-    seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
+    seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
+  }, 2500);
 
+  // store the timer object so we can clear it if response arrives early
+  seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
+
+  try {
+    const response = await apiPromise;
+    // mark as responded (prevents later timers from adding typing/seen)
+    responsePendingRef.current[seenId] = true;
+
+    // clear any scheduled timers (defensive)
     try {
-      const response = await apiPromise;
-      responsePendingRef.current[seenId] = true;
+      const o = seenTimersRef.current[seenId];
+      if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+    } catch (e) {}
 
-      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
+    const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
 
+    // replace typing/seen if present, otherwise append bot response
+    setMessagesSafe(prev => {
+      if (!Array.isArray(prev) || prev.length === 0) return [botResponse];
+      const typingId = seenToTypingRef.current[seenId];
+      if (typingId && prev.some(m => m.id === typingId)) {
+        return prev.map(m => (m.id === typingId ? botResponse : m));
+      }
+      if (prev.some(m => m.id === seenId)) {
+        return prev.map(m => (m.id === seenId ? botResponse : m));
+      }
+      // fallback: append to the end
+      return [...prev, botResponse];
+    });
+
+    Haptics.selectionAsync();
+    if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
+  } catch (error) {
+    // if aborted, remove placeholders; otherwise show error message
+    if (error?.name === 'AbortError') {
+      setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
+    } else {
+      console.error('AI Chat Error:', error);
+      const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
       setMessagesSafe(prev => {
         const typingId = seenToTypingRef.current[seenId];
-        if (typingId) return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? botResponse : m)) : [botResponse];
-        return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? botResponse : m)) : [botResponse];
+        if (typingId && Array.isArray(prev) && prev.some(m => m.id === typingId)) return prev.map(m => (m.id === typingId ? errorMessage : m));
+        if (Array.isArray(prev) && prev.some(m => m.id === seenId)) return prev.map(m => (m.id === seenId ? errorMessage : m));
+        return Array.isArray(prev) ? [...prev, errorMessage] : [errorMessage];
       });
-
-      Haptics.selectionAsync();
-      if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.id !== seenId && m.id !== seenToTypingRef.current[seenId]) : prev));
-      } else {
-        console.error('AI Chat Error:', error);
-        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
-        setMessagesSafe(prev => {
-          const typingId = seenToTypingRef.current[seenId];
-          if (typingId) return Array.isArray(prev) ? prev.map(m => (m.id === typingId ? errorMessage : m)) : [errorMessage];
-          return Array.isArray(prev) ? prev.map(m => (m.id === seenId ? errorMessage : m)) : [errorMessage];
-        });
-      }
-    } finally {
-      try {
-        const o = seenTimersRef.current[seenId];
-        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-      } catch (e) {}
-      delete seenTimersRef.current[seenId];
-      delete seenToTypingRef.current[seenId];
-      delete responsePendingRef.current[seenId];
-      setIsSending(false);
-      abortControllerRef.current = null;
     }
-  }, [lessonContent, lessonTitle, user?.uid, isChatPanelVisible, showToast, setMessagesSafe, isSending]);
+  } finally {
+    // cleanup timers & maps
+    try {
+      const o = seenTimersRef.current[seenId];
+      if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
+    } catch (e) {}
+    delete seenTimersRef.current[seenId];
+    delete seenToTypingRef.current[seenId];
+    delete responsePendingRef.current[seenId];
+    setIsSending(false);
+    abortControllerRef.current = null;
+  }
+}, [lessonContent, lessonTitle, user?.uid, isChatPanelVisible, showToast, setMessagesSafe, isSending]);
 
   const handleSendPrompt = useCallback(() => {
     if (isSending) { handleStopGenerating(); return; }

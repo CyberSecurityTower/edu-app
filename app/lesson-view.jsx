@@ -1,5 +1,6 @@
 // LessonViewScreen.jsx
-import React from 'react'; {
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'; // <--- تم إصلاح استيراد React
+import {
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -17,10 +18,19 @@ import React from 'react'; {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur'; // <--- تم استيراد BlurView
+import { FontAwesome5 } from '@expo/vector-icons'; // <--- تم استيراد FontAwesome5
+import { LinearGradient } from 'expo-linear-gradient'; // <--- تم استيراد LinearGradient
+import LottieView from 'lottie-react-native'; // <--- تم استيراد LottieView
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
+import { MotiView, AnimatePresence } from 'moti'; // <--- تم استيراد Moti
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router'; // <--- تم استيراد Expo Router
 import { v4 as uuidv4 } from 'uuid';
 
 import FloatingActionButton from '../components/FloatingActionButton';
@@ -42,7 +52,7 @@ const BOTTOM_EMPTY_SPACE = 60;
 const MESSAGE_HISTORY_CAP = 120;
 
 /* display widths */
-const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.25);
+const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.75); // ✨ [MODIFIED] Max width for automatic sizing
 const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.73);
 
 const getAccentFromSubject = (subjectId) => {
@@ -145,7 +155,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
       </MotiView>
     </RNAnimated.View>
   );
-}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated && a.disableAnim === b.disableAnim);
+}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated && a.disableAnim === b.disableAnim && a.showTyping === b.showTyping); // ✨ [FIXED] إضافة showTyping للاعتمادية
 
 /* ---------------- Screen ---------------- */
 export default function LessonViewScreen() {
@@ -526,8 +536,14 @@ export default function LessonViewScreen() {
 
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
-    return <MessageItem message={item} onLongPressMessage={handleLongPressMessage} disableAnim={disableAnimations} showTyping={isChatPanelVisible} />;
-  }, [handleLongPressMessage, disableAnimations, isChatPanelVisible]);
+    // ✨ [FIXED] تمرير isChatPanelVisible كـ showTyping
+    return <MessageItem 
+        message={item} 
+        onLongPressMessage={handleLongPressMessage} 
+        disableAnim={disableAnimations} 
+        showTyping={isChatPanelVisible} 
+    />;
+  }, [handleLongPressMessage, disableAnimations, isChatPanelVisible]); // ✨ [FIXED] إضافة isChatPanelVisible للاعتمادية
 
   const computePanelHeight = () => {
     const extra = isSending ? 80 : 30;

@@ -246,28 +246,50 @@ export default function LessonViewScreen() {
   }, [lessonId]);
 
   // batching updates to reduce renders & disk writes
-  const enqueueMessageUpdate = useCallback((updater, options = { save: false }) => {
+  // replace existing enqueueMessageUpdate with this corrected version
+const enqueueMessageUpdate = useCallback((updater, options = { save: false }) => {
+  // if there's no queued updater, set it
+  if (!messageUpdateQueueRef.current) {
     messageUpdateQueueRef.current = { updater, options };
-    if (batchedFlushTimeoutRef.current) return;
-    batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
-      try {
-        const queued = messageUpdateQueueRef.current;
-        messageUpdateQueueRef.current = null;
-        batchedFlushTimeoutRef.current = null;
-        if (!queued) return;
-        setMessages(prev => {
-          const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
-          const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
-          messagesRef.current = capped;
-          return capped;
-        });
-        // do NOT save automatically while chat open (we save once when chat closes)
-        if (queued.options?.save && !suspendBackgroundRef.current) {
-          saveChat(messagesRef.current);
-        }
-      } catch (e) { console.error('enqueueMessageUpdate error', e); }
-    });
-  }, [saveChat]);
+  } else {
+    // compose the new updater after the existing one so order is preserved
+    const existing = messageUpdateQueueRef.current;
+    const prevUpdater = existing.updater;
+    const newUpdater = updater;
+    const combinedUpdater = (prev) => {
+      const intermediate = typeof prevUpdater === 'function' ? prevUpdater(prev) : prevUpdater;
+      return typeof newUpdater === 'function' ? newUpdater(intermediate) : newUpdater;
+    };
+    // if any queued option requested save, keep it true
+    const combinedOptions = { save: Boolean((existing.options && existing.options.save) || options.save) };
+    messageUpdateQueueRef.current = { updater: combinedUpdater, options: combinedOptions };
+  }
+
+  if (batchedFlushTimeoutRef.current) return;
+
+  // flush on next animation frame (still batched), but now composed updates won't overwrite each other
+  batchedFlushTimeoutRef.current = requestAnimationFrame(() => {
+    try {
+      const queued = messageUpdateQueueRef.current;
+      messageUpdateQueueRef.current = null;
+      batchedFlushTimeoutRef.current = null;
+      if (!queued) return;
+      setMessages(prev => {
+        const next = typeof queued.updater === 'function' ? queued.updater(prev) : queued.updater;
+        const capped = Array.isArray(next) && next.length > MESSAGE_HISTORY_CAP ? next.slice(next.length - MESSAGE_HISTORY_CAP) : next;
+        messagesRef.current = capped;
+        return capped;
+      });
+      // we intentionally avoid saving while chat is open; only save if explicitly requested and not suspended
+      if (queued.options?.save && !suspendBackgroundRef.current) {
+        saveChat(messagesRef.current);
+      }
+    } catch (e) {
+      console.error('enqueueMessageUpdate error', e);
+    }
+  });
+}, [saveChat]);
+
 
   const setMessagesSafe = useCallback((updater, options = { save: false }) => {
     enqueueMessageUpdate(updater, options);

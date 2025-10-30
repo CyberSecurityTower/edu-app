@@ -19,7 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  Animated as RNAnimated,
+  RNAnimated,
   ScrollView,
   StyleSheet,
   Text,
@@ -52,8 +52,8 @@ const BOTTOM_EMPTY_SPACE = 60;
 const MESSAGE_HISTORY_CAP = 120;
 
 /* display widths */
-const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.65);
-const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.70);
+const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.25);
+const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.73);
 
 const getAccentFromSubject = (subjectId) => {
   const palette = [
@@ -93,7 +93,7 @@ const MessageText = React.memo(({ text, isBot, style, strongStyle }) => {
   if (!text) return null;
   const parts = parseBoldSegments(text);
   return (
-    <Text style={[style?.body ?? styles.bodyText, { color: isBot ? '#042C2B' : '#F8FAFC' }]}>
+    <Text style={[style?.body ?? styles.bodyText, { color: isBot ? '#042C2B' : '#F8FAFC' }]}> 
       {parts.map((p, i) => (p.t === 'text' ? <Text key={i}>{p.v}</Text> : <Text key={i} style={strongStyle}>{p.v}</Text>))}
     </Text>
   );
@@ -110,19 +110,19 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   if (message.type === 'seen') {
     const isUser = message.author?.id !== BOT_USER.id;
     return (
-      <View style={[styles.seenWrapper, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
+      <View style={[styles.seenWrapper, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}> 
         <View style={styles.seenBadge}><Text style={styles.seenText}>Seen</Text></View>
       </View>
     );
   }
 
   if (message.type === 'typing') {
-    // only render typing Lottie when allowed (i.e. chat panel visible)
+    // replaced Lottie typing with a lightweight dots placeholder to avoid heavy rendering
     if (!showTyping) return null;
     return (
       <View style={styles.botRow}>
-        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}>
-          <LottieView source={require('../assets/images/typing.json')} autoPlay loop style={styles.typingLottie} />
+        <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60, alignItems: 'flex-start' }]}> 
+          <Text style={{ fontSize: 20, lineHeight: 22, fontWeight: '700', color: '#164E63' }}>...</Text>
         </View>
       </View>
     );
@@ -350,11 +350,12 @@ export default function LessonViewScreen() {
         if (responsePendingRef.current[seenId]) return;
         const typingId = uuidv4();
         seenToTypingRef.current[seenId] = typingId;
+        // insert a lightweight typing placeholder (no Lottie) to avoid heavy rendering
         setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
       }, delayMs);
 
       seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
-    }, 2500);
+    }, 1000);
 
     seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
 
@@ -548,7 +549,7 @@ export default function LessonViewScreen() {
   const placeholderColor = '#9CA3AF';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}> 
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
@@ -564,7 +565,9 @@ export default function LessonViewScreen() {
       {isLoading ? (
         <View style={styles.centerContent}>
           {!isChatPanelVisible && (
-            <LottieView ref={backgroundLottieRef} source={require('../assets/images/empty-content.json')} autoPlay loop style={{ width: 220, height: 220 }} />
+            <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>
+              <LottieView ref={backgroundLottieRef} source={require('../assets/images/robot.json')} autoPlay loop style={{ width: 220, height: 220 }} />
+            </Pressable>
           )}
           <ActivityIndicator size="large" color={accent[0]} style={{ marginTop: 8 }} />
         </View>
@@ -576,6 +579,16 @@ export default function LessonViewScreen() {
               <View style={{ writingDirection: 'rtl' }}>
                 <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
               </View>
+
+              {/* background robot Lottie visible when chat is closed - press to open chat */}
+              <View style={{ alignItems: 'center', marginTop: 8 }}>
+                {!isChatPanelVisible && (
+                  <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>
+                    <LottieView ref={backgroundLottieRef} source={require('../assets/images/robot.json')} autoPlay loop style={{ width: 160, height: 160 }} />
+                  </Pressable>
+                )}
+              </View>
+
             </ScrollView>
           ) : (
             <View style={{ padding: 18 }}>
@@ -631,7 +644,7 @@ export default function LessonViewScreen() {
                         />
                       </KeyboardAvoidingView>
 
-                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
                         <TextInput
                           style={[styles.promptInput, { color: inputTextColor }]}
                           placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
@@ -680,7 +693,7 @@ export default function LessonViewScreen() {
                         />
                       </KeyboardAvoidingView>
 
-                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}>
+                      <View style={[styles.promptContainer, { borderColor: accent[0] + '20' }]}> 
                         <TextInput
                           style={[styles.promptInput, { color: inputTextColor }]}
                           placeholder={isSending ? "Waiting for response..." : "Ask a quick question..."}
@@ -703,7 +716,7 @@ export default function LessonViewScreen() {
           </AnimatePresence>
 
           {toastVisible && (
-            <RNAnimated.View style={[styles.toast, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate ? toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) : 0 }] }]}>
+            <RNAnimated.View style={[styles.toast, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate ? toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) : 0 }] }]}> 
               <TouchableOpacity onPress={onToastPress} style={styles.toastInner}><Text style={styles.toastText}>FAB replied — اضغط للفتح</Text></TouchableOpacity>
             </RNAnimated.View>
           )}

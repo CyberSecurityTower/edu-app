@@ -1,4 +1,13 @@
 // LessonViewScreen.jsx
+import { FontAwesome5 } from '@expo/vector-icons'; // <--- تم استيراد FontAwesome5
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur'; // <--- تم استيراد BlurView
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient'; // <--- تم استيراد LinearGradient
+import { useLocalSearchParams, useRouter } from 'expo-router'; // <--- تم استيراد Expo Router
+import LottieView from 'lottie-react-native'; // <--- تم استيراد LottieView
+import { AnimatePresence, MotiView } from 'moti'; // <--- تم استيراد Moti
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'; // <--- تم إصلاح استيراد React
 import {
   ActivityIndicator,
@@ -18,19 +27,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { BlurView } from 'expo-blur'; // <--- تم استيراد BlurView
-import { FontAwesome5 } from '@expo/vector-icons'; // <--- تم استيراد FontAwesome5
-import { LinearGradient } from 'expo-linear-gradient'; // <--- تم استيراد LinearGradient
-import LottieView from 'lottie-react-native'; // <--- تم استيراد LottieView
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
-import { MotiView, AnimatePresence } from 'moti'; // <--- تم استيراد Moti
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router'; // <--- تم استيراد Expo Router
 import { v4 as uuidv4 } from 'uuid';
 
 import FloatingActionButton from '../components/FloatingActionButton';

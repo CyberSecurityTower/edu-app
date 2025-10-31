@@ -1,3 +1,4 @@
+// LessonViewScreen.jsx
 import { FontAwesome5 } from '@expo/vector-icons'; // <--- تم استيراد FontAwesome5
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur'; // <--- تم استيراد BlurView
@@ -383,16 +384,17 @@ export default function LessonViewScreen() {
       Haptics.selectionAsync();
       if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
     } catch (error) {
-      const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
+      if (error?.name !== 'AbortError') {
+        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
 
-      // ✨ [FIXED] Robustly replace typing/seen placeholders with an error message
-      setMessagesSafe(prev => {
-          if (!Array.isArray(prev)) return [errorMessage];
-          const typingId = seenToTypingRef.current[seenId];
-          const filtered = prev.filter(m => m.id !== seenId && m.id !== typingId && m.id !== userMessage.id);
-          return [...filtered, userMessage, errorMessage]; // Re-add user message for context
-      });
-
+        // ✨ [FIXED] Robustly replace typing/seen placeholders with an error message
+        setMessagesSafe(prev => {
+            if (!Array.isArray(prev)) return [errorMessage];
+            const typingId = seenToTypingRef.current[seenId];
+            const filtered = prev.filter(m => m.id !== seenId && m.id !== typingId);
+            return [...filtered, errorMessage];
+        });
+      }
     } finally {
       try {
         const o = seenTimersRef.current[seenId];
@@ -573,13 +575,11 @@ export default function LessonViewScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* ✨ [FIXED] Always render the full markdown view for a consistent UX */}
           <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
             <View style={{ writingDirection: 'rtl' }}>
               <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
             </View>
 
-            {/* background robot Lottie visible when chat is closed - press to open chat */}
             <View style={{ alignItems: 'center', marginTop: 8 }}>
               {!isChatPanelVisible && (
                 <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>

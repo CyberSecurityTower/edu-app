@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import MiniCircularProgress from './MiniCircularProgress';
 import ActionButton from './ActionButton';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, interpolateColor } from 'react-native-reanimated'; // Import interpolateColor
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, interpolateColor, withSequence, withDelay } from 'react-native-reanimated';
 import { audioService } from '../../services/audioService';
 
 const { height: screenHeight } = Dimensions.get('window');
@@ -22,19 +22,12 @@ const CONSTANTS = { COMPACT_HEIGHT: 50, EXPANDED_HEIGHT: 92, SAFE_AREA_TOP_MARGI
 const ICONS = {
   focus: { name: 'brain', color: '#34D399' },
   break: { name: 'coffee', color: '#60A5FA' },
-  finished: { name: 'check-circle', color: '#A78BFA' }, // Finished color
+  finished: { name: 'check-circle', color: '#A78BFA' },
   default: { name: 'brain', color: '#34D399' }
 };
 
-// ... (TimerDisplay component remains the same)
-const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMotion, isExpanded, isFlashing, showDoneMessage }, ref) => {
+const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMotion, isExpanded }, ref) => {
   const safeTimeLeft = typeof timeLeft === 'number' && isFinite(timeLeft) ? timeLeft : 0;
-
-  if (status === 'finished') {
-    if (showDoneMessage) return <Text style={styles.doneText}>You're done!</Text>;
-    return <Text style={[isExpanded ? styles.expandedTimerText : styles.timerText, { opacity: isFlashing ? 1 : 0.4 }]}>00:00</Text>;
-  }
-  
   const minutes = Math.floor(safeTimeLeft / 60).toString().padStart(2, '0');
   const seconds = (safeTimeLeft % 60).toString().padStart(2, '0');
   const textStyle = isExpanded ? styles.expandedTimerText : styles.timerText;
@@ -42,18 +35,30 @@ const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMoti
   return (
     <View style={isExpanded ? styles.expandedRight : styles.timerContainer}>
       <Text style={textStyle} selectable={false}>{minutes}:{seconds}</Text>
-      
-      {status === 'paused' && (
-        <FontAwesome5 name="pause-circle" size={isExpanded ? 30 : 24} color="#F59E0B" style={isExpanded ? styles.pauseIconExpanded : styles.pauseIcon} />
-      )}
-      {status === 'active' && !reduceMotion && (
-        <LottieView ref={ref} source={require('../../assets/images/clock-running.json')} autoPlay loop style={isExpanded ? styles.lottieClockExpanded : styles.lottieClock} />
-      )}
+      {status === 'paused' && <FontAwesome5 name="pause-circle" size={isExpanded ? 30 : 24} color="#F59E0B" style={isExpanded ? styles.pauseIconExpanded : styles.pauseIcon} />}
+      {status === 'active' && !reduceMotion && <LottieView ref={ref} source={require('../../assets/images/clock-running.json')} autoPlay loop style={isExpanded ? styles.lottieClockExpanded : styles.lottieClock} />}
     </View>
   );
 }));
 TimerDisplay.displayName = 'TimerDisplay';
 
+// ✅ NEW: A dedicated component for the "Finished" state animation sequence.
+const FinishedDisplay = ({ showCongratulations, showDoneMessage, congratsStyle, doneStyle }) => {
+  return (
+    <View style={styles.finishedContainer}>
+      {showCongratulations && (
+        <Animated.View style={congratsStyle}>
+          <Text style={styles.congratsText}>Cycle Complete!</Text>
+        </Animated.View>
+      )}
+      {showDoneMessage && (
+        <Animated.View style={[StyleSheet.absoluteFill, styles.finishedContainer, doneStyle]}>
+          <Text style={styles.doneText}>You're done!</Text>
+        </Animated.View>
+      )}
+    </View>
+  );
+};
 
 function DynamicTimerIslandInner() {
   const router = useRouter();
@@ -64,40 +69,72 @@ function DynamicTimerIslandInner() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [isFlashing, setIsFlashing] = useState(true);
+  
+  // ✅ NEW: State to manage the sequence of "finished" messages.
+  const [showCongratulations, setShowCongratulations] = useState(false);
   const [showDoneMessage, setShowDoneMessage] = useState(false);
 
-  const compactLottieRef = useRef(null);
-  const expandedLottieRef = useRef(null);
   const expansion = useSharedValue(0);
   const pressScale = useSharedValue(1);
   const transitionProgress = useSharedValue(0);
-  const finishedAnimation = useSharedValue(0); // ✅ NEW: Shared value for the finished animation
+  const finishedAnimation = useSharedValue(0);
+  
+  // ✅ NEW: Shared values for the text animations.
+  const congratsOpacity = useSharedValue(0);
+  const congratsScale = useSharedValue(1);
+  const doneOpacity = useSharedValue(0);
 
   const triggerHaptic = useCallback((style = Haptics.ImpactFeedbackStyle.Light) => { if (!reduceMotion) Haptics.impactAsync(style).catch(() => {}); }, [reduceMotion]);
 
-  // ✅ NEW: useEffect to handle the "finished" state animation and haptics
+  // ✅ REVAMPED: This useEffect now controls the entire "finished" animation sequence.
   useEffect(() => {
-    let flashInterval, doneMessageTimeout, endTimerTimeout;
+    let doneMessageTimeout, endTimerTimeout;
     if (status === 'finished') {
+      // --- Phase 1: Initial Setup & Animation ---
       setIsExpanded(true);
-      triggerHaptic(Haptics.NotificationFeedbackType.Success); // Vibrate on finish
-      finishedAnimation.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.quad) }); // Animate to "finished" state
+      setShowCongratulations(true);
+      setShowDoneMessage(false);
 
-      flashInterval = setInterval(() => setIsFlashing(prev => !prev), 500);
-      doneMessageTimeout = setTimeout(() => { clearInterval(flashInterval); setIsFlashing(false); setShowDoneMessage(true); }, 4000);
-      endTimerTimeout = setTimeout(() => endTimer(), 5000);
+      // Vibrate twice
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 300);
+
+      // Animate background color
+      finishedAnimation.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.quad) });
+      
+      // Animate "Cycle Complete!" text: Fade in, grow slightly, then shrink back.
+      congratsOpacity.value = withTiming(1, { duration: 400 });
+      congratsScale.value = withSequence(
+        withTiming(1.1, { duration: 200 }),
+        withTiming(1, { duration: 300 })
+      );
+
+      // --- Phase 2: Message Transition ---
+      doneMessageTimeout = setTimeout(() => {
+        // Fade out "Cycle Complete!"
+        congratsOpacity.value = withTiming(0, { duration: 400 });
+        // After a short delay, show and fade in "You're done!"
+        setTimeout(() => {
+          setShowDoneMessage(true);
+          doneOpacity.value = withTiming(1, { duration: 500 });
+        }, 400);
+      }, 2500); // Wait 2.5 seconds before starting the transition
+
+      // --- Phase 3: Cleanup ---
+      endTimerTimeout = setTimeout(() => endTimer(), 5000); // Reset the timer after 5 seconds total.
     } else {
-      // Reset animation when status is no longer 'finished'
+      // Reset all animations and states if the status changes from "finished"
       finishedAnimation.value = withTiming(0, { duration: 600 });
+      setShowCongratulations(false);
+      setShowDoneMessage(false);
+      congratsOpacity.value = 0;
+      doneOpacity.value = 0;
     }
     return () => {
-      clearInterval(flashInterval);
       clearTimeout(doneMessageTimeout);
       clearTimeout(endTimerTimeout);
-      if (status === 'finished') { setIsFlashing(true); setShowDoneMessage(false); }
     };
-  }, [status, endTimer, triggerHaptic]);
+  }, [status, endTimer]);
 
   useEffect(() => { expansion.value = withSpring(isExpanded ? 1 : 0, ANIMATION_CONFIG.mainSpring); }, [isExpanded]);
   useEffect(() => {
@@ -106,12 +143,7 @@ function DynamicTimerIslandInner() {
     const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', checkReduceMotion);
     return () => subscription?.remove();
   }, []);
-  useEffect(() => {
-    if (status === 'active' && !reduceMotion) { compactLottieRef.current?.play(); expandedLottieRef.current?.play(); } 
-    else { compactLottieRef.current?.reset(); expandedLottieRef.current?.reset(); }
-  }, [status, reduceMotion]);
 
-  // ... (other handlers remain the same)
   const handlePress = useCallback(() => { if (isTransitioning || status === 'finished') return; if (!isExpanded) triggerHaptic(Haptics.ImpactFeedbackStyle.Medium); setIsExpanded(p => !p); }, [isExpanded, isTransitioning, triggerHaptic, status]);
   const handleLongPress = useCallback(() => {
     if (isTransitioning || status === 'finished') return;
@@ -132,20 +164,14 @@ function DynamicTimerIslandInner() {
   const iconConfig = useMemo(() => ICONS[status === 'finished' ? 'finished' : sessionType] || ICONS.default, [sessionType, status]);
   const SAFE_TOP = Math.max(8, insets.top || 0) + CONSTANTS.SAFE_AREA_TOP_MARGIN;
 
-  // ✅ MODIFIED: Animated style now includes the background color interpolation
   const animatedContainerStyle = useAnimatedStyle(() => {
-    const backgroundColor = interpolateColor(
-      finishedAnimation.value,
-      [0, 1],
-      ['#1C1C1E', ICONS.finished.color] // From black to purple
-    );
-    return {
-      height: CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT),
-      transform: [{ scale: pressScale.value }],
-      width: `${94 + (100 - 94) * transitionProgress.value}%`,
-      backgroundColor,
-    };
+    const backgroundColor = interpolateColor(finishedAnimation.value, [0, 1], ['#1C1C1E', ICONS.finished.color]);
+    return { height: CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT), transform: [{ scale: pressScale.value }], width: `${94 + (100 - 94) * transitionProgress.value}%`, backgroundColor };
   }, []);
+  
+  // ✅ NEW: Animated styles for the text messages.
+  const animatedCongratsStyle = useAnimatedStyle(() => ({ opacity: congratsOpacity.value, transform: [{ scale: congratsScale.value }] }));
+  const animatedDoneStyle = useAnimatedStyle(() => ({ opacity: doneOpacity.value }));
 
   const animatedTransitionStyle = useAnimatedStyle(() => { const currentIslandHeight = CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT); return { top: SAFE_TOP - (SAFE_TOP * transitionProgress.value), height: currentIslandHeight + (screenHeight - currentIslandHeight) * transitionProgress.value }; }, [SAFE_TOP]);
   const animatedInnerContainerStyle = useAnimatedStyle(() => ({ borderRadius: 50 * (1 - transitionProgress.value) }), []);
@@ -154,7 +180,6 @@ function DynamicTimerIslandInner() {
   const onPressIn = useCallback(() => { pressScale.value = withSpring(0.97, ANIMATION_CONFIG.pressSpring); }, []);
   const onPressOut = useCallback(() => { pressScale.value = withSpring(1, ANIMATION_CONFIG.pressSpring); }, []);
   
-  // ... (rest of the component remains the same)
   useEffect(() => {
     const soundId = timerSession?.selectedSound || null;
     if (status === 'active') audioService.resumeSessionSound?.() ?? audioService.playSessionSound?.(soundId);
@@ -162,7 +187,7 @@ function DynamicTimerIslandInner() {
     else if (status === 'idle' || status === 'finished') audioService.stopSessionSound?.();
   }, [status, timerSession?.selectedSound]);
 
-  const displayTitle = status === 'finished' ? 'Cycle Complete!' : (sessionType === 'focus' ? (taskTitle || 'Focus') : 'Break');
+  const displayTitle = sessionType === 'focus' ? (taskTitle || 'Focus') : 'Break';
 
   return (
     <MotiView key={`${sessionType}-${currentCycle}`} style={styles.mainContainer} pointerEvents="box-none" from={{ opacity: 0, scale: 0.9, translateY: -20 }} animate={{ opacity: 1, scale: 1, translateY: 0 }} exit={{ opacity: 0, scale: 0.85, translateY: -30 }} transition={{ type: 'spring', duration: 400 }}>
@@ -173,17 +198,29 @@ function DynamicTimerIslandInner() {
             <Animated.View style={[styles.contentWrapper, animatedCompactStyle]} pointerEvents={isExpanded ? 'none' : 'auto'}>
               <View style={styles.compactView}>
                 <MiniCircularProgress progress={progress} size={28} strokeWidth={3} progressColor={iconConfig.color} iconName={iconConfig.name} iconColor="white" iconSize={14} animationDuration={1000} />
-                <Text style={styles.taskText} numberOfLines={1}>{displayTitle}</Text>
-                <TimerDisplay ref={compactLottieRef} timeLeft={timeLeft} status={status} reduceMotion={reduceMotion} isExpanded={false} isFlashing={isFlashing} showDoneMessage={showDoneMessage} />
+                <Text style={styles.taskText} numberOfLines={1}>{status === 'finished' ? 'Complete!' : displayTitle}</Text>
+                {status !== 'finished' && <TimerDisplay timeLeft={timeLeft} status={status} reduceMotion={reduceMotion} isExpanded={false} />}
               </View>
             </Animated.View>
             <Animated.View style={[styles.contentWrapper, animatedExpandedStyle]} pointerEvents={isExpanded ? 'auto' : 'none'}>
               <View style={styles.expandedView}>
-                <View style={styles.expandedLeft}><Text style={styles.expandedTaskText} numberOfLines={1}>{displayTitle}</Text></View>
-                <View style={styles.expandedRightContainer}>
-                  <MiniCircularProgress progress={progress} progressColor={iconConfig.color} iconName={iconConfig.name} iconColor="white" iconSize={16} />
-                  <TimerDisplay ref={expandedLottieRef} timeLeft={timeLeft} status={status} reduceMotion={reduceMotion} isExpanded={true} isFlashing={isFlashing} showDoneMessage={showDoneMessage} />
-                </View>
+                {/* ✅ MODIFIED: Show the finished animation when status is 'finished', otherwise show the timer. */}
+                {status === 'finished' ? (
+                  <FinishedDisplay
+                    showCongratulations={showCongratulations}
+                    showDoneMessage={showDoneMessage}
+                    congratsStyle={animatedCongratsStyle}
+                    doneStyle={animatedDoneStyle}
+                  />
+                ) : (
+                  <>
+                    <View style={styles.expandedLeft}><Text style={styles.expandedTaskText} numberOfLines={1}>{displayTitle}</Text></View>
+                    <View style={styles.expandedRightContainer}>
+                      <MiniCircularProgress progress={progress} progressColor={iconConfig.color} iconName={iconConfig.name} iconColor="white" iconSize={16} />
+                      <TimerDisplay timeLeft={timeLeft} status={status} reduceMotion={reduceMotion} isExpanded={true} />
+                    </View>
+                  </>
+                )}
               </View>
             </Animated.View>
           </Pressable>
@@ -197,14 +234,13 @@ function DynamicTimerIslandInner() {
 const styles = StyleSheet.create({
   mainContainer: { ...StyleSheet.absoluteFillObject, zIndex: 1000 },
   contentPositioner: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  // ✅ MODIFIED: Removed the hardcoded background color from here, as it's now handled by the animation.
   container: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 15, elevation: 15, width: '94%', alignSelf: 'center', overflow: 'hidden' },
   pressableArea: { flex: 1, justifyContent: 'center' },
   contentWrapper: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
   compactView: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
   taskText: { flex: 1, color: 'white', fontSize: 15, fontWeight: '600', marginLeft: 12, marginRight: 8 },
   timerText: { color: 'white', fontSize: 16, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
-  expandedView: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
+  expandedView: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, flex: 1 },
   expandedLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 },
   expandedTaskText: { color: 'white', fontSize: 18, fontWeight: '700', flexShrink: 1 },
   expandedRightContainer: { flexDirection: 'row', alignItems: 'center' },
@@ -217,7 +253,22 @@ const styles = StyleSheet.create({
   lottieClockExpanded: { width: 44, height: 44, marginLeft: 8 },
   pauseIcon: { marginLeft: 8 },
   pauseIconExpanded: { marginLeft: 12 },
-  doneText: { color: 'white', fontSize: 18, fontWeight: 'bold' }, // Changed to white to look good on the purple background
+  // ✅ NEW Styles for the finished state display
+  finishedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  congratsText: {
+    color: 'white',
+    fontSize: 22, // Slightly larger
+    fontWeight: 'bold',
+  },
+  doneText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
 });
 
 const DynamicTimerIsland = React.memo(DynamicTimerIslandInner);

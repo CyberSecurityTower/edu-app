@@ -1,234 +1,231 @@
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAppState } from '../../context/AppStateContext';
-import { MotiView, AnimatePresence } from 'moti';
-import * as Haptics from 'expo-haptics';
+// components/timer/SettingsModal.jsx
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  Pressable,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
+import { BlurView } from 'expo-blur';
+import { MotiView } from 'moti';
 import { FontAwesome5 } from '@expo/vector-icons';
 
-import SettingsModal from '../../components/timer/SettingsModal';
-import CircularProgress from '../../components/timer/CircularProgress';
-import SoundsModal from '../../components/timer/SoundsModal';
-import TimerControls from '../../components/timer/TimerControls';
-import { audioService } from '../../services/audioService';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const ASYNC_STORAGE_MODES_KEY = '@timerModes';
-
-const DEFAULT_MODES = [
-  { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
-  { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
+const AVAILABLE_ICONS = [
+  'brain', 'hourglass-half', 'book', 'coffee', 'leaf', 'code',
+  'music', 'couch', 'dumbbell', 'pen-alt', 'laptop-code', 'atom'
 ];
 
-const SESSION_COLORS = {
-  focus: '#34D399',
-  break: '#60A5FA',
-};
+const toMinutes = (seconds) => (seconds / 60).toString();
+const toSeconds = (minutes) => (parseInt(minutes, 10) || 0) * 60;
 
-const TimerStatusIndicator = React.memo(({ timerSession }) => {
-  const { status, sessionType, currentCycle, settings } = timerSession;
-  const totalSessions = settings.sessions.length;
-
-  const { icon, text } = useMemo(() => {
-    const isRunning = status === 'active' || status === 'paused';
-    if (status === 'finished') {
-        return { icon: 'check-circle', text: 'Cycle Complete! Well done.' };
-    }
-    if (isRunning) {
-      switch (sessionType) {
-        case 'focus':
-          return { icon: 'brain', text: `Focus: Session ${currentCycle} of ${totalSessions}` };
-        case 'break':
-          return { icon: 'coffee', text: `Break after Session ${currentCycle}` };
-        default:
-          return { icon: 'clock', text: '...' };
-      }
-    } else {
-      return { icon: 'play-circle', text: `Ready to start Session ${currentCycle} of ${totalSessions}` };
-    }
-  }, [status, sessionType, currentCycle, totalSessions]);
-
-  return (
-    <View style={styles.statusIndicatorContainer}>
-      <FontAwesome5 name={icon} style={styles.statusIndicatorIcon} />
-      <Text style={styles.statusIndicatorText}>{text}</Text>
+const SessionCounter = ({ count, onCountChange }) => (
+  <View style={styles.inputContainer}>
+    <Text style={styles.inputLabel}>Number of Sessions</Text>
+    <View style={styles.counterContainer}>
+      <Pressable style={styles.counterButton} onPress={() => onCountChange(Math.max(1, count - 1))}>
+        <FontAwesome5 name="minus" size={16} color="#E5E7EB" />
+      </Pressable>
+      <Text style={styles.counterText}>{count}</Text>
+      <Pressable style={styles.counterButton} onPress={() => onCountChange(count + 1)}>
+        <FontAwesome5 name="plus" size={16} color="#E5E7EB" />
+      </Pressable>
     </View>
-  );
-});
-TimerStatusIndicator.displayName = 'TimerStatusIndicator';
+  </View>
+);
 
-
-export default function StudyTimerScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  const { timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
-  const { timeLeft, activeModeKey } = timerSession;
-
-  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
-  const [isSoundsVisible, setIsSoundsVisible] = useState(false);
-  const [selectedSound, setSelectedSound] = useState(timerSession?.selectedSound ?? 'complete-silence');
-  const [availableModes, setAvailableModes] = useState([]);
-  const [modeToEdit, setModeToEdit] = useState(null);
-  const [modeLayouts, setModeLayouts] = useState({});
-  const scrollViewRef = useRef(null);
+const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => {
+  const [mode, setMode] = useState(null);
 
   useEffect(() => {
-    const loadModes = async () => {
-      try {
-        const storedModes = await AsyncStorage.getItem(ASYNC_STORAGE_MODES_KEY);
-        setAvailableModes(storedModes ? JSON.parse(storedModes) : DEFAULT_MODES);
-      } catch (e) { console.error('Failed to load modes', e); setAvailableModes(DEFAULT_MODES); }
-    };
-    loadModes();
-  }, []);
+    if (modeToEdit) {
+      const editableMode = JSON.parse(JSON.stringify(modeToEdit));
+      if (!editableMode.settings.sessions) {
+        editableMode.settings.sessions = [{ focus: 25 * 60, break: 5 * 60 }];
+      }
+      setMode(editableMode);
+    } else {
+      setMode(null);
+    }
+  }, [modeToEdit]);
 
-  const saveModes = async (modes) => {
-    try { await AsyncStorage.setItem(ASYNC_STORAGE_MODES_KEY, JSON.stringify(modes)); } 
-    catch (e) { console.error('Failed to save modes', e); }
-  };
-
-  useEffect(() => { if (timerSession?.selectedSound !== selectedSound) { setSelectedSound(timerSession.selectedSound ?? 'complete-silence'); } }, [timerSession?.selectedSound]);
-  useEffect(() => () => audioService?.stopPreview?.(), []);
-  useEffect(() => { if (params.relatedTaskTitle && timerSession.status === 'idle') { setTimerSession(prev => ({ ...prev, taskTitle: params.relatedTaskTitle, taskId: params.taskId || null })); } }, [params.relatedTaskTitle, params.taskId, timerSession.status, setTimerSession]);
-
-  const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
-  
-  const handleSelectMode = useCallback((mode) => {
-    if (timerSession.status === 'active' || timerSession.status === 'paused') return;
-    if (!mode || !mode.key) {
-      console.warn("handleSelectMode was called with an invalid mode object.", mode);
+  const handleSave = () => {
+    if (!mode || mode.name.trim() === '') {
+      Alert.alert('Validation Error', 'Mode name cannot be empty.');
       return;
     }
-    updateSettings(mode);
-    const layout = modeLayouts[mode.key];
-    if (layout && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ x: layout.x - 15, animated: true });
-    }
-  }, [timerSession.status, updateSettings, modeLayouts]);
-
-  const handleAddNewMode = useCallback(() => {
-    const newMode = {
-      key: `custom-${Date.now()}`, name: 'New Custom Mode', icon: 'pen-alt',
-      settings: { sessions: [{ focus: 30 * 60, break: 5 * 60 }], autoStartNextSession: true, enableAudioNotifications: true },
+    const modeToSave = {
+      key: mode.key,
+      name: mode.name,
+      icon: mode.icon,
+      settings: {
+        sessions: mode.settings.sessions,
+        autoStartNextSession: true,
+        enableAudioNotifications: mode.settings.enableAudioNotifications,
+      }
     };
-    setModeToEdit(newMode);
-    setIsSettingsVisible(true);
-  }, []);
+    onSave(modeToSave);
+  };
 
-  const handleEditMode = useCallback((mode) => { setModeToEdit(mode); setIsSettingsVisible(true); }, []);
+  const handleDelete = () => {
+    if (mode.key.startsWith('default-')) {
+        Alert.alert('Cannot Delete', 'Default modes cannot be deleted.');
+        return;
+    }
+    Alert.alert(
+      'Confirm Deletion',
+      `Are you sure you want to delete "${mode.name}"?`,
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => onDelete(mode.key) }],
+      { cancelable: true }
+    );
+  };
   
-  const handleSaveMode = useCallback(async (savedMode) => {
-    const wasActiveMode = modeToEdit?.key === activeModeKey;
-    const updatedModes = await new Promise(resolve => {
-      setAvailableModes(prevModes => {
-        const isNew = !prevModes.some(m => m.key === savedMode.key);
-        const newModeList = isNew ? [...prevModes, savedMode] : prevModes.map(m => (m.key === savedMode.key ? savedMode : m));
-        resolve(newModeList);
-        return newModeList;
-      });
+  const handleSessionCountChange = (newCount) => {
+    setMode(prev => {
+      const currentSessions = prev.settings.sessions || [];
+      const lastSession = currentSessions[currentSessions.length - 1] || { focus: 25 * 60, break: 5 * 60 };
+      const newSessions = [...currentSessions];
+      if (newCount > currentSessions.length) {
+        for (let i = currentSessions.length; i < newCount; i++) {
+          newSessions.push({ ...lastSession });
+        }
+      } else {
+        newSessions.length = newCount;
+      }
+      return { ...prev, settings: { ...prev.settings, sessions: newSessions } };
     });
-    await saveModes(updatedModes);
-    if (wasActiveMode) {
-      updateSettings(savedMode);
-    }
-    setModeToEdit(null);
-    setIsSettingsVisible(false);
-  }, [activeModeKey, updateSettings, modeToEdit]);
-    
-  const handleDeleteMode = useCallback(async (modeKey) => {
-    const updatedModes = availableModes.filter(m => m.key !== modeKey);
-    setAvailableModes(updatedModes);
-    await saveModes(updatedModes);
-    if (modeKey === activeModeKey) {
-      updateSettings(DEFAULT_MODES[0]);
-    }
-    setModeToEdit(null);
-    setIsSettingsVisible(false);
-  }, [availableModes, activeModeKey, updateSettings]);
+  };
 
-  const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
-  const handleModeLayout = useCallback((event, key) => { const { x, width, height } = event.nativeEvent.layout; setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } })); }, []);
+  const handleSessionValueChange = (index, type, value) => {
+    setMode(prev => {
+      const newSessions = [...prev.settings.sessions];
+      newSessions[index] = { ...newSessions[index], [type]: toSeconds(value) };
+      return { ...prev, settings: { ...prev.settings, sessions: newSessions } };
+    });
+  };
 
-  const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
-  const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : 'Break';
-  const progressColor = useMemo(() => SESSION_COLORS[timerSession?.sessionType] || SESSION_COLORS.focus, [timerSession?.sessionType]);
+  if (!mode) return null;
 
   return (
-    <ImageBackground source={require('../../assets/images/timer-background.jpg')} style={styles.backgroundImage}>
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Pressable style={styles.headerIcon} onPress={() => router.back()}><FontAwesome5 name="chevron-down" size={22} color="#E5E7EB" /></Pressable>
-          <Pressable style={styles.headerIcon} onPress={() => { audioService?.stopPreview?.(); setIsSoundsVisible(true); }}><FontAwesome5 name="music" size={22} color="#E5E7EB" /></Pressable>
-        </View>
+    <Modal visible={isVisible} transparent animationType="fade">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill}>
+          <Pressable style={styles.modalBackdrop} onPress={onClose}>
+            {/* ✅ FIX: onStartShouldSetResponder is moved here to correctly handle touch events and fix scrolling. */}
+            <MotiView
+              from={{ opacity: 0, scale: 0.8, translateY: 50 }}
+              animate={{ opacity: 1, scale: 1, translateY: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              style={styles.motiViewContainer}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.modalContainer}>
+                {/* The main content is now a View, not a ScrollView */}
+                <View style={styles.contentContainer}>
+                  <Text style={styles.modalTitle}>{mode.key.startsWith('custom') ? 'New Mode' : 'Edit Mode'}</Text>
+                  
+                  <TextInput
+                    style={[styles.input, styles.modeNameInput]}
+                    value={mode.name}
+                    onChangeText={(text) => setMode(prev => ({ ...prev, name: text }))}
+                    placeholder="Mode Name"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Icon</Text>
+                    <View style={styles.iconGrid}>
+                      {AVAILABLE_ICONS.map(iconName => (
+                        <Pressable key={iconName} style={[styles.iconButton, mode.icon === iconName && styles.iconButtonActive]} onPress={() => setMode(prev => ({ ...prev, icon: iconName }))}>
+                          <FontAwesome5 name={iconName} size={22} color={mode.icon === iconName ? '#FFFFFF' : '#E5E7EB'} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
 
-        {/* ✅ FIX: Wrap the entire content in a single MotiView for a fast, unified animation */}
-        <MotiView 
-          style={styles.content}
-          from={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'timing', duration: 250 }} // Very fast animation
-        >
-          <View style={styles.titleContainer}>
-            <Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text>
-          </View>
-          <CircularProgress duration={timerSession?.duration ?? 0} timeLeft={timeLeft} sessionType={timerSession?.sessionType} progressColor={progressColor} />
-          <TimerStatusIndicator timerSession={timerSession} />
-          <View style={styles.controlsContainer}>
-            <TimerControls status={timerSession?.status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} />
-          </View>
-        </MotiView>
+                  <SessionCounter count={mode.settings.sessions.length} onCountChange={handleSessionCountChange} />
 
-        <View style={styles.modeSelectorSection}>
-          <ScrollView ref={scrollViewRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScrollContent}>
-            <AnimatePresence>
-              {activeModeLayout && (
-                <MotiView from={{ opacity: 0 }} animate={{ opacity: 1, left: activeModeLayout.x, width: activeModeLayout.width, height: activeModeLayout.height }} transition={{ type: 'spring', damping: 20, stiffness: 200 }} style={[styles.modeCardActive, styles.activeIndicator]} />
-              )}
-            </AnimatePresence>
-            {availableModes.map((mode) => {
-              const isActive = activeModeKey === mode.key;
-              return (
-                <Pressable key={mode.key} onLayout={(event) => handleModeLayout(event, mode.key)} style={styles.modeCard} onPress={() => handleSelectMode(mode)} onLongPress={() => handleEditMode(mode)} disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}>
-                  <FontAwesome5 name={mode.icon ?? 'clock'} size={20} color={isActive ? 'white' : '#9CA3AF'} />
-                  <Text style={[styles.modeCardTitle, isActive && styles.modeCardTitleActive]}>{mode.name}</Text>
-                </Pressable>
-              );
-            })}
-            <Pressable style={styles.addModeCard} onPress={handleAddNewMode}><FontAwesome5 name="plus" size={20} color="#9CA3AF" /></Pressable>
-          </ScrollView>
-        </View>
-      </SafeAreaView>
+                  {/* ✅ NEW: A dedicated, height-limited ScrollView for the sessions list */}
+                  <ScrollView style={styles.sessionsList} nestedScrollEnabled={true}>
+                    {mode.settings.sessions.map((session, index) => (
+                      <View key={index} style={styles.sessionRow}>
+                        <Text style={styles.sessionLabel}>Session {index + 1}</Text>
+                        <View style={styles.sessionInputContainer}>
+                          <View style={styles.inputGroup}>
+                            <Text style={styles.sessionInputLabel}>Focus (min)</Text>
+                            <TextInput style={styles.sessionInput} value={toMinutes(session.focus)} onChangeText={(text) => handleSessionValueChange(index, 'focus', text)} keyboardType="numeric" />
+                          </View>
+                          <View style={styles.inputGroup}>
+                            <Text style={styles.sessionInputLabel}>Break (min)</Text>
+                            <TextInput style={styles.sessionInput} value={toMinutes(session.break)} onChangeText={(text) => handleSessionValueChange(index, 'break', text)} keyboardType="numeric" />
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
 
-      <SettingsModal isVisible={isSettingsVisible} onClose={() => { setModeToEdit(null); setIsSettingsVisible(false); }} onSave={handleSaveMode} onDelete={handleDeleteMode} modeToEdit={modeToEdit} />
-      <SoundsModal isVisible={isSoundsVisible} onClose={() => { audioService?.stopPreview?.(); setIsSoundsVisible(false); }} selectedSound={selectedSound} onSelectSound={handleSelectSound} />
-    </ImageBackground>
+                <View style={styles.buttonRow}>
+                  {!mode.key.startsWith('default-') && (
+                     <Pressable style={[styles.button, styles.deleteButton]} onPress={handleDelete}>
+                        <FontAwesome5 name="trash" size={16} color="#F87171" />
+                     </Pressable>
+                  )}
+                  <Pressable style={[styles.button, styles.saveButton]} onPress={handleSave}>
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </MotiView>
+          </Pressable>
+        </BlurView>
+      </KeyboardAvoidingView>
+    </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  backgroundImage: { flex: 1 },
-  container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingTop: 10 },
-  headerIcon: { padding: 10 },
-  content: { flex: 1, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20 },
-  titleContainer: { alignItems: 'center', paddingHorizontal: 30 },
-  taskTitle: { color: 'white', fontSize: 24, fontWeight: '600', textAlign: 'center' },
-  statusIndicatorContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
-  statusIndicatorIcon: { fontSize: 14, color: '#E5E7EB', marginRight: 10 },
-  statusIndicatorText: { color: '#E5E7EB', fontSize: 14, fontWeight: '600' },
-  controlsContainer: { width: '100%', alignItems: 'center' },
-  modeSelectorSection: { height: 100, justifyContent: 'center', paddingBottom: 10, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)' },
-  modeScrollContent: { paddingHorizontal: 15, alignItems: 'center' },
-  modeCard: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 16, padding: 15, alignItems: 'center', justifyContent: 'center', width: 110, height: 80, marginHorizontal: 5, borderWidth: 2, borderColor: 'transparent' },
-  modeCardActive: { backgroundColor: 'rgba(52, 211, 153, 0.2)', borderColor: '#34D399' },
-  modeCardTitle: { color: '#9CA3AF', fontSize: 15, fontWeight: '600', marginTop: 8 },
-  modeCardTitleActive: { color: 'white' },
-  addModeCard: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginHorizontal: 5, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.2)', borderStyle: 'dashed' },
-  activeIndicator: { position: 'absolute', top: 0, borderRadius: 16, borderWidth: 2 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.4)' },
+  motiViewContainer: { width: '92%', maxHeight: '85%' },
+  modalContainer: { backgroundColor: 'rgba(30, 41, 59, 0.95)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden', flexShrink: 1 },
+  // ✅ NEW: A container for the main content area
+  contentContainer: { padding: 25 },
+  modalTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
+  modeNameInput: { marginBottom: 18, textAlign: 'center', fontSize: 18, padding: 16 },
+  inputContainer: { marginBottom: 20 },
+  inputLabel: { color: '#9CA3AF', fontSize: 14, marginBottom: 8, fontWeight: '500' },
+  input: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 10, padding: 14, color: 'white', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  iconButton: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 2, borderColor: 'transparent' },
+  iconButtonActive: { borderColor: '#34D399', backgroundColor: 'rgba(52, 211, 153, 0.2)' },
+  counterContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 10, padding: 8, marginBottom: 15 },
+  counterButton: { padding: 10, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+  counterText: { color: 'white', fontSize: 20, fontWeight: 'bold', marginHorizontal: 20 },
+  
+  // ✅ NEW: Style for the scrollable sessions list
+  sessionsList: {
+    maxHeight: 150, // Height for approx 1.5 items
+    marginHorizontal: -10, // Offset padding for better scroll appearance
+    paddingHorizontal: 10,
+  },
+  sessionRow: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 12, padding: 15, marginBottom: 12 },
+  sessionLabel: { color: 'white', fontWeight: '600', marginBottom: 10 },
+  sessionInputContainer: { flexDirection: 'row', gap: 10 },
+  inputGroup: { flex: 1 },
+  sessionInputLabel: { color: '#9CA3AF', fontSize: 13, marginBottom: 6, textAlign: 'center' },
+  sessionInput: { backgroundColor: 'rgba(0, 0, 0, 0.2)', borderRadius: 8, padding: 12, color: 'white', fontSize: 16, textAlign: 'center' },
+  
+  buttonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 25, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(30, 41, 59, 0.95)' },
+  button: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  deleteButton: { backgroundColor: 'rgba(248, 113, 113, 0.1)', marginRight: 'auto', paddingHorizontal: 20 },
+  saveButton: { backgroundColor: '#10B981', flex: 1, marginLeft: 10 },
+  saveButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
+
+export default SettingsModal;

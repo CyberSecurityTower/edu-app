@@ -1,5 +1,4 @@
 
-// components/timer/DynamicTimerIsland.jsx
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, AccessibilityInfo, Dimensions } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
@@ -26,24 +25,31 @@ const ICONS = {
   default: { name: 'brain', color: '#34D399' }
 };
 
+// ✅ THE DEFINITIVE FIX IS HERE
 const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMotion, isExpanded, isFlashing, showDoneMessage }, ref) => {
-  // ✅ THE FIX: Add a defensive check to ensure timeLeft is a valid number.
   const safeTimeLeft = typeof timeLeft === 'number' && isFinite(timeLeft) ? timeLeft : 0;
 
   if (status === 'finished') {
     if (showDoneMessage) return <Text style={styles.doneText}>You're done!</Text>;
     return <Text style={[isExpanded ? styles.expandedTimerText : styles.timerText, { opacity: isFlashing ? 1 : 0.4 }]}>00:00</Text>;
   }
+  
   const minutes = Math.floor(safeTimeLeft / 60).toString().padStart(2, '0');
   const seconds = (safeTimeLeft % 60).toString().padStart(2, '0');
   const textStyle = isExpanded ? styles.expandedTimerText : styles.timerText;
+
   return (
     <View style={isExpanded ? styles.expandedRight : styles.timerContainer}>
       <Text style={textStyle} selectable={false}>{minutes}:{seconds}</Text>
-      {status === 'paused'
-        ? <FontAwesome5 name="pause-circle" size={isExpanded ? 30 : 24} color="#F59E0B" style={isExpanded ? styles.pauseIconExpanded : styles.pauseIcon} />
-        : (!reduceMotion && <LottieView ref={ref} source={require('../../assets/images/clock-running.json')} autoPlay loop style={isExpanded ? styles.lottieClockExpanded : styles.lottieClock} />)
-      }
+      
+      {/* ✅ FIX: Replaced the unsafe ternary operator with explicit, safe conditional rendering. */}
+      {/* This structure is 100% safe and prevents the "Text strings" error permanently. */}
+      {status === 'paused' && (
+        <FontAwesome5 name="pause-circle" size={isExpanded ? 30 : 24} color="#F59E0B" style={isExpanded ? styles.pauseIconExpanded : styles.pauseIcon} />
+      )}
+      {status === 'active' && !reduceMotion && (
+        <LottieView ref={ref} source={require('../../assets/images/clock-running.json')} autoPlay loop style={isExpanded ? styles.lottieClockExpanded : styles.lottieClock} />
+      )}
     </View>
   );
 }));
@@ -52,8 +58,7 @@ TimerDisplay.displayName = 'TimerDisplay';
 
 function DynamicTimerIslandInner() {
   const router = useRouter();
-  // ✅ THE FIX: Destructure timeLeft directly from timerSession
-  const { timerSession, pauseTimer, resumeTimer, endTimer } = useAppState();
+  const { timerSession, pauseTimer, resumeTimer, endTimer, skipTimer } = useAppState();
   const { duration, taskTitle, status, sessionType, currentCycle, timeLeft } = timerSession || {};
   const insets = useSafeAreaInsets();
 
@@ -112,6 +117,7 @@ function DynamicTimerIslandInner() {
 
   const handleTogglePause = useCallback(() => { triggerHaptic(); if (status === 'active') pauseTimer(); else if (status === 'paused') resumeTimer(); }, [status, triggerHaptic, pauseTimer, resumeTimer]);
   const handleEndSession = useCallback(() => { triggerHaptic(); setIsExpanded(false); setTimeout(endTimer, 260); }, [triggerHaptic, endTimer]);
+  const handleSkipSession = useCallback(() => { triggerHaptic(); skipTimer(); }, [triggerHaptic, skipTimer]);
   
   const progress = useMemo(() => { if (status === 'finished') return 1; return duration > 0 ? (duration - timeLeft) / duration : 0; }, [duration, timeLeft, status]);
   const iconConfig = useMemo(() => ICONS[status === 'finished' ? 'finished' : sessionType] || ICONS.default, [sessionType, status]);
@@ -135,7 +141,8 @@ function DynamicTimerIslandInner() {
   const displayTitle = status === 'finished' ? 'Cycle Complete!' : (sessionType === 'focus' ? (taskTitle || 'Focus') : 'Break');
 
   return (
-  <MotiView key={`${sessionType}-${currentCycle}`} style={styles.mainContainer} pointerEvents="box-none" from={{ opacity: 0, scale: 0.9, translateY: -20 }} animate={{ opacity: 1, scale: 1, translateY: 0 }} exit={{ opacity: 0, scale: 0.85, translateY: -30 }} transition={{ type: 'spring', duration: 400 }}>      <AnimatePresence>{isExpanded && !isTransitioning && (<MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={StyleSheet.absoluteFill}><Pressable style={StyleSheet.absoluteFill} onPress={handlePress}><BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} /></Pressable></MotiView>)}</AnimatePresence>
+    <MotiView key={`${sessionType}-${currentCycle}`} style={styles.mainContainer} pointerEvents="box-none" from={{ opacity: 0, scale: 0.9, translateY: -20 }} animate={{ opacity: 1, scale: 1, translateY: 0 }} exit={{ opacity: 0, scale: 0.85, translateY: -30 }} transition={{ type: 'spring', duration: 400 }}>
+      <AnimatePresence>{isExpanded && !isTransitioning && (<MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={StyleSheet.absoluteFill}><Pressable style={StyleSheet.absoluteFill} onPress={handlePress}><BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} /></Pressable></MotiView>)}</AnimatePresence>
       <Animated.View style={[styles.contentPositioner, animatedTransitionStyle]} pointerEvents="box-none">
         <Animated.View style={[styles.container, animatedContainerStyle, animatedInnerContainerStyle]}>
           <Pressable onPress={handlePress} onLongPress={handleLongPress} onPressIn={onPressIn} onPressOut={onPressOut} style={styles.pressableArea} disabled={isTransitioning}>
@@ -157,7 +164,7 @@ function DynamicTimerIslandInner() {
             </Animated.View>
           </Pressable>
         </Animated.View>
-        <AnimatePresence>{isExpanded && !isTransitioning && status !== 'finished' && (<MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} exit={{ opacity: 0, translateY: 10 }} style={styles.externalControlsContainer}><ActionButton onPress={handleEndSession} iconName="stop" iconSize={18} iconColor="#F87171" /><ActionButton onPress={handleTogglePause} iconName={status === 'paused' ? 'play' : 'pause'} iconSize={24} iconColor="white" style={styles.mainExternalControlButton} /><ActionButton onPress={() => {}} iconName="forward" iconSize={18} iconColor="#38BDF8" /></MotiView>)}</AnimatePresence>
+        <AnimatePresence>{isExpanded && !isTransitioning && status !== 'finished' && (<MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} exit={{ opacity: 0, translateY: 10 }} style={styles.externalControlsContainer}><ActionButton onPress={handleEndSession} iconName="stop" iconSize={18} iconColor="#F87171" /><ActionButton onPress={handleTogglePause} iconName={status === 'paused' ? 'play' : 'pause'} iconSize={24} iconColor="white" style={styles.mainExternalControlButton} /><ActionButton onPress={handleSkipSession} iconName="forward" iconSize={18} iconColor="#38BDF8" /></MotiView>)}</AnimatePresence>
       </Animated.View>
     </MotiView>
   );

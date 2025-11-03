@@ -16,7 +16,6 @@ import {
 import { BlurView } from 'expo-blur';
 import { MotiView } from 'moti';
 import { FontAwesome5 } from '@expo/vector-icons';
-
 const AVAILABLE_ICONS = [
   'brain', 'hourglass-half', 'book', 'coffee', 'leaf', 'code',
   'music', 'couch', 'dumbbell', 'pen-alt', 'laptop-code', 'atom'

@@ -5,22 +5,19 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { audioService } from '../services/audioService';
-import BackgroundTimer from 'react-native-background-timer'; // ✅ استيراد المكتبة الجديدة
+import BackgroundTimer from 'react-native-background-timer';
 
 const AppStateContext = createContext();
 
 const ASYNC_STORAGE_SETTINGS_KEY = '@lastActiveTimerSettings';
 
-const DEFAULT_SETTINGS = {
-  sessions: [
-    { focus: 25 * 60, break: 5 * 60 },
-    { focus: 25 * 60, break: 5 * 60 },
-    { focus: 25 * 60, break: 5 * 60 },
-    { focus: 25 * 60, break: 5 * 60 },
-  ],
-  autoStartNextSession: true,
-  enableAudioNotifications: true,
-};
+// ✅ NEW: Default modes are also defined here to get the key of the default mode
+const DEFAULT_MODES = [
+  { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
+  { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
+];
+
+const DEFAULT_SETTINGS = DEFAULT_MODES[0].settings;
 
 export const AppStateProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -38,21 +35,23 @@ export const AppStateProvider = ({ children }) => {
     taskId: null,
     selectedSound: null,
     settings: DEFAULT_SETTINGS,
+    activeModeKey: DEFAULT_MODES[0].key, // ✅ NEW: Track the active mode key
   });
 
-  // ✅ تم حذف كل الـ refs المتعلقة بالمؤقت القديم (intervalRef, appState, backgroundTime)
-
+  // ... (useEffect for loading data and auth remains the same)
   useEffect(() => {
-    // ... (الكود الخاص بتحميل الإعدادات والمستخدم يبقى كما هو)
     const getValidatedSettings = (storedSettingsString) => {
-      if (!storedSettingsString) return DEFAULT_SETTINGS;
+      if (!storedSettingsString) return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
       try {
         const parsed = JSON.parse(storedSettingsString);
-        if (parsed && Array.isArray(parsed.sessions) && parsed.sessions.length > 0) return parsed;
-        return DEFAULT_SETTINGS;
+        // ✅ We now expect an object { settings, key }
+        if (parsed && parsed.settings && Array.isArray(parsed.settings.sessions) && parsed.settings.sessions.length > 0 && parsed.key) {
+          return parsed;
+        }
+        return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
       } catch (error) {
         console.error('Failed to parse stored settings, using default.', error);
-        return DEFAULT_SETTINGS;
+        return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
       }
     };
 
@@ -61,13 +60,13 @@ export const AppStateProvider = ({ children }) => {
         const onboarding = await AsyncStorage.getItem('@hasCompletedOnboarding');
         setHasCompletedOnboarding(onboarding === 'true');
         const storedSettingsString = await AsyncStorage.getItem(ASYNC_STORAGE_SETTINGS_KEY);
-        const settings = getValidatedSettings(storedSettingsString);
+        const { settings, key } = getValidatedSettings(storedSettingsString);
         const initialDuration = settings.sessions[0].focus;
-        setTimerSession(prev => ({ ...prev, settings, duration: initialDuration, timeLeft: initialDuration }));
+        setTimerSession(prev => ({ ...prev, settings, duration: initialDuration, timeLeft: initialDuration, activeModeKey: key }));
       } catch (e) {
         console.error('Failed to load initial data.', e);
         const initialDuration = DEFAULT_SETTINGS.sessions[0].focus;
-        setTimerSession(prev => ({ ...prev, settings: DEFAULT_SETTINGS, duration: initialDuration, timeLeft: initialDuration }));
+        setTimerSession(prev => ({ ...prev, settings: DEFAULT_SETTINGS, duration: initialDuration, timeLeft: initialDuration, activeModeKey: DEFAULT_MODES[0].key }));
       }
     };
     loadInitialData();
@@ -91,9 +90,10 @@ export const AppStateProvider = ({ children }) => {
 
     return () => {
       unsubscribeAuth();
-      BackgroundTimer.stopBackgroundTimer(); // ✅ التأكد من إيقاف المؤقت عند تفكيك المكون
+      BackgroundTimer.stopBackgroundTimer();
     };
   }, []);
+
 
   const _transitionToNextSession = useCallback((currentSession) => {
     const { sessionType, currentCycle, settings } = currentSession;
@@ -120,27 +120,23 @@ export const AppStateProvider = ({ children }) => {
       }
       const nextState = _transitionToNextSession(prev);
       if (nextState.status === 'active') {
-        // ✅ ابدأ المؤقت للجلسة التالية تلقائيًا
         startTimerLogic(nextState);
       }
       return nextState;
     });
   }, [_transitionToNextSession]);
-  
-  // ✅ [NEW] الدالة الأساسية التي تشغل المؤقت
+
   const startTimerLogic = (sessionState) => {
     BackgroundTimer.runBackgroundTimer(() => {
       setTimerSession(prev => {
-        // التأكد من أن المؤقت لا يزال نشطًا لتجنب التحديثات غير المرغوب فيها
         if (prev.status !== 'active') {
           BackgroundTimer.stopBackgroundTimer();
           return prev;
         }
         
         const newTimeLeft = prev.timeLeft - 1;
-        if (newTimeLeft <= 0) {
+        if (newTimeLeft < 1) {
           BackgroundTimer.stopBackgroundTimer();
-          // استدعاء دالة الانتهاء بعد تحديث الحالة لتجنب race conditions
           setTimeout(handleSessionFinish, 0); 
           return { ...prev, timeLeft: 0 };
         }
@@ -162,7 +158,7 @@ export const AppStateProvider = ({ children }) => {
           newState = { ...prev, status: 'active', selectedSound: soundId };
         }
         
-        startTimerLogic(newState); // ✅ بدء المؤقت
+        startTimerLogic(newState);
         return newState;
       }
       return prev;
@@ -170,7 +166,7 @@ export const AppStateProvider = ({ children }) => {
   }, [handleSessionFinish]);
 
   const pauseTimer = useCallback(() => {
-    BackgroundTimer.stopBackgroundTimer(); // ✅ إيقاف المؤقت
+    BackgroundTimer.stopBackgroundTimer();
     setTimerSession(prev => (prev.status === 'active' ? { ...prev, status: 'paused' } : prev));
   }, []);
 
@@ -178,7 +174,7 @@ export const AppStateProvider = ({ children }) => {
     setTimerSession(prev => {
       if (prev.status === 'paused') {
         const newState = { ...prev, status: 'active' };
-        startTimerLogic(newState); // ✅ استئناف المؤقت
+        startTimerLogic(newState);
         return newState;
       }
       return prev;
@@ -186,38 +182,60 @@ export const AppStateProvider = ({ children }) => {
   }, []);
 
   const skipTimer = useCallback(() => {
-    BackgroundTimer.stopBackgroundTimer(); // ✅ إيقاف المؤقت الحالي
-    handleSessionFinish(); // ✅ الانتقال للجلسة التالية
+    BackgroundTimer.stopBackgroundTimer();
+    handleSessionFinish();
   }, [handleSessionFinish]);
 
   const endTimer = useCallback(() => {
-    BackgroundTimer.stopBackgroundTimer(); // ✅ إيقاف المؤقت
+    BackgroundTimer.stopBackgroundTimer();
     setTimerSession(prev => {
       const firstSessionDuration = prev.settings.sessions[0].focus;
       return { ...prev, status: 'idle', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: null };
     });
   }, []);
-  
-  // session sound management — reacts to status and selectedSound
+
+  // ✅ MODIFIED: The function now accepts the entire mode object for robustness
+  const updateSettings = useCallback(async (newMode) => {
+    // ✅ GUARD CLAUSE: Prevent crash if undefined is passed
+    if (!newMode || !newMode.settings || !newMode.key) {
+      console.error("updateSettings was called with an invalid mode object. Aborting.", newMode);
+      return;
+    }
+
+    try {
+      // ✅ Save both settings and the key
+      const dataToStore = JSON.stringify({ settings: newMode.settings, key: newMode.key });
+      await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, dataToStore);
+      
+      setTimerSession(prev => {
+        const firstSessionDuration = newMode.settings.sessions[0].focus;
+        // Only reset timer values if it's not running
+        if (prev.status === 'idle' || prev.status === 'finished') {
+          return { 
+            ...prev, 
+            settings: newMode.settings, 
+            activeModeKey: newMode.key,
+            duration: firstSessionDuration, 
+            timeLeft: firstSessionDuration, 
+            sessionType: 'focus', 
+            currentCycle: 1 
+          };
+        }
+        // If a session is active/paused, just update the settings and key for the next run
+        return { ...prev, settings: newMode.settings, activeModeKey: newMode.key };
+      });
+    } catch (e) { 
+      console.error('Failed to save settings.', e); 
+    }
+  }, []);
+
+  // ... (rest of the provider remains the same)
   useEffect(() => {
     const { status, selectedSound } = timerSession;
     if (status === 'active') audioService.playSessionSound(selectedSound);
     else if (status === 'paused') audioService.pauseSessionSound();
     else audioService.stopSessionSound();
   }, [timerSession.status, timerSession.selectedSound]);
-
-  const updateSettings = useCallback(async (newSettings) => {
-    try {
-      await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, JSON.stringify(newSettings));
-      setTimerSession(prev => {
-        const firstSessionDuration = newSettings.sessions[0].focus;
-        if (prev.status === 'idle' || prev.status === 'finished') {
-          return { ...prev, settings: newSettings, duration: firstSessionDuration, timeLeft: firstSessionDuration, sessionType: 'focus', currentCycle: 1 };
-        }
-        return { ...prev, settings: newSettings };
-      });
-    } catch (e) { console.error('Failed to save settings.', e); }
-  }, []);
 
   const refreshPoints = useCallback(async () => {
     if (!user?.uid) return;

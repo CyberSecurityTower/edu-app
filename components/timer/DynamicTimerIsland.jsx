@@ -135,8 +135,7 @@ function DynamicTimerIslandInner() {
   const displayTitle = status === 'finished' ? 'Cycle Complete!' : (sessionType === 'focus' ? (taskTitle || 'Focus') : 'Break');
 
   return (
-    <MotiView key={`${sessionType}-${currentCycle}-${status}`} style={styles.mainContainer} pointerEvents="box-none" from={{ opacity: 0, scale: 0.9, translateY: -20 }} animate={{ opacity: 1, scale: 1, translateY: 0 }} exit={{ opacity: 0, scale: 0.85, translateY: -30 }} transition={{ type: 'spring', duration: 400 }}>
-      <AnimatePresence>{isExpanded && !isTransitioning && (<MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={StyleSheet.absoluteFill}><Pressable style={StyleSheet.absoluteFill} onPress={handlePress}><BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} /></Pressable></MotiView>)}</AnimatePresence>
+  <MotiView key={`${sessionType}-${currentCycle}`} style={styles.mainContainer} pointerEvents="box-none" from={{ opacity: 0, scale: 0.9, translateY: -20 }} animate={{ opacity: 1, scale: 1, translateY: 0 }} exit={{ opacity: 0, scale: 0.85, translateY: -30 }} transition={{ type: 'spring', duration: 400 }}>      <AnimatePresence>{isExpanded && !isTransitioning && (<MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={StyleSheet.absoluteFill}><Pressable style={StyleSheet.absoluteFill} onPress={handlePress}><BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} /></Pressable></MotiView>)}</AnimatePresence>
       <Animated.View style={[styles.contentPositioner, animatedTransitionStyle]} pointerEvents="box-none">
         <Animated.View style={[styles.container, animatedContainerStyle, animatedInnerContainerStyle]}>
           <Pressable onPress={handlePress} onLongPress={handleLongPress} onPressIn={onPressIn} onPressOut={onPressOut} style={styles.pressableArea} disabled={isTransitioning}>

@@ -1,200 +1,253 @@
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, AccessibilityInfo, Dimensions } from 'react-native';
-import { MotiView, AnimatePresence } from 'moti';
-import { FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useAppState } from '../../context/AppStateContext';
-import { BlurView } from 'expo-blur';
-import LottieView from 'lottie-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
-import MiniCircularProgress from './MiniCircularProgress';
-import ActionButton from './ActionButton';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing } from 'react-native-reanimated';
-import { audioService } from '../../services/audioService';
 
-const { height: screenHeight } = Dimensions.get('window');
-const ANIMATION_CONFIG = { mainSpring: { damping: 22, stiffness: 350 }, pressSpring: { damping: 15, stiffness: 500, mass: 0.5 }, longPressDuration: 300 };
-const CONSTANTS = { COMPACT_HEIGHT: 50, EXPANDED_HEIGHT: 92, SAFE_AREA_TOP_MARGIN: 10 };
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { audioService } from '../services/audioService';
+import BackgroundTimer from 'react-native-background-timer';
 
-const ICONS = {
-  focus: { name: 'brain', color: '#34D399' },
-  break: { name: 'coffee', color: '#60A5FA' },
-  finished: { name: 'check-circle', color: '#A78BFA' },
-  default: { name: 'brain', color: '#34D399' }
+const AppStateContext = createContext();
+
+const ASYNC_STORAGE_SETTINGS_KEY = '@lastActiveTimerSettings';
+
+const DEFAULT_MODES = [
+  { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
+  { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
+];
+
+const DEFAULT_SETTINGS = DEFAULT_MODES[0].settings;
+
+export const AppStateProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
+  const [points, setPoints] = useState(0);
+
+  const [timerSession, setTimerSession] = useState({
+    status: 'idle',
+    sessionType: 'focus',
+    duration: DEFAULT_SETTINGS.sessions[0].focus,
+    timeLeft: DEFAULT_SETTINGS.sessions[0].focus,
+    currentCycle: 1,
+    taskTitle: null,
+    taskId: null,
+    selectedSound: null,
+    settings: DEFAULT_SETTINGS,
+    activeModeKey: DEFAULT_MODES[0].key,
+  });
+
+  // ... (useEffect for loading data and auth remains the same)
+  useEffect(() => {
+    const getValidatedSettings = (storedSettingsString) => {
+      if (!storedSettingsString) return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
+      try {
+        const parsed = JSON.parse(storedSettingsString);
+        if (parsed && parsed.settings && Array.isArray(parsed.settings.sessions) && parsed.settings.sessions.length > 0 && parsed.key) {
+          return parsed;
+        }
+        return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
+      } catch (error) {
+        console.error('Failed to parse stored settings, using default.', error);
+        return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
+      }
+    };
+    const loadInitialData = async () => {
+      try {
+        const onboarding = await AsyncStorage.getItem('@hasCompletedOnboarding');
+        setHasCompletedOnboarding(onboarding === 'true');
+        const storedSettingsString = await AsyncStorage.getItem(ASYNC_STORAGE_SETTINGS_KEY);
+        const { settings, key } = getValidatedSettings(storedSettingsString);
+        const initialDuration = settings.sessions[0].focus;
+        setTimerSession(prev => ({ ...prev, settings, duration: initialDuration, timeLeft: initialDuration, activeModeKey: key }));
+      } catch (e) {
+        console.error('Failed to load initial data.', e);
+        const initialDuration = DEFAULT_SETTINGS.sessions[0].focus;
+        setTimerSession(prev => ({ ...prev, settings: DEFAULT_SETTINGS, duration: initialDuration, timeLeft: initialDuration, activeModeKey: DEFAULT_MODES[0].key }));
+      }
+    };
+    loadInitialData();
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) setUser({ uid: firebaseUser.uid, ...userDoc.data() });
+          else setUser({ uid: firebaseUser.uid });
+        } catch (e) {
+          console.error('Failed to fetch user doc', e);
+          setUser({ uid: firebaseUser.uid });
+        }
+      } else {
+        setUser(null);
+      }
+      setAuthLoading(false);
+    });
+    return () => {
+      unsubscribeAuth();
+      BackgroundTimer.stopBackgroundTimer();
+    };
+  }, []);
+
+  const _transitionToNextSession = useCallback((currentSession) => {
+    // ✅ DEFENSIVE CHECK: Ensure settings exist before proceeding.
+    if (!currentSession.settings || !currentSession.settings.sessions) {
+        console.error("Transition failed: session settings are missing. Resetting timer to a safe state.");
+        return { ...currentSession, status: 'idle', timeLeft: DEFAULT_SETTINGS.sessions[0].focus, settings: DEFAULT_SETTINGS, currentCycle: 1, sessionType: 'focus' };
+    }
+    const { sessionType, currentCycle, settings } = currentSession;
+    const sessionIndex = currentCycle - 1;
+    const currentSessionConfig = settings.sessions[sessionIndex];
+    if (sessionType === 'focus' && currentSessionConfig.break > 0) {
+      return { ...currentSession, status: 'active', sessionType: 'break', duration: currentSessionConfig.break, timeLeft: currentSessionConfig.break };
+    }
+    const nextSessionIndex = sessionIndex + 1;
+    if (nextSessionIndex < settings.sessions.length) {
+      const nextSessionConfig = settings.sessions[nextSessionIndex];
+      return { ...currentSession, status: 'active', sessionType: 'focus', duration: nextSessionConfig.focus, timeLeft: nextSessionConfig.focus, currentCycle: currentSession.currentCycle + 1 };
+    }
+    return { ...currentSession, status: 'finished', timeLeft: 0 };
+  }, []);
+
+  const handleSessionFinish = useCallback(() => {
+    setTimerSession(prev => {
+      if (prev.settings?.enableAudioNotifications) {
+        audioService.playEffect('end-effect');
+      }
+      const nextState = _transitionToNextSession(prev);
+      if (nextState.status === 'active' && prev.settings?.autoStartNextSession) {
+        startTimerLogic(nextState);
+      } else if (nextState.status === 'finished' || nextState.status === 'idle') {
+        BackgroundTimer.stopBackgroundTimer();
+      }
+      return nextState;
+    });
+  }, [_transitionToNextSession]);
+
+  const startTimerLogic = (sessionState) => {
+    BackgroundTimer.stopBackgroundTimer();
+    BackgroundTimer.runBackgroundTimer(() => {
+      setTimerSession(prev => {
+        if (prev.status !== 'active') {
+          BackgroundTimer.stopBackgroundTimer();
+          return prev;
+        }
+        const newTimeLeft = prev.timeLeft - 1;
+        if (newTimeLeft < 1) {
+          BackgroundTimer.stopBackgroundTimer();
+          setTimeout(handleSessionFinish, 0); 
+          return { ...prev, timeLeft: 0 };
+        }
+        return { ...prev, timeLeft: newTimeLeft };
+      });
+    }, 1000);
+  };
+
+  const startTimer = useCallback((soundId) => {
+    setTimerSession(prev => {
+      if (prev.status === 'idle' || prev.status === 'finished') {
+        // ✅ BULLETPROOF: Use safe settings here as well.
+        const safeSettings = prev.settings && prev.settings.sessions ? prev.settings : DEFAULT_SETTINGS;
+        if (safeSettings.enableAudioNotifications) audioService.playEffect('start-effect');
+        
+        let newState;
+        if (prev.status === 'finished') {
+          const firstSessionDuration = safeSettings.sessions[0].focus;
+          newState = { ...prev, status: 'active', sessionType: 'focus', settings: safeSettings, duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: soundId };
+        } else {
+          newState = { ...prev, status: 'active', settings: safeSettings, selectedSound: soundId };
+        }
+        startTimerLogic(newState);
+        return newState;
+      }
+      return prev;
+    });
+  }, [handleSessionFinish]);
+
+  const pauseTimer = useCallback(() => {
+    BackgroundTimer.stopBackgroundTimer();
+    setTimerSession(prev => (prev.status === 'active' ? { ...prev, status: 'paused' } : prev));
+  }, []);
+
+  const resumeTimer = useCallback(() => {
+    setTimerSession(prev => {
+      if (prev.status === 'paused') {
+        const newState = { ...prev, status: 'active' };
+        startTimerLogic(newState);
+        return newState;
+      }
+      return prev;
+    });
+  }, []);
+
+  const skipTimer = useCallback(() => {
+    BackgroundTimer.stopBackgroundTimer();
+    handleSessionFinish();
+  }, [handleSessionFinish]);
+
+  // ✅ THE MOST IMPORTANT FIX IS HERE
+  const endTimer = useCallback(() => {
+    BackgroundTimer.stopBackgroundTimer();
+    setTimerSession(prev => {
+      // ✅ BULLETPROOF LOGIC:
+      // 1. Safely get the settings. If prev.settings is broken, use the absolute default.
+      const safeSettings = prev.settings && prev.settings.sessions ? prev.settings : DEFAULT_SETTINGS;
+      // 2. Get the duration from these safe settings.
+      const firstSessionDuration = safeSettings.sessions[0].focus;
+      
+      // 3. Return a completely clean, reliable state.
+      return {
+        ...prev,
+        status: 'idle',
+        sessionType: 'focus',
+        settings: safeSettings, // Crucially, we also fix the settings in the state.
+        duration: firstSessionDuration,
+        timeLeft: firstSessionDuration,
+        currentCycle: 1,
+        selectedSound: null
+      };
+    });
+  }, []);
+
+  const updateSettings = useCallback(async (newMode) => {
+    if (!newMode || !newMode.settings || !newMode.key) {
+      console.error("CRITICAL: updateSettings was called with an invalid mode object. Aborting update.", newMode);
+      return;
+    }
+    try {
+      const dataToStore = JSON.stringify({ settings: newMode.settings, key: newMode.key });
+      await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, dataToStore);
+      setTimerSession(prev => {
+        const firstSessionDuration = newMode.settings.sessions[0].focus;
+        if (prev.status === 'idle' || prev.status === 'finished') {
+          return { ...prev, settings: newMode.settings, activeModeKey: newMode.key, duration: firstSessionDuration, timeLeft: firstSessionDuration, sessionType: 'focus', currentCycle: 1 };
+        }
+        return { ...prev, settings: newMode.settings, activeModeKey: newMode.key };
+      });
+    } catch (e) { 
+      console.error('Failed to save settings.', e); 
+    }
+  }, []);
+
+  useEffect(() => {
+    const { status, selectedSound } = timerSession;
+    if (status === 'active') audioService.playSessionSound(selectedSound);
+    else if (status === 'paused') audioService.pauseSessionSound();
+    else audioService.stopSessionSound();
+  }, [timerSession.status, timerSession.selectedSound]);
+
+  const refreshPoints = useCallback(async () => {
+    if (!user?.uid) return;
+    try {
+      const progressDoc = await getDoc(doc(db, 'userProgress', user.uid));
+      if (progressDoc.exists()) setPoints(progressDoc.data().stats?.points || 0);
+    } catch (e) { console.error('Failed to refresh points', e); }
+  }, [user?.uid]);
+  
+  const value = { user, setUser, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, points, refreshPoints, timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, resetTimer: endTimer, skipTimer, updateSettings };
+
+  return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
 
-// ✅ THE DEFINITIVE FIX IS HERE
-const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMotion, isExpanded, isFlashing, showDoneMessage }, ref) => {
-  const safeTimeLeft = typeof timeLeft === 'number' && isFinite(timeLeft) ? timeLeft : 0;
-
-  if (status === 'finished') {
-    if (showDoneMessage) return <Text style={styles.doneText}>You're done!</Text>;
-    return <Text style={[isExpanded ? styles.expandedTimerText : styles.timerText, { opacity: isFlashing ? 1 : 0.4 }]}>00:00</Text>;
-  }
-  
-  const minutes = Math.floor(safeTimeLeft / 60).toString().padStart(2, '0');
-  const seconds = (safeTimeLeft % 60).toString().padStart(2, '0');
-  const textStyle = isExpanded ? styles.expandedTimerText : styles.timerText;
-
-  return (
-    <View style={isExpanded ? styles.expandedRight : styles.timerContainer}>
-      <Text style={textStyle} selectable={false}>{minutes}:{seconds}</Text>
-      
-      {/* ✅ FIX: Replaced the unsafe ternary operator with explicit, safe conditional rendering. */}
-      {/* This structure is 100% safe and prevents the "Text strings" error permanently. */}
-      {status === 'paused' && (
-        <FontAwesome5 name="pause-circle" size={isExpanded ? 30 : 24} color="#F59E0B" style={isExpanded ? styles.pauseIconExpanded : styles.pauseIcon} />
-      )}
-      {status === 'active' && !reduceMotion && (
-        <LottieView ref={ref} source={require('../../assets/images/clock-running.json')} autoPlay loop style={isExpanded ? styles.lottieClockExpanded : styles.lottieClock} />
-      )}
-    </View>
-  );
-}));
-TimerDisplay.displayName = 'TimerDisplay';
-
-
-function DynamicTimerIslandInner() {
-  const router = useRouter();
-  const { timerSession, pauseTimer, resumeTimer, endTimer, skipTimer } = useAppState();
-  const { duration, taskTitle, status, sessionType, currentCycle, timeLeft } = timerSession || {};
-  const insets = useSafeAreaInsets();
-
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [isFlashing, setIsFlashing] = useState(true);
-  const [showDoneMessage, setShowDoneMessage] = useState(false);
-
-  const compactLottieRef = useRef(null);
-  const expandedLottieRef = useRef(null);
-  const expansion = useSharedValue(0);
-  const pressScale = useSharedValue(1);
-  const transitionProgress = useSharedValue(0);
-
-  useEffect(() => {
-    let flashInterval, doneMessageTimeout, endTimerTimeout;
-    if (status === 'finished') {
-      setIsExpanded(true);
-      flashInterval = setInterval(() => setIsFlashing(prev => !prev), 500);
-      doneMessageTimeout = setTimeout(() => { clearInterval(flashInterval); setIsFlashing(false); setShowDoneMessage(true); }, 4000);
-      endTimerTimeout = setTimeout(() => endTimer(), 5000);
-    }
-    return () => {
-      clearInterval(flashInterval);
-      clearTimeout(doneMessageTimeout);
-      clearTimeout(endTimerTimeout);
-      if (status === 'finished') { setIsFlashing(true); setShowDoneMessage(false); }
-    };
-  }, [status, endTimer]);
-
-  useEffect(() => { expansion.value = withSpring(isExpanded ? 1 : 0, ANIMATION_CONFIG.mainSpring); }, [isExpanded]);
-  useEffect(() => {
-    const checkReduceMotion = (v) => setReduceMotion(!!v);
-    AccessibilityInfo.isReduceMotionEnabled?.().then(checkReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', checkReduceMotion);
-    return () => subscription?.remove();
-  }, []);
-  useEffect(() => {
-    if (status === 'active' && !reduceMotion) { compactLottieRef.current?.play(); expandedLottieRef.current?.play(); } 
-    else { compactLottieRef.current?.reset(); expandedLottieRef.current?.reset(); }
-  }, [status, reduceMotion]);
-
-  const triggerHaptic = useCallback((style = Haptics.ImpactFeedbackStyle.Light) => { if (!reduceMotion) Haptics.impactAsync(style).catch(() => {}); }, [reduceMotion]);
-  const handlePress = useCallback(() => { if (isTransitioning || status === 'finished') return; if (!isExpanded) triggerHaptic(Haptics.ImpactFeedbackStyle.Medium); setIsExpanded(p => !p); }, [isExpanded, isTransitioning, triggerHaptic, status]);
-  const handleLongPress = useCallback(() => {
-    if (isTransitioning || status === 'finished') return;
-    triggerHaptic(Haptics.ImpactFeedbackStyle.Heavy);
-    setIsTransitioning(true);
-    transitionProgress.value = withTiming(1, { duration: ANIMATION_CONFIG.longPressDuration, easing: Easing.inOut(Easing.ease) });
-    setTimeout(() => {
-      router.push({ pathname: '/(modals)/study-timer' });
-      setTimeout(() => { transitionProgress.value = 0; setIsTransitioning(false); }, 240);
-    }, ANIMATION_CONFIG.longPressDuration);
-  }, [router, transitionProgress, triggerHaptic, isTransitioning, status]);
-
-  const handleTogglePause = useCallback(() => { triggerHaptic(); if (status === 'active') pauseTimer(); else if (status === 'paused') resumeTimer(); }, [status, triggerHaptic, pauseTimer, resumeTimer]);
-  const handleEndSession = useCallback(() => { triggerHaptic(); setIsExpanded(false); setTimeout(endTimer, 260); }, [triggerHaptic, endTimer]);
-  const handleSkipSession = useCallback(() => { triggerHaptic(); skipTimer(); }, [triggerHaptic, skipTimer]);
-  
-  const progress = useMemo(() => { if (status === 'finished') return 1; return duration > 0 ? (duration - timeLeft) / duration : 0; }, [duration, timeLeft, status]);
-  const iconConfig = useMemo(() => ICONS[status === 'finished' ? 'finished' : sessionType] || ICONS.default, [sessionType, status]);
-  const SAFE_TOP = Math.max(8, insets.top || 0) + CONSTANTS.SAFE_AREA_TOP_MARGIN;
-
-  const animatedContainerStyle = useAnimatedStyle(() => ({ height: CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT), transform: [{ scale: pressScale.value }], width: `${94 + (100 - 94) * transitionProgress.value}%` }), []);
-  const animatedTransitionStyle = useAnimatedStyle(() => { const currentIslandHeight = CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT); return { top: SAFE_TOP - (SAFE_TOP * transitionProgress.value), height: currentIslandHeight + (screenHeight - currentIslandHeight) * transitionProgress.value }; }, [SAFE_TOP]);
-  const animatedInnerContainerStyle = useAnimatedStyle(() => ({ borderRadius: 50 * (1 - transitionProgress.value) }), []);
-  const animatedCompactStyle = useAnimatedStyle(() => ({ opacity: 1 - expansion.value, transform: [{ translateY: -expansion.value * 6 }] }), []);
-  const animatedExpandedStyle = useAnimatedStyle(() => ({ opacity: expansion.value, transform: [{ translateY: (1 - expansion.value) * 4 }] }), []);
-  const onPressIn = useCallback(() => { pressScale.value = withSpring(0.97, ANIMATION_CONFIG.pressSpring); }, []);
-  const onPressOut = useCallback(() => { pressScale.value = withSpring(1, ANIMATION_CONFIG.pressSpring); }, []);
-  
-  useEffect(() => {
-    const soundId = timerSession?.selectedSound || null;
-    if (status === 'active') audioService.resumeSessionSound?.() ?? audioService.playSessionSound?.(soundId);
-    else if (status === 'paused') audioService.pauseSessionSound?.();
-    else if (status === 'idle' || status === 'finished') audioService.stopSessionSound?.();
-  }, [status, timerSession?.selectedSound]);
-
-  const displayTitle = status === 'finished' ? 'Cycle Complete!' : (sessionType === 'focus' ? (taskTitle || 'Focus') : 'Break');
-
-  return (
-    <MotiView key={`${sessionType}-${currentCycle}`} style={styles.mainContainer} pointerEvents="box-none" from={{ opacity: 0, scale: 0.9, translateY: -20 }} animate={{ opacity: 1, scale: 1, translateY: 0 }} exit={{ opacity: 0, scale: 0.85, translateY: -30 }} transition={{ type: 'spring', duration: 400 }}>
-      <AnimatePresence>{isExpanded && !isTransitioning && (<MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={StyleSheet.absoluteFill}><Pressable style={StyleSheet.absoluteFill} onPress={handlePress}><BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} /></Pressable></MotiView>)}</AnimatePresence>
-      <Animated.View style={[styles.contentPositioner, animatedTransitionStyle]} pointerEvents="box-none">
-        <Animated.View style={[styles.container, animatedContainerStyle, animatedInnerContainerStyle]}>
-          <Pressable onPress={handlePress} onLongPress={handleLongPress} onPressIn={onPressIn} onPressOut={onPressOut} style={styles.pressableArea} disabled={isTransitioning}>
-            <Animated.View style={[styles.contentWrapper, animatedCompactStyle]} pointerEvents={isExpanded ? 'none' : 'auto'}>
-              <View style={styles.compactView}>
-                <MiniCircularProgress progress={progress} size={28} strokeWidth={3} progressColor={iconConfig.color} iconName={iconConfig.name} iconColor="white" iconSize={14} animationDuration={1000} />
-                <Text style={styles.taskText} numberOfLines={1}>{displayTitle}</Text>
-                <TimerDisplay ref={compactLottieRef} timeLeft={timeLeft} status={status} reduceMotion={reduceMotion} isExpanded={false} isFlashing={isFlashing} showDoneMessage={showDoneMessage} />
-              </View>
-            </Animated.View>
-            <Animated.View style={[styles.contentWrapper, animatedExpandedStyle]} pointerEvents={isExpanded ? 'auto' : 'none'}>
-              <View style={styles.expandedView}>
-                <View style={styles.expandedLeft}><Text style={styles.expandedTaskText} numberOfLines={1}>{displayTitle}</Text></View>
-                <View style={styles.expandedRightContainer}>
-                  <MiniCircularProgress progress={progress} progressColor={iconConfig.color} iconName={iconConfig.name} iconColor="white" iconSize={16} />
-                  <TimerDisplay ref={expandedLottieRef} timeLeft={timeLeft} status={status} reduceMotion={reduceMotion} isExpanded={true} isFlashing={isFlashing} showDoneMessage={showDoneMessage} />
-                </View>
-              </View>
-            </Animated.View>
-          </Pressable>
-        </Animated.View>
-        <AnimatePresence>{isExpanded && !isTransitioning && status !== 'finished' && (<MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} exit={{ opacity: 0, translateY: 10 }} style={styles.externalControlsContainer}><ActionButton onPress={handleEndSession} iconName="stop" iconSize={18} iconColor="#F87171" /><ActionButton onPress={handleTogglePause} iconName={status === 'paused' ? 'play' : 'pause'} iconSize={24} iconColor="white" style={styles.mainExternalControlButton} /><ActionButton onPress={handleSkipSession} iconName="forward" iconSize={18} iconColor="#38BDF8" /></MotiView>)}</AnimatePresence>
-      </Animated.View>
-    </MotiView>
-  );
-}
-
-const styles = StyleSheet.create({
-  mainContainer: { ...StyleSheet.absoluteFillObject, zIndex: 1000 },
-  contentPositioner: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  container: { backgroundColor: '#1C1C1E', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 15, elevation: 15, width: '94%', alignSelf: 'center', overflow: 'hidden' },
-  pressableArea: { flex: 1, justifyContent: 'center' },
-  contentWrapper: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
-  compactView: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
-  taskText: { flex: 1, color: 'white', fontSize: 15, fontWeight: '600', marginLeft: 12, marginRight: 8 },
-  timerText: { color: 'white', fontSize: 16, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
-  expandedView: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
-  expandedLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 },
-  expandedTaskText: { color: 'white', fontSize: 18, fontWeight: '700', flexShrink: 1 },
-  expandedRightContainer: { flexDirection: 'row', alignItems: 'center' },
-  expandedRight: { flexDirection: 'row', alignItems: 'center' },
-  expandedTimerText: { color: 'white', fontSize: 20, fontWeight: 'bold', fontVariant: ['tabular-nums'], marginLeft: 12 },
-  externalControlsContainer: { flexDirection: 'row', marginTop: 16, gap: 12, alignItems: 'center' },
-  mainExternalControlButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#007AFF' },
-  timerContainer: { flexDirection: 'row', alignItems: 'center' },
-  lottieClock: { width: 34, height: 34, marginLeft: 6 },
-  lottieClockExpanded: { width: 44, height: 44, marginLeft: 8 },
-  pauseIcon: { marginLeft: 8 },
-  pauseIconExpanded: { marginLeft: 12 },
-  doneText: { color: '#A78BFA', fontSize: 18, fontWeight: 'bold' },
-});
-
-const DynamicTimerIsland = React.memo(DynamicTimerIslandInner);
-DynamicTimerIsland.displayName = 'DynamicTimerIsland';
-export default DynamicTimerIsland;
+export const useAppState = () => useContext(AppStateContext);

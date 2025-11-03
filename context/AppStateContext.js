@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,7 +16,8 @@ const DEFAULT_SETTINGS = {
   shortBreakDuration: 5 * 60,
   longBreakDuration: 15 * 60,
   pomodorosPerCycle: 4,
-  autoStartNextSession: false,
+  // ✅ THE FIX: Auto-start is now the default behavior.
+  autoStartNextSession: true, 
   enableAudioNotifications: true,
 };
 
@@ -26,8 +28,8 @@ export const AppStateProvider = ({ children }) => {
   const [points, setPoints] = useState(0);
 
   const [timerSession, setTimerSession] = useState({
-    status: 'idle',
-    sessionType: 'focus',
+    status: 'idle', // idle, active, paused, finished
+    sessionType: 'focus', // focus, shortBreak, longBreak
     duration: DEFAULT_SETTINGS.focusDuration,
     currentCycle: 1,
     taskTitle: null,
@@ -76,49 +78,53 @@ export const AppStateProvider = ({ children }) => {
     return () => unsubscribeAuth();
   }, []);
 
+  // ✅ GOD-TIER: The new and improved, fully automatic state machine.
   const _transitionToNextSession = useCallback(() => {
     const { sessionType, currentCycle, settings } = timerSession;
     
+    // Case 1: A long break just finished. The entire cycle is now complete.
     if (sessionType === 'longBreak') {
-        const newCycle = 1;
-        setTimerSession(prev => ({
-            ...prev,
-            status: 'idle',
-            sessionType: 'focus',
-            duration: prev.settings.focusDuration,
-            currentCycle: newCycle,
-        }));
-        setTimeLeft(settings.focusDuration);
-        return;
+      setTimerSession(prev => ({ ...prev, status: 'finished' }));
+      setTimeLeft(0);
+      return;
     }
 
     let nextSessionType = 'focus';
     let nextDuration = settings.focusDuration;
     let nextCycle = currentCycle;
 
+    // Case 2: A focus session just finished.
     if (sessionType === 'focus') {
       if (currentCycle >= settings.pomodorosPerCycle) {
         nextSessionType = 'longBreak';
         nextDuration = settings.longBreakDuration;
-        nextCycle = 1; // Reset for the next full cycle
+        // The cycle count will reset to 1 after this long break is complete.
       } else {
         nextSessionType = 'shortBreak';
         nextDuration = settings.shortBreakDuration;
-        nextCycle = currentCycle + 1;
       }
+    } 
+    // Case 3: A short break just finished. Go back to focus and increment the cycle.
+    else if (sessionType === 'shortBreak') {
+        nextSessionType = 'focus';
+        nextDuration = settings.focusDuration;
+        nextCycle = currentCycle + 1;
     }
     
     setTimerSession(prev => ({
       ...prev,
-      status: prev.settings.autoStartNextSession ? 'active' : 'idle',
+      // ✅ THE FIX: Always transition to 'active' for a seamless flow.
+      status: 'active',
       sessionType: nextSessionType,
       duration: nextDuration,
       currentCycle: nextCycle,
     }));
     setTimeLeft(nextDuration);
+
   }, [timerSession]);
 
   const handleSessionFinish = useCallback(() => {
+    // ✅ THE FIX: The sound now plays on every transition.
     if (timerSession.settings.enableAudioNotifications) {
       audioService.playEffect('end-effect');
     }
@@ -175,7 +181,18 @@ export const AppStateProvider = ({ children }) => {
       if (timerSession.settings.enableAudioNotifications) {
         audioService.playEffect('start-effect');
       }
-      setTimerSession(prev => ({ ...prev, status: 'active', selectedSound: soundId }));
+      
+      if (timerSession.status === 'finished') {
+        const newSettings = timerSession.settings;
+        setTimeLeft(newSettings.focusDuration);
+        setTimerSession(prev => ({
+          ...prev, status: 'active', sessionType: 'focus',
+          duration: newSettings.focusDuration, currentCycle: 1, selectedSound: soundId,
+        }));
+      } else {
+         setTimeLeft(timerSession.duration);
+         setTimerSession(prev => ({ ...prev, status: 'active', selectedSound: soundId }));
+      }
     }
   }, [timerSession]);
 
@@ -191,18 +208,14 @@ export const AppStateProvider = ({ children }) => {
     }
   }, [timerSession.status]);
 
-  // ✅ GOD-TIER: This function now correctly skips to the next session.
   const skipTimer = useCallback(() => {
     if (timerSession.status === 'active' || timerSession.status === 'paused') {
         if (intervalRef.current) clearInterval(intervalRef.current);
-        // Play the end sound effect to signify a transition
-        if (timerSession.settings.enableAudioNotifications) {
-            audioService.playEffect('end-effect');
-        }
-        _transitionToNextSession();
+        handleSessionFinish(); // Use the same finish logic for consistency
     }
-  }, [timerSession.status, timerSession.settings.enableAudioNotifications, _transitionToNextSession]);
+  }, [timerSession.status, handleSessionFinish]);
 
+  // This function now acts as a full reset.
   const endTimer = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     const currentSettings = timerSession.settings;
@@ -213,7 +226,6 @@ export const AppStateProvider = ({ children }) => {
     setTimeLeft(currentSettings.focusDuration);
   }, [timerSession.settings]);
 
-  // ✅ GOD-TIER: This function now updates settings and persists them.
   const updateSettings = useCallback(async (newSettings) => {
     try {
       await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, JSON.stringify(newSettings));
@@ -236,10 +248,11 @@ export const AppStateProvider = ({ children }) => {
     }
   }, []);
 
-const refreshPoints = useCallback(async () => { if (user?.uid) { const progressDoc = await getDoc(doc(db, 'userProgress', user.uid)); if (progressDoc.exists()) { setPoints(progressDoc.data().stats?.points || 0); } } }, [user?.uid]);
+  const refreshPoints = useCallback(async () => { if (user?.uid) { const progressDoc = await getDoc(doc(db, 'userProgress', user.uid)); if (progressDoc.exists()) { setPoints(progressDoc.data().stats?.points || 0); } } }, [user?.uid]);
+  
   const value = {
     user, setUser, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, points, refreshPoints,
-    timerSession, setTimerSession, timeLeft, setTimeLeft, startTimer, pauseTimer,
+    timerSession, setTimerSession, timeLeft, startTimer, pauseTimer,
     resumeTimer, endTimer, resetTimer: endTimer, skipTimer, updateSettings,
   };
 

@@ -1,4 +1,5 @@
 
+// app/lesson-view.jsx
 import { FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
@@ -12,7 +13,6 @@ import { BehavioralAnalyticsService } from '../services/behavioralAnalyticsServi
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
   InteractionManager,
@@ -35,6 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 import FloatingActionButton from '../components/FloatingActionButton';
 import GenerateKitButton from '../components/GenerateKitButton';
+import CustomAlert from '../components/CustomAlert'; // Import CustomAlert
 import { apiService } from '../config/api';
 import { useAppState } from '../context/AppStateContext';
 import { getLessonContent, updateLessonProgress } from '../services/firestoreService';
@@ -122,7 +123,6 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
       <View style={styles.botRow}>
         <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}>
           <LottieView 
-            // ✅ FIX: Corrected Lottie file path
             source={require('../assets/images/typing.json')} 
             autoPlay 
             loop 
@@ -186,6 +186,7 @@ export default function LessonViewScreen() {
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE);
   const [toastVisible, setToastVisible] = useState(false);
   const toastAnim = useRef(new RNAnimated.Value(0)).current;
+  const [alertInfo, setAlertInfo] = useState({ isVisible: false }); // State for custom alert
 
   const backgroundLottieRef = useRef(null);
   const flatListRef = useRef(null);
@@ -239,10 +240,10 @@ export default function LessonViewScreen() {
       const note = { id: uuidv4(), text: message.text, lessonId, createdAt: Date.now() };
       prev.unshift(note);
       await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(prev));
-      Alert.alert('Saved', 'Message saved to your notes.');
+      setAlertInfo({ isVisible: true, title: 'Saved', message: 'Message saved to your notes.', buttons: [{ text: 'OK' }] });
     } catch (e) {
       console.error('Failed to save note', e);
-      Alert.alert('Error', 'Could not save note.');
+      setAlertInfo({ isVisible: true, title: 'Error', message: 'Could not save the note.', buttons: [{ text: 'OK' }] });
     }
   }, [lessonId]);
 
@@ -329,22 +330,19 @@ export default function LessonViewScreen() {
   const basePanelHeight = Math.round(windowHeight * BASE_PANEL_RATIO);
   const maxPanelHeight = Math.round(windowHeight * MAX_PANEL_RATIO);
 
-  // ✅✅✅ START: REFACTORED & ROBUST processAndRespond ✅✅✅
   const processAndRespond = useCallback(async (userMessage, history) => {
     if (isSendingRef.current) return;
     isSendingRef.current = true;
     setIsSending(true);
     abortControllerRef.current = new AbortController();
 
-    // 1. Add user message and a 'seen' indicator immediately
     const seenIndicator = { type: 'seen', id: uuidv4(), author: BOT_USER };
     setMessagesSafe(prev => [...(Array.isArray(prev) ? prev : []), userMessage, seenIndicator]);
 
-    // 2. After a short delay, replace 'seen' with 'typing'
     const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
     setTimeout(() => {
         setMessagesSafe(prev => prev.map(m => (m.id === seenIndicator.id ? typingIndicator : m)));
-    }, 400); // 400ms delay for a natural feel
+    }, 400); 
 
     const historyForAPI = history.map(msg => ({
         role: msg.author?.id === BOT_USER.id ? 'model' : 'user',
@@ -372,7 +370,6 @@ export default function LessonViewScreen() {
 
         const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response.reply };
         
-        // Replace typing indicator with the final bot response
         setMessagesSafe(prev => prev.map(m => m.id === typingIndicator.id ? botResponse : m));
         
         if (!isChatPanelVisible) {
@@ -381,12 +378,10 @@ export default function LessonViewScreen() {
 
     } catch (error) {
         if (error?.name !== 'AbortError') {
-            console.error("Error in processAndRespond:", error); // Log the actual error
+            console.error("Error in processAndRespond:", error);
             const errorMsg = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ تعذر الوصول للمساعد الذكي. يرجى التحقق من اتصالك.' };
-            // Replace typing indicator with an error message
             setMessagesSafe(prev => prev.map(m => m.id === typingIndicator.id ? errorMsg : m));
         } else {
-            // If aborted, just remove the typing indicator
             setMessagesSafe(prev => prev.filter(m => m.id !== typingIndicator.id));
         }
     } finally {
@@ -395,7 +390,6 @@ export default function LessonViewScreen() {
         abortControllerRef.current = null;
     }
   }, [user?.uid, sessionId, lessonId, lessonTitle, isChatPanelVisible, showToast, setMessagesSafe]);
-  // ✅✅✅ END: REFACTORED processAndRespond ✅✅✅
     
      const handleSendPrompt = useCallback(() => {
         if (isSendingRef.current) { handleStopGenerating(); return; }
@@ -413,27 +407,30 @@ export default function LessonViewScreen() {
   }, [promptText, isSending, chatUser, processAndRespond, handleStopGenerating]);
 
   const handleLongPressMessage = useCallback((message) => {
-    Alert.alert('اختيارات الرسالة', 'اختر إجراء', [
-      { text: 'نسخ', onPress: async () => { await Clipboard.setStringAsync(message.text || ''); Alert.alert('Copied'); } },
-      { text: 'حفظ كملاحظه', onPress: () => saveMessageToNotes(message) },
-      { text: 'إعادة السؤال', onPress: () => { setPromptText(message.text || ''); openChatPanel(); } },
-      { text: 'إلغاء', style: 'cancel' },
-    ], { cancelable: true });
+    setAlertInfo({
+      isVisible: true,
+      title: 'Message Options',
+      message: 'What would you like to do?',
+      buttons: [
+        { text: 'Copy', onPress: async () => { await Clipboard.setStringAsync(message.text || ''); setAlertInfo({ isVisible: true, title: 'Copied', message: 'Message copied to clipboard.', buttons: [{ text: 'OK' }] }); } },
+        { text: 'Save to Notes', onPress: () => saveMessageToNotes(message) },
+        { text: 'Ask Again', onPress: () => { setPromptText(message.text || ''); openChatPanel(); } },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    });
   }, [saveMessageToNotes, openChatPanel]);
+
   useEffect(() => {
   if (user?.uid && lessonId) {
-    // Send the event to the server (fire and forget)
     apiService.logEvent(user.uid, 'lesson_view_start', { lessonId, lessonTitle });
   }
 
   return () => {
     if (user?.uid && lessonId) {
-      // This part is more complex as it needs to calculate duration,
-      // but we can start by just logging the end of the view
       apiService.logEvent(user.uid, 'lesson_view_end', { lessonId });
     }
   };
-}, [user?.uid, lessonId]); // Runs once when the lesson loads
+}, [user?.uid, lessonId]); 
   useEffect(() => {
     mountedRef.current = true;
     BehavioralAnalyticsService.logEvent('lesson_view_start', { lessonId, subjectId });
@@ -450,7 +447,7 @@ export default function LessonViewScreen() {
         await loadChat();
       } catch (e) {
         console.error('Failed to load lesson:', e);
-        Alert.alert('Error', 'Could not load lesson content or progress.');
+        setAlertInfo({ isVisible: true, title: 'Error', message: 'Could not load lesson content or progress.', buttons: [{ text: 'OK' }] });
       } finally {
         if (mountedRef.current) setIsLoading(false);
       }
@@ -767,7 +764,14 @@ return (
           )}
         </View>
       )}
-        </SafeAreaView>
+      <CustomAlert 
+        isVisible={alertInfo.isVisible}
+        onClose={() => setAlertInfo({ isVisible: false })}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+      />
+    </SafeAreaView>
   </GestureHandlerRootView>
 );}
 
@@ -856,7 +860,7 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     position: 'absolute',
-    backgroundColor: '#2d3748', // A dark, clean background
+    backgroundColor: '#2d3748', 
     borderRadius: 12,
     padding: 5,
     shadowColor: '#000',
@@ -880,7 +884,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 20, // Space from the input field
+    paddingBottom: 20, 
   },
   welcomeTitle: {
     color: '#E5E7EB',
@@ -909,9 +913,8 @@ const styles = StyleSheet.create({
 });
 
 export const markdownStyles = StyleSheet.create({
-  // العناوين الرئيسية
   heading1: {
-    color: '#F8FAFC', // أبيض فاتح
+    color: '#F8FAFC', 
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 12,
@@ -921,45 +924,35 @@ export const markdownStyles = StyleSheet.create({
     textAlign: 'right',
     letterSpacing: 0.5,
   },
-
-  // العناوين الفرعية
   heading2: {
-    color: '#A5B4FC', // بنفسجي ناعم
+    color: '#A5B4FC', 
     fontSize: 22,
     fontWeight: '600',
     marginTop: 14,
     marginBottom: 8,
     textAlign: 'right',
   },
-
-  // الفقرات
   body: {
-    color: '#E2E8F0', // رمادي فاتح
+    color: '#E2E8F0', 
     fontSize: 16,
     lineHeight: 26,
     textAlign: 'right',
     marginBottom: 8,
   },
-
-  // النصوص الغامقة
   strong: {
     fontWeight: '700',
-    color: '#10B981', // أخضر زمردي
+    color: '#10B981', 
   },
-
-  // الروابط
   link: {
-    color: '#38BDF8', // أزرق سماوي
+    color: '#38BDF8', 
     textDecorationLine: 'underline',
   },
-
-  // القوائم
   bullet_list: {
     marginVertical: 6,
     paddingRight: 12,
   },
   list_item: {
-    flexDirection: 'row-reverse', // To have bullet on the right for RTL
+    flexDirection: 'row-reverse', 
     alignItems: 'flex-start',
     marginBottom: 4,
   },
@@ -970,8 +963,6 @@ export const markdownStyles = StyleSheet.create({
     marginRight: 8,
     marginLeft: 5,
   },
-  
-  // الجداول
   table: {
     borderWidth: 1,
     borderColor: '#475569',
@@ -993,8 +984,6 @@ export const markdownStyles = StyleSheet.create({
     borderColor: '#475569',
     textAlign: 'center',
   },
-
-  // الاقتباسات
   blockquote: {
     borderRightWidth: 4,
     borderColor: '#10B981',
@@ -1004,11 +993,9 @@ export const markdownStyles = StyleSheet.create({
     marginVertical: 8,
     borderRadius: 6,
   },
-
-  // الكود البرمجي
   code_inline: {
     backgroundColor: '#1E293B',
-    color: '#FACC15', // أصفر ذهبي
+    color: '#FACC15', 
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

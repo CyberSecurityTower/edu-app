@@ -11,11 +11,12 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { MotiView } from 'moti';
 import { FontAwesome5 } from '@expo/vector-icons';
+import CustomAlert from '../CustomAlert'; // Import CustomAlert
+
 const AVAILABLE_ICONS = [
   'brain', 'hourglass-half', 'book', 'coffee', 'leaf', 'code',
   'music', 'couch', 'dumbbell', 'pen-alt', 'laptop-code', 'atom'
@@ -41,6 +42,7 @@ const SessionCounter = ({ count, onCountChange }) => (
 
 const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => {
   const [mode, setMode] = useState(null);
+  const [alertInfo, setAlertInfo] = useState({ isVisible: false }); // State for custom alert
 
   useEffect(() => {
     if (modeToEdit) {
@@ -56,7 +58,7 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
 
   const handleSave = () => {
     if (!mode || mode.name.trim() === '') {
-      Alert.alert('Validation Error', 'Mode name cannot be empty.');
+      setAlertInfo({ isVisible: true, title: 'Validation Error', message: 'Mode name cannot be empty.', buttons: [{ text: 'OK' }] });
       return;
     }
     const modeToSave = {
@@ -74,15 +76,18 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
 
   const handleDelete = () => {
     if (mode.key.startsWith('default-')) {
-        Alert.alert('Cannot Delete', 'Default modes cannot be deleted.');
+        setAlertInfo({ isVisible: true, title: 'Cannot Delete', message: 'Default modes cannot be deleted.', buttons: [{ text: 'OK' }] });
         return;
     }
-    Alert.alert(
-      'Confirm Deletion',
-      `Are you sure you want to delete "${mode.name}"?`,
-      [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => onDelete(mode.key) }],
-      { cancelable: true }
-    );
+    setAlertInfo({
+      isVisible: true,
+      title: 'Confirm Deletion',
+      message: `Are you sure you want to delete "${mode.name}"?`,
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete(mode.key) }
+      ]
+    });
   };
   
   const handleSessionCountChange = (newCount) => {
@@ -116,7 +121,6 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill}>
           <Pressable style={styles.modalBackdrop} onPress={onClose}>
-            {/* ✅ FIX: onStartShouldSetResponder is moved here to correctly handle touch events and fix scrolling. */}
             <MotiView
               from={{ opacity: 0, scale: 0.8, translateY: 50 }}
               animate={{ opacity: 1, scale: 1, translateY: 0 }}
@@ -125,7 +129,6 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
               onStartShouldSetResponder={() => true}
             >
               <View style={styles.modalContainer}>
-                {/* The main content is now a View, not a ScrollView */}
                 <View style={styles.contentContainer}>
                   <Text style={styles.modalTitle}>{mode.key.startsWith('custom') ? 'New Mode' : 'Edit Mode'}</Text>
                   
@@ -150,7 +153,6 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
 
                   <SessionCounter count={mode.settings.sessions.length} onCountChange={handleSessionCountChange} />
 
-                  {/* ✅ NEW: A dedicated, height-limited ScrollView for the sessions list */}
                   <ScrollView style={styles.sessionsList} nestedScrollEnabled={true}>
                     {mode.settings.sessions.map((session, index) => (
                       <View key={index} style={styles.sessionRow}>
@@ -185,6 +187,13 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
           </Pressable>
         </BlurView>
       </KeyboardAvoidingView>
+      <CustomAlert 
+        isVisible={alertInfo.isVisible}
+        onClose={() => setAlertInfo({ isVisible: false })}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+      />
     </Modal>
   );
 };
@@ -193,7 +202,6 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.4)' },
   motiViewContainer: { width: '92%', maxHeight: '85%' },
   modalContainer: { backgroundColor: 'rgba(30, 41, 59, 0.95)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden', flexShrink: 1 },
-  // ✅ NEW: A container for the main content area
   contentContainer: { padding: 25 },
   modalTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
   modeNameInput: { marginBottom: 18, textAlign: 'center', fontSize: 18, padding: 16 },
@@ -206,11 +214,9 @@ const styles = StyleSheet.create({
   counterContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 10, padding: 8, marginBottom: 15 },
   counterButton: { padding: 10, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
   counterText: { color: 'white', fontSize: 20, fontWeight: 'bold', marginHorizontal: 20 },
-  
-  // ✅ NEW: Style for the scrollable sessions list
   sessionsList: {
-    maxHeight: 150, // Height for approx 1.5 items
-    marginHorizontal: -10, // Offset padding for better scroll appearance
+    maxHeight: 150, 
+    marginHorizontal: -10, 
     paddingHorizontal: 10,
   },
   sessionRow: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 12, padding: 15, marginBottom: 12 },
@@ -219,7 +225,6 @@ const styles = StyleSheet.create({
   inputGroup: { flex: 1 },
   sessionInputLabel: { color: '#9CA3AF', fontSize: 13, marginBottom: 6, textAlign: 'center' },
   sessionInput: { backgroundColor: 'rgba(0, 0, 0, 0.2)', borderRadius: 8, padding: 12, color: 'white', fontSize: 16, textAlign: 'center' },
-  
   buttonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 25, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(30, 41, 59, 0.95)' },
   button: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   deleteButton: { backgroundColor: 'rgba(248, 113, 113, 0.1)', marginRight: 'auto', paddingHorizontal: 20 },

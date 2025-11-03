@@ -1,7 +1,7 @@
 
 // app/(tabs)/tasks.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -18,6 +18,7 @@ import EmptyTasksComponent from '../../components/EmptyTasksComponent';
 import AddTaskBottomSheet from '../../components/AddTaskBottomSheet';
 import RenameTaskModal from '../../components/RenameTaskModal';
 import ExpandableFAB from '../../components/ExpandableFAB';
+import CustomAlert from '../../components/CustomAlert'; // Import CustomAlert
 
 export default function TasksScreen() {
   const { user } = useAppState();
@@ -30,6 +31,7 @@ export default function TasksScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskToRename, setTaskToRename] = useState(null);
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
+  const [alertInfo, setAlertInfo] = useState({ isVisible: false }); // State for custom alert
 
   const bottomSheetRef = useRef(null);
 
@@ -55,7 +57,7 @@ export default function TasksScreen() {
       await updateDoc(doc(db, `userProgress/${user.uid}`), { 'dailyTasks.tasks': updatedTasks });
     } catch (error) {
       console.error("Firestore update failed:", error);
-      Alert.alert("Error", "Could not sync changes.");
+      setAlertInfo({ isVisible: true, title: 'Error', message: 'Could not sync changes with the server.', buttons: [{ text: 'OK' }] });
     }
   }, [user?.uid]);
 
@@ -69,10 +71,11 @@ export default function TasksScreen() {
   }, [tasks, selectedTasks, updateTasksInFirestore, setSelectedTasks, setIsEditMode]);
 
   const handleDeleteSelectedTasks = useCallback(() => {
-    Alert.alert(
-      "Delete Tasks",
-      `Are you sure you want to delete ${selectedTasks.size} selected tasks?`,
-      [
+    setAlertInfo({
+      isVisible: true,
+      title: 'Delete Tasks',
+      message: `Are you sure you want to delete ${selectedTasks.size} selected tasks?`,
+      buttons: [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
@@ -85,7 +88,7 @@ export default function TasksScreen() {
           }
         }
       ]
-    );
+    });
   }, [tasks, selectedTasks, updateTasksInFirestore, setSelectedTasks, setIsEditMode]);
 
   const handleRenameSelectedTask = useCallback(() => {
@@ -183,7 +186,7 @@ export default function TasksScreen() {
 
   const handleNavigateToTask = (task) => {
     if (!user.selectedPathId) {
-      Alert.alert("No Path Selected", "Please complete your profile setup to navigate to tasks.");
+      setAlertInfo({ isVisible: true, title: 'No Path Selected', message: 'Please complete your profile setup to navigate to tasks.', buttons: [{ text: 'OK' }] });
       return;
     }
 
@@ -194,7 +197,7 @@ export default function TasksScreen() {
         params: { 
           lessonId: task.relatedLessonId, 
           lessonTitle: task.title,
-          pathId: user.selectedPathId, // ✨ تمرير Path ID
+          pathId: user.selectedPathId,
           subjectId: task.relatedSubjectId,
         },
       });
@@ -249,6 +252,13 @@ export default function TasksScreen() {
 
       <AddTaskBottomSheet ref={bottomSheetRef} onTaskUpdate={handleTaskUpdate} onVisibilityChange={setIsSheetVisible} />
       <RenameTaskModal isVisible={isRenameModalVisible} onClose={() => setIsRenameModalVisible(false)} onRename={handleRenameTask} task={taskToRename} />
+      <CustomAlert 
+        isVisible={alertInfo.isVisible}
+        onClose={() => setAlertInfo({ isVisible: false })}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+      />
     </SafeAreaView>
   );
 }

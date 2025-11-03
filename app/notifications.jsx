@@ -1,11 +1,11 @@
+
 // app/notifications.jsx
 import React, { useCallback, useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, SectionList, Alert as DefaultAlert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SectionList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, interpolateColor } from 'react-native-reanimated';
 import LottieView from 'lottie-react-native';
 import { Animated as RNAnimated } from 'react-native'; 
 import { useAppState } from '../context/AppStateContext';
@@ -25,16 +25,12 @@ const NOTIFICATION_ICONS = {
   default: { name: 'bell', color: '#6B7280' },
 };
 
-// ✨ [FIX] Correctly access the animated value from the progress object
-// ✨ [الحل النهائي] هذا هو الكود الصحيح الذي يتوافق مع Swipeable
-
-
+// ✅ [FIX] Correctly implemented swipe action compatible with Swipeable's Animated API
 const SwipeToDeleteAction = ({ dragX }) => {
-  // dragX.interpolate هي الطريقة الصحيحة لربط حركة السحب بالأنماط في هذه الحالة
   const backgroundColor = dragX.interpolate({
-    inputRange: [-80, 0], // نطاق الإدخال: من السحب الكامل (-80px) إلى الحالة العادية (0px)
-    outputRange: ['#B91C1C', '#374151'], // نطاق الإخراج: من اللون الأحمر إلى الرمادي
-    extrapolate: 'clamp', // هذا يضمن أن لا تتجاوز الحركة الألوان المحددة
+    inputRange: [-80, 0],
+    outputRange: ['#B91C1C', '#374151'],
+    extrapolate: 'clamp',
   });
 
   return (
@@ -62,7 +58,7 @@ const NotificationItem = ({ item, onNavigate, onDelete }) => {
   return (
      <Swipeable
       ref={swipeableRef}
-      renderRightActions={renderRightActions} // <<<--- هنا نستخدم الدالة المحدثة
+      renderRightActions={renderRightActions}
       onSwipeableWillOpen={handleDelete}
       rightThreshold={80}
       overshootFriction={8}
@@ -87,8 +83,6 @@ const NotificationItem = ({ item, onNavigate, onDelete }) => {
   );
 };
 
-
-// ... (The rest of the file remains exactly the same)
 const groupNotificationsByDate = (notificationsArray) => {
   const groups = { Today: [], Yesterday: [], 'Previous 7 Days': [], Older: [] };
   const today = new Date();

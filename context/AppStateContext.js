@@ -93,14 +93,14 @@ export const AppStateProvider = ({ children }) => {
   }, []);
 
   const _transitionToNextSession = useCallback((currentSession) => {
-    if (!currentSession.settings || !currentSession.settings.sessions) {
-        console.error("Transition failed: session settings are missing. Resetting timer to a safe state.");
+    if (!currentSession.settings || !Array.isArray(currentSession.settings.sessions) || currentSession.settings.sessions.length === 0) {
+        console.error("Transition failed: session settings are invalid. Resetting timer to a safe state.");
         return createInitialTimerState(); // Return a completely safe state
     }
     const { sessionType, currentCycle, settings } = currentSession;
     const sessionIndex = currentCycle - 1;
     const currentSessionConfig = settings.sessions[sessionIndex];
-    if (sessionType === 'focus' && currentSessionConfig.break > 0) {
+    if (sessionType === 'focus' && currentSessionConfig && currentSessionConfig.break > 0) {
       return { ...currentSession, status: 'active', sessionType: 'break', duration: currentSessionConfig.break, timeLeft: currentSessionConfig.break };
     }
     const nextSessionIndex = sessionIndex + 1;
@@ -148,7 +148,7 @@ export const AppStateProvider = ({ children }) => {
   const startTimer = useCallback((soundId) => {
     setTimerSession(prev => {
       if (prev.status === 'idle' || prev.status === 'finished') {
-        const safeSettings = prev.settings && prev.settings.sessions ? prev.settings : DEFAULT_SETTINGS;
+        const safeSettings = prev.settings && Array.isArray(prev.settings.sessions) && prev.settings.sessions.length > 0 ? prev.settings : DEFAULT_SETTINGS;
         if (safeSettings.enableAudioNotifications) audioService.playEffect('start-effect');
         let newState;
         if (prev.status === 'finished') {
@@ -194,7 +194,7 @@ export const AppStateProvider = ({ children }) => {
   }, []);
 
   const updateSettings = useCallback(async (newMode) => {
-    if (!newMode || !newMode.settings || !newMode.key) {
+    if (!newMode || !newMode.settings || !newMode.key || !Array.isArray(newMode.settings.sessions) || newMode.settings.sessions.length === 0) {
       console.error("CRITICAL: updateSettings was called with an invalid mode object. Aborting update.", newMode);
       return;
     }

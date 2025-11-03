@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { AppState } from 'react-native';
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { audioService } from '../services/audioService';
+import BackgroundTimer from 'react-native-background-timer'; // ✅ استيراد المكتبة الجديدة
 
 const AppStateContext = createContext();
 
@@ -39,17 +40,10 @@ export const AppStateProvider = ({ children }) => {
     settings: DEFAULT_SETTINGS,
   });
 
-  // refs to keep latest values without creating stale-closure issues
-  const timerSessionRef = useRef(timerSession);
-  const settingsRef = useRef(timerSession.settings);
-  const intervalRef = useRef(null);
-  const appState = useRef(AppState.currentState);
-  const backgroundTime = useRef(null);
-
-  useEffect(() => { timerSessionRef.current = timerSession; }, [timerSession]);
-  useEffect(() => { settingsRef.current = timerSession.settings; }, [timerSession.settings]);
+  // ✅ تم حذف كل الـ refs المتعلقة بالمؤقت القديم (intervalRef, appState, backgroundTime)
 
   useEffect(() => {
+    // ... (الكود الخاص بتحميل الإعدادات والمستخدم يبقى كما هو)
     const getValidatedSettings = (storedSettingsString) => {
       if (!storedSettingsString) return DEFAULT_SETTINGS;
       try {
@@ -96,97 +90,114 @@ export const AppStateProvider = ({ children }) => {
     });
 
     return () => {
-      // cleanup auth subscription and any intervals
       unsubscribeAuth();
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      BackgroundTimer.stopBackgroundTimer(); // ✅ التأكد من إيقاف المؤقت عند تفكيك المكون
     };
   }, []);
 
-  // transition logic (pure, uses settings from ref when called outside setState)
-  const _transitionToNextSession = useCallback(() => {
-    setTimerSession(prev => {
-      const { sessionType, currentCycle, settings } = prev;
-      const sessionIndex = currentCycle - 1;
-      const currentSessionConfig = settings.sessions[sessionIndex];
+  const _transitionToNextSession = useCallback((currentSession) => {
+    const { sessionType, currentCycle, settings } = currentSession;
+    const sessionIndex = currentCycle - 1;
+    const currentSessionConfig = settings.sessions[sessionIndex];
 
-      if (sessionType === 'focus' && currentSessionConfig.break > 0) {
-        return { ...prev, status: 'active', sessionType: 'break', duration: currentSessionConfig.break, timeLeft: currentSessionConfig.break };
-      }
-
-      const nextSessionIndex = sessionIndex + 1;
-      if (nextSessionIndex < settings.sessions.length) {
-        const nextSessionConfig = settings.sessions[nextSessionIndex];
-        return { ...prev, status: 'active', sessionType: 'focus', duration: nextSessionConfig.focus, timeLeft: nextSessionConfig.focus, currentCycle: prev.currentCycle + 1 };
-      }
-
-      return { ...prev, status: 'finished', timeLeft: 0 };
-    });
-  }, []);
-
-  // use a ref-based settings check to avoid stale closures
-  const handleSessionFinish = useCallback(() => {
-    if (settingsRef.current?.enableAudioNotifications) audioService.playEffect('end-effect');
-    _transitionToNextSession();
-  }, [_transitionToNextSession]);
-
-  // interval manager — keeps running reliably without stale closures
-  useEffect(() => {
-    if (timerSession.status !== 'active') {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      return;
+    if (sessionType === 'focus' && currentSessionConfig.break > 0) {
+      return { ...currentSession, status: 'active', sessionType: 'break', duration: currentSessionConfig.break, timeLeft: currentSessionConfig.break };
     }
 
-    // clear any previous interval just in case
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    const nextSessionIndex = sessionIndex + 1;
+    if (nextSessionIndex < settings.sessions.length) {
+      const nextSessionConfig = settings.sessions[nextSessionIndex];
+      return { ...currentSession, status: 'active', sessionType: 'focus', duration: nextSessionConfig.focus, timeLeft: nextSessionConfig.focus, currentCycle: currentSession.currentCycle + 1 };
+    }
 
-    intervalRef.current = setInterval(() => {
+    return { ...currentSession, status: 'finished', timeLeft: 0 };
+  }, []);
+
+  const handleSessionFinish = useCallback(() => {
+    setTimerSession(prev => {
+      if (prev.settings.enableAudioNotifications) {
+        audioService.playEffect('end-effect');
+      }
+      const nextState = _transitionToNextSession(prev);
+      if (nextState.status === 'active') {
+        // ✅ ابدأ المؤقت للجلسة التالية تلقائيًا
+        startTimerLogic(nextState);
+      }
+      return nextState;
+    });
+  }, [_transitionToNextSession]);
+  
+  // ✅ [NEW] الدالة الأساسية التي تشغل المؤقت
+  const startTimerLogic = (sessionState) => {
+    BackgroundTimer.runBackgroundTimer(() => {
       setTimerSession(prev => {
-        if (prev.timeLeft <= 1) {
-          // ensure interval is cleared
-          if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-          // call finish handler (safe — uses refs internally)
-          handleSessionFinish();
+        // التأكد من أن المؤقت لا يزال نشطًا لتجنب التحديثات غير المرغوب فيها
+        if (prev.status !== 'active') {
+          BackgroundTimer.stopBackgroundTimer();
+          return prev;
+        }
+        
+        const newTimeLeft = prev.timeLeft - 1;
+        if (newTimeLeft <= 0) {
+          BackgroundTimer.stopBackgroundTimer();
+          // استدعاء دالة الانتهاء بعد تحديث الحالة لتجنب race conditions
+          setTimeout(handleSessionFinish, 0); 
           return { ...prev, timeLeft: 0 };
         }
-        return { ...prev, timeLeft: prev.timeLeft - 1 };
+        return { ...prev, timeLeft: newTimeLeft };
       });
     }, 1000);
+  };
 
-    return () => {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    };
-  }, [timerSession.status, handleSessionFinish]);
+  const startTimer = useCallback((soundId) => {
+    setTimerSession(prev => {
+      if (prev.status === 'idle' || prev.status === 'finished') {
+        if (prev.settings.enableAudioNotifications) audioService.playEffect('start-effect');
 
-  // AppState (background/foreground) handling. If the app was in background, compute elapsed seconds
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', nextAppState => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        if (timerSessionRef.current.status === 'active' && backgroundTime.current) {
-          const elapsed = Math.round((Date.now() - backgroundTime.current) / 1000);
-          setTimerSession(prev => {
-            const newTimeLeft = Math.max(0, prev.timeLeft - elapsed);
-            // If the time ran out while backgrounded, run finish handler
-            if (newTimeLeft === 0) {
-              // we must trigger finish *after* state update; calling directly is fine because handler uses refs
-              handleSessionFinish();
-              return { ...prev, timeLeft: 0 };
-            }
-            return { ...prev, timeLeft: newTimeLeft };
-          });
+        let newState;
+        if (prev.status === 'finished') {
+          const firstSessionDuration = prev.settings.sessions[0].focus;
+          newState = { ...prev, status: 'active', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: soundId };
+        } else {
+          newState = { ...prev, status: 'active', selectedSound: soundId };
         }
-        backgroundTime.current = null;
-      } else if (nextAppState.match(/inactive|background/)) {
-        backgroundTime.current = Date.now();
+        
+        startTimerLogic(newState); // ✅ بدء المؤقت
+        return newState;
       }
-      appState.current = nextAppState;
+      return prev;
     });
-
-    return () => subscription.remove();
   }, [handleSessionFinish]);
 
+  const pauseTimer = useCallback(() => {
+    BackgroundTimer.stopBackgroundTimer(); // ✅ إيقاف المؤقت
+    setTimerSession(prev => (prev.status === 'active' ? { ...prev, status: 'paused' } : prev));
+  }, []);
+
+  const resumeTimer = useCallback(() => {
+    setTimerSession(prev => {
+      if (prev.status === 'paused') {
+        const newState = { ...prev, status: 'active' };
+        startTimerLogic(newState); // ✅ استئناف المؤقت
+        return newState;
+      }
+      return prev;
+    });
+  }, []);
+
+  const skipTimer = useCallback(() => {
+    BackgroundTimer.stopBackgroundTimer(); // ✅ إيقاف المؤقت الحالي
+    handleSessionFinish(); // ✅ الانتقال للجلسة التالية
+  }, [handleSessionFinish]);
+
+  const endTimer = useCallback(() => {
+    BackgroundTimer.stopBackgroundTimer(); // ✅ إيقاف المؤقت
+    setTimerSession(prev => {
+      const firstSessionDuration = prev.settings.sessions[0].focus;
+      return { ...prev, status: 'idle', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: null };
+    });
+  }, []);
+  
   // session sound management — reacts to status and selectedSound
   useEffect(() => {
     const { status, selectedSound } = timerSession;
@@ -195,42 +206,6 @@ export const AppStateProvider = ({ children }) => {
     else audioService.stopSessionSound();
   }, [timerSession.status, timerSession.selectedSound]);
 
-  // start/pause/resume/skip/end logic (careful with closures)
-  const startTimer = useCallback((soundId) => {
-    setTimerSession(prev => {
-      if (prev.status === 'idle' || prev.status === 'finished') {
-        if (prev.settings.enableAudioNotifications) audioService.playEffect('start-effect');
-
-        if (prev.status === 'finished') {
-          const firstSessionDuration = prev.settings.sessions[0].focus;
-          return { ...prev, status: 'active', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: soundId };
-        }
-
-        // For 'idle' state, timeLeft is already correct from settings
-        return { ...prev, status: 'active', selectedSound: soundId };
-      }
-      return prev;
-    });
-  }, []);
-
-  const pauseTimer = useCallback(() => { setTimerSession(prev => (prev.status === 'active' ? { ...prev, status: 'paused' } : prev)); }, []);
-  const resumeTimer = useCallback(() => { setTimerSession(prev => (prev.status === 'paused' ? { ...prev, status: 'active' } : prev)); }, []);
-
-  const skipTimer = useCallback(() => {
-    // clear interval then finish
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    handleSessionFinish();
-  }, [handleSessionFinish]);
-
-  const endTimer = useCallback(() => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    setTimerSession(prev => {
-      const firstSessionDuration = prev.settings.sessions[0].focus;
-      return { ...prev, status: 'idle', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: null };
-    });
-  }, []);
-
-  // update settings and persist; if idle/finished, update current duration/timeLeft to reflect new settings
   const updateSettings = useCallback(async (newSettings) => {
     try {
       await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, JSON.stringify(newSettings));
@@ -239,7 +214,6 @@ export const AppStateProvider = ({ children }) => {
         if (prev.status === 'idle' || prev.status === 'finished') {
           return { ...prev, settings: newSettings, duration: firstSessionDuration, timeLeft: firstSessionDuration, sessionType: 'focus', currentCycle: 1 };
         }
-        // If a session is active/paused, we only replace settings object — don't mutate current timers
         return { ...prev, settings: newSettings };
       });
     } catch (e) { console.error('Failed to save settings.', e); }
@@ -252,14 +226,7 @@ export const AppStateProvider = ({ children }) => {
       if (progressDoc.exists()) setPoints(progressDoc.data().stats?.points || 0);
     } catch (e) { console.error('Failed to refresh points', e); }
   }, [user?.uid]);
-
-  // cleanup on unmount: intervals already cleared in other effects but keep safe guard
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    };
-  }, []);
-
+  
   const value = { user, setUser, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, points, refreshPoints, timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, resetTimer: endTimer, skipTimer, updateSettings };
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

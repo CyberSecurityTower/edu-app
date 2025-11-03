@@ -31,4 +31,12 @@ export const apiService = {
   generateTitle: (message, signal) => apiCall('/generate-title', 'POST', { message }, signal),
   generateDailyTasks: (userId, pathId) => apiCall('/generate-daily-tasks', 'POST', { userId, pathId }),
   analyzeQuiz: (quizPayload) => apiCall('/analyze-quiz', 'POST', quizPayload),
+  wakeUp: async () => {
+    const response = await fetch('https://eduserver-htnt.onrender.com/health');
+    if (!response.ok) {
+      throw new Error('Server ping failed');
+    }
+    return response.json();
+  },
+  logEvent: (userId, eventName, eventData) => apiCall('/log-event', 'POST', { userId, eventName, eventData }),
 };

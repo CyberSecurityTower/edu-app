@@ -1,3 +1,4 @@
+// services/firestoreService.js
 
 import { 
   doc, getDoc, setDoc, updateDoc, collection, getDocs, 
@@ -6,32 +7,76 @@ import {
 } from "firebase/firestore"; 
 import { db } from '../firebase';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// --- ✨ [NEW] Notification Functions ---
+const EDUCATIONAL_PATH_CACHE_KEY = '@educational_path_cache';
 
 /**
- * Sends a notification to the user's inbox in Firestore and optionally shows a Toast.
- * @param {string} userId - The ID of the user.
- * @param {object} payload - The notification content.
- * @param {string} payload.title - The title for the notification.
- * @param {string} payload.message - The main message content.
- * @param {object} payload.meta - Metadata for navigation (e.g., { type: 'lesson', lessonId: '...' }).
- * @param {boolean} [showToast=true] - Whether to show a pop-up toast message.
+ * يجلب المسار التعليمي من ذاكرة التخزين المؤقت أولاً، وإذا لم يجده، يجلبه من Firestore.
+ * @param {string} pathId - The ID of the educational path.
+ * @returns {object | null} The educational path data.
  */
+export const getCachedEducationalPathById = async (pathId) => {
+  if (!pathId) return null;
+
+  try {
+    // 1. محاولة القراءة من ذاكرة التخزين المؤقت (AsyncStorage)
+    const cachedPathRaw = await AsyncStorage.getItem(`${EDUCATIONAL_PATH_CACHE_KEY}_${pathId}`);
+    if (cachedPathRaw) {
+      console.log(`[Cache] Loaded educational path ${pathId} from cache.`);
+      return JSON.parse(cachedPathRaw);
+    }
+
+    // 2. إذا لم يكن في الذاكرة، اطلبه من Firestore
+    console.log(`[Cache] Path ${pathId} not in cache. Fetching from Firestore.`);
+    const pathFromDB = await getEducationalPathById(pathId); // نستدعي الدالة الأصلية
+    if (pathFromDB) {
+      // 3. حفظ النتيجة في الذاكرة المؤقتة للمرة القادمة
+      await AsyncStorage.setItem(`${EDUCATIONAL_PATH_CACHE_KEY}_${pathId}`, JSON.stringify(pathFromDB));
+    }
+    return pathFromDB;
+
+  } catch (error) {
+    console.error("Error in getCachedEducationalPathById:", error);
+    // في حالة حدوث خطأ، حاول القراءة من Firestore كحل أخير
+    return getEducationalPathById(pathId);
+  }
+};
+
+/**
+ * دالة لتحديث ذاكرة التخزين المؤقت في الخلفية بهدوء.
+ * @param {string} pathId - The ID of the educational path to refresh.
+ */
+export const refreshEducationalPathCache = async (pathId) => {
+  if (!pathId) return;
+  try {
+    console.log(`[Cache] Silently refreshing cache for path ${pathId}...`);
+    const pathFromDB = await getEducationalPathById(pathId);
+    if (pathFromDB) {
+      await AsyncStorage.setItem(`${EDUCATIONAL_PATH_CACHE_KEY}_${pathId}`, JSON.stringify(pathFromDB));
+      console.log(`[Cache] Successfully refreshed cache for path ${pathId}.`);
+    }
+  } catch (error) {
+    console.error("Error refreshing educational path cache:", error);
+  }
+};
+// --- ✨ Notification Functions ---
+
 export const sendAndDisplayNotification = async (userId, { title, message, meta }, showToast = true) => {
   if (!userId) return;
   try {
     const notificationsRef = collection(db, 'userNotifications', userId, 'inbox');
     await addDoc(notificationsRef, {
+      title: title, // تم التعديل هنا ليتوافق مع _layout.jsx
       message,
-      meta: { ...meta, title },
+      meta: meta || {}, // التأكد من وجود meta
       read: false,
       createdAt: serverTimestamp(),
     });
 
     if (showToast) {
       Toast.show({
-        type: 'eduai_notification',
+        type: 'info', // تم التعديل ليتوافق مع _layout.jsx
         text1: title,
         text2: message,
         position: 'top',
@@ -58,6 +103,32 @@ export const markAllNotificationsAsRead = async (userId, notificationIds) => {
   });
   await batch.commit();
 };
+
+export const deleteNotification = async (userId, notificationId) => {
+  if (!userId || !notificationId) return;
+  const notifRef = doc(db, 'userNotifications', userId, 'inbox', notificationId);
+  try {
+    await deleteDoc(notifRef);
+  } catch (error) {
+    console.error(`Error deleting notification ${notificationId}:`, error);
+  }
+};
+
+export const deleteAllNotifications = async (userId, notificationIds) => {
+  if (!userId || !Array.isArray(notificationIds) || notificationIds.length === 0) return;
+  const batch = writeBatch(db);
+  notificationIds.forEach(id => {
+    const notifRef = doc(db, 'userNotifications', userId, 'inbox', id);
+    batch.delete(notifRef);
+  });
+  try {
+    await batch.commit();
+    console.log(`${notificationIds.length} notifications deleted successfully.`);
+  } catch (error) {
+    console.error("Error batch deleting notifications:", error);
+  }
+};
+
 // --- User Profile Functions ---
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
@@ -118,17 +189,10 @@ export const getLessonContent = async (lessonId) => {
   return lessonSnap.exists() ? lessonSnap.data() : null;
 };
 
-// --- ✨ [NEW] Function to get all subjects for a path ---
-/**
- * Fetches all subjects within a specific educational path.
- * @param {string} pathId The ID of the educational path.
- * @returns {Array<object>} An array of subject objects.
- */
 export const getAllSubjectsForPath = async (pathId) => {
   if (!pathId) return [];
   try {
     const pathData = await getEducationalPathById(pathId);
-    // Return subjects with their original names (e.g., 'name' not 'label')
     return pathData?.subjects || [];
   } catch (error) {
     console.error("Error fetching subjects for path:", error);
@@ -136,25 +200,16 @@ export const getAllSubjectsForPath = async (pathId) => {
   }
 };
 
-// --- ✨ [NEW] Function to get all lessons for a subject ---
-/**
- * Fetches all lessons within a specific subject of an educational path.
- * @param {string} pathId The ID of the educational path.
- * @param {string} subjectId The ID of the subject.
- * @returns {Array<object>} An array of lesson objects.
- */
 export const getLessonsForSubject = async (pathId, subjectId) => {
   if (!pathId || !subjectId) return [];
   try {
     const subjectData = await getSubjectDetails(pathId, subjectId);
-    // Return lessons with their original names (e.g., 'title' as 'name' for consistency)
     return (subjectData?.lessons || []).map(lesson => ({ id: lesson.id, name: lesson.title }));
   } catch (error) {
     console.error("Error fetching lessons for subject:", error);
     return [];
   }
 };
-
 
 // --- User Progress Functions ---
 export const getUserProgressDocument = async (userId) => {
@@ -167,7 +222,6 @@ export const getUserProgressDocument = async (userId) => {
 export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) => {
   if (!userId || !subjectId) return;
   const progressRef = doc(db, `userProgress/${userId}`);
-  
   await setDoc(progressRef, { 
     favorites: { 
       subjects: isFavorite ? arrayUnion(subjectId) : arrayRemove(subjectId) 
@@ -175,26 +229,55 @@ export const updateUserFavoriteSubject = async (userId, subjectId, isFavorite) =
   }, { merge: true });
 };
 
+// --- ✅✅✅ الدالة الجديدة والمحسّنة هنا ✅✅✅ ---
 export const updateLessonProgress = async (userId, pathId, subjectId, lessonId, status, totalLessonsInSubject) => {
   if (!userId || !pathId || !subjectId || !lessonId || !status) return;
+
   const progressRef = doc(db, `userProgress/${userId}`);
   
-  // Update the lesson status
-  const lessonPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}.status`;
-  await updateDoc(progressRef, { [lessonPath]: status });
-
-  // Recalculate and update the subject progress only if the lesson is completed
+  // التحسين الرئيسي: نقرأ فقط إذا كانت الحالة 'completed'
   if (status === 'completed') {
-    const progressDoc = await getUserProgressDocument(userId);
-    const lessonsMap = progressDoc?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
-    
-    const completedCount = Object.values(lessonsMap).filter(lesson => lesson.status === 'completed').length;
-    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
+    // حالة إكمال الدرس (تتطلب قراءة + كتابة)
+    const progressDoc = await getDoc(progressRef);
+    const lessonsMap = progressDoc.data()?.pathProgress?.[pathId]?.subjects?.[subjectId]?.lessons || {};
 
-    const progressKey = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
-    await updateDoc(progressRef, { [progressKey]: newProgress });
+    // تجنب الكتابة إذا كان الدرس مكتملًا بالفعل
+    if (lessonsMap[lessonId]?.status === 'completed') return;
+
+    const updates = {};
+    const lessonStatusPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}.status`;
+    updates[lessonStatusPath] = 'completed';
+
+    const completedCount = Object.values(lessonsMap).filter(l => l.status === 'completed').length + 1;
+    const newProgress = totalLessonsInSubject > 0 ? Math.round((completedCount / totalLessonsInSubject) * 100) : 0;
+    
+    const subjectProgressPath = `pathProgress.${pathId}.subjects.${subjectId}.progress`;
+    updates[subjectProgressPath] = newProgress;
+
+    await updateDoc(progressRef, updates); // عملية كتابة واحدة مجمعة
+
+  } else if (status === 'current') {
+    // حالة بدء الدرس (تتطلب كتابة فقط، بدون قراءة)
+    // نستخدم setDoc مع merge لتجنب الحاجة إلى قراءة الوثيقة أولاً
+    // هذا هو التحسين الأكبر لتقليل عمليات القراءة
+    await setDoc(progressRef, { 
+      pathProgress: { 
+        [pathId]: { 
+          subjects: { 
+            [subjectId]: { 
+              lessons: { 
+                [lessonId]: { 
+                  status: 'current' 
+                } 
+              } 
+            } 
+          } 
+        } 
+      } 
+    }, { merge: true });
   }
 };
+// --- نهاية الدالة المحسّنة ---
 
 export const getStudyKit = async (lessonId) => {
   if (!lessonId) return null;
@@ -210,17 +293,24 @@ export const getStudyKit = async (lessonId) => {
 
 export const updateLessonMasteryScore = async (userId, pathId, subjectId, lessonId, masteryScore, suggestedReview) => {
   if (!userId || !pathId || !subjectId || !lessonId || masteryScore === undefined) return;
-  
   const progressRef = doc(db, `userProgress/${userId}`);
-  
   const lessonPath = `pathProgress.${pathId}.subjects.${subjectId}.lessons.${lessonId}`;
-  
   await setDoc(progressRef, {
-    [lessonPath]: {
-      status: 'completed',
-      masteryScore: masteryScore,
-      suggestedReview: suggestedReview || null, // Ensure it's null if undefined
-      lastAttempt: new Date(),
+    pathProgress: {
+      [pathId]: {
+        subjects: {
+          [subjectId]: {
+            lessons: {
+              [lessonId]: {
+                status: 'completed',
+                masteryScore: masteryScore,
+                suggestedReview: suggestedReview || null,
+                lastAttempt: new Date(),
+              }
+            }
+          }
+        }
+      }
     }
   }, { merge: true });
 };
@@ -273,11 +363,9 @@ export const updateUserDailyStreak = async (userId, newStreakCount, pointsToAdd)
 
 export const updateUserProgressProfileData = async (userId, profileData) => {
   if (!userId || !profileData.firstName || !profileData.lastName) return;
-
   const progressRef = doc(db, `userProgress/${userId}`);
   const displayName = `${profileData.firstName} ${profileData.lastName}`;
   const avatarUrl = `https://ui-avatars.com/api/?name=${displayName.replace(' ', '+')}&background=3B82F6&color=FFFFFF&size=128`;
-
   try {
     await setDoc(progressRef, {
       stats: {
@@ -298,13 +386,10 @@ export const getLeaderboard = async () => {
       orderBy('stats.points', 'desc'), 
       limit(50)
     );
-    
     const progressSnapshot = await getDocs(progressQuery);
-    
     if (progressSnapshot.empty) {
       return [];
     }
-
     const leaderboard = progressSnapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -314,40 +399,9 @@ export const getLeaderboard = async () => {
         avatarUrl: data.stats?.avatarUrl || `https://ui-avatars.com/api/?name=Anonymous&background=3B82F6&color=FFFFFF&size=128`,
       };
     });
-
     return leaderboard;
-
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     return [];
-  }
-};
-// --- ✨ [NEW] Notification Functions ---
-
-// ✨ [NEW] Function to delete a notification
-export const deleteNotification = async (userId, notificationId) => {
-  if (!userId || !notificationId) return;
-  const notifRef = doc(db, 'userNotifications', userId, 'inbox', notificationId);
-  try {
-    await deleteDoc(notifRef);
-  } catch (error) {
-    console.error(`Error deleting notification ${notificationId}:`, error);
-  }
-};
-// ✨ [NEW] Function to delete multiple notifications at once
-export const deleteAllNotifications = async (userId, notificationIds) => {
-  if (!userId || !Array.isArray(notificationIds) || notificationIds.length === 0) return;
-
-  const batch = writeBatch(db);
-  notificationIds.forEach(id => {
-    const notifRef = doc(db, 'userNotifications', userId, 'inbox', id);
-    batch.delete(notifRef);
-  });
-
-  try {
-    await batch.commit();
-    console.log(`${notificationIds.length} notifications deleted successfully.`);
-  } catch (error) {
-    console.error("Error batch deleting notifications:", error);
   }
 };

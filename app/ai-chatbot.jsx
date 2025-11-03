@@ -1,3 +1,4 @@
+
 import { FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
@@ -191,59 +192,68 @@ export default function AiChatbotScreen() {
   }, []);
   
 const isSendingRef = useRef(false);
-const processAndRespond = useCallback(async (currentSessionId, currentTitle, userMessage, messageHistory, isRetry = false) => {
+
+// ✅✅✅ START: REFACTORED & SIMPLIFIED LOGIC ✅✅✅
+const processAndRespond = useCallback(async (userMessage, messageHistory = []) => {
     if (isSendingRef.current) return;
     isSendingRef.current = true;
     setIsSending(true);
     abortControllerRef.current = new AbortController();
-    const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
 
-    setMessages(prev => {
-        let newMessages = prev.filter(m => m.type !== 'intro' && m.type !== 'typing' && m.type !== 'error');
-        if (!isRetry) {
-            newMessages = [userMessage, ...newMessages];
-        }
-        return [typingIndicator, ...newMessages];
-    });
+    const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
     
+    // 1. Display user message and typing indicator immediately for a responsive feel
+    setMessages(prev => [typingIndicator, userMessage, ...prev.filter(m => m.type !== 'intro')]);
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
 
-    const historyForAPI = messageHistory.slice(-5).map(msg => ({
+    // 2. Prepare conversation history for the API
+    const historyForAPI = messageHistory.map(msg => ({
       role: msg.author?.id === BOT_USER.id ? 'model' : 'user',
       text: msg.text || '',
     }));
 
-    let finalUserMessageText = userMessage.text;
-    const isFirstMessageOfSession = messageHistory.length === 0;
-    if (lessonContentContext && isFirstMessageOfSession) {
-        const contextSnippet = typeof lessonContentContext === 'string' 
-            ? lessonContentContext.substring(0, 1500) 
-            : 'No content available.';
-        finalUserMessageText = `[CONTEXT: The user is in a lesson about: "${contextSnippet}..."] ${userMessage.text}`;
-    }
-
     try {
-        const response = await apiService.getInteractiveChatReply({ 
-            message: finalUserMessageText, 
-            userId: user?.uid, 
-            history: historyForAPI 
-        }, abortControllerRef.current.signal);
+        // 3. Build the full payload that the smart server understands
+        const payload = {
+            message: userMessage.text,
+            userId: user?.uid,
+            history: historyForAPI,
+            sessionId: sessionId, // ✨ Send the current session ID (or null if new)
+            context: {
+                type: contextLessonId ? 'lesson_chat' : 'main_chat',
+                lessonId: contextLessonId,
+                lessonTitle: contextLessonTitle,
+            }
+        };
+
+        // 4. Call the server. The server will do all the heavy lifting now.
+        const response = await apiService.getInteractiveChatReply(payload, abortControllerRef.current.signal);
+
+        // 5. Update state with the smart data returned from the server
+        if (response.sessionId && !sessionId) {
+            setSessionId(response.sessionId); // ✨ Save the new session ID
+        }
+        if (response.chatTitle && chatTitle === 'New Chat') {
+            setChatTitle(response.chatTitle); // ✨ Update with the new title
+        }
 
         const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response.reply, reactions: {} };
 
         setMessages(prev => {
-            const newMessages = [botResponse, ...prev.filter(m => m.id !== typingIndicator.id)];
-            saveChat(currentSessionId, newMessages, currentTitle);
-            return newMessages;
+            // Replace the typing indicator with the final bot response
+            const finalMessages = prev.map(m => m.id === typingIndicator.id ? botResponse : m);
+            
+            // Save the completed session locally (in AsyncStorage) for fast loading next time
+            saveChat(response.sessionId || sessionId, finalMessages.filter(m => m.type !== 'typing'), response.chatTitle || chatTitle);
+            
+            return finalMessages;
         });
+
     } catch (error) {
-        if (error.name !== 'AbortError') {
-            const errorMsg = { 
-                type: 'error', 
-                id: uuidv4(), 
-                text: error.message || "Failed to connect.", 
-                canRetry: true, 
-                retryPayload: { userMessage, messageHistory } // Pass the correct payload for retry
+        if (error?.name !== 'AbortError') {
+            const errorMsg = {
+                type: 'error', id: uuidv4(), text: error.message || "Failed to connect.",
+                canRetry: true, retryPayload: { userMessage, messageHistory }
             };
             setMessages(prev => prev.map(m => m.id === typingIndicator.id ? errorMsg : m));
         } else {
@@ -253,49 +263,33 @@ const processAndRespond = useCallback(async (currentSessionId, currentTitle, use
         isSendingRef.current = false;
         setIsSending(false);
     }
-}, [user?.uid, saveChat, lessonContentContext]);
+}, [user?.uid, sessionId, chatTitle, contextLessonId, contextLessonTitle, saveChat]); // ✨ Dependencies updated
 
-   
+
 const onSendPress = useCallback(async (text) => {
     if (isSending || !text.trim()) return;
 
     const currentMessages = messages.filter(m => m.type !== 'intro' && m.type !== 'typing' && m.type !== 'error');
 
+    // Edit message logic remains the same
     if (editingMessage) {
         const editIndex = messages.findIndex(m => m.id === editingMessage.id);
         if (editIndex > -1) {
-            // History is everything OLDER than the edited message. In an inverted list, that's everything after its index.
             const historyForRegen = messages.slice(editIndex + 1).filter(m => m.type !== 'intro');
             const updatedUserMessage = { ...editingMessage, text: text.trim() };
             
-            // Optimistically update the UI: remove subsequent conversation and show the edited message.
             setMessages(prev => {
                 const newMessages = [...prev];
                 newMessages[editIndex] = updatedUserMessage;
-                return newMessages.slice(editIndex); // This keeps the edited message and all older ones.
+                return newMessages;
             });
             
-            // Regenerate the response from this point.
-            processAndRespond(sessionId, chatTitle, updatedUserMessage, historyForRegen.reverse(), true);
+            // Regenerate response from this point
+            processAndRespond(updatedUserMessage, historyForRegen.reverse());
         }
         setEditingMessage(null);
     } else {
-        let currentSessionId = sessionId;
-        let currentTitle = chatTitle;
-
-        if (!currentSessionId) {
-            currentSessionId = `chat_${Date.now()}`;
-            setSessionId(currentSessionId);
-            try {
-                const { title } = await apiService.generateTitle(text.trim());
-                currentTitle = title;
-                setChatTitle(title);
-            } catch (e) {
-                currentTitle = text.trim().substring(0, 30);
-                setChatTitle(currentTitle);
-            }
-        }
-
+        // ✨ Very simplified logic for sending a new message
         const replyingToMessage = replyingTo ? messages.find(m => m.id === replyingTo.id) : null;
         const userMessage = {
             type: 'user', author: chatUser, id: uuidv4(), text: text.trim(),
@@ -305,21 +299,19 @@ const onSendPress = useCallback(async (text) => {
         };
         setReplyingTo(null);
         
-        processAndRespond(currentSessionId, currentTitle, userMessage, currentMessages, false);
+        // Just call processAndRespond. The server will handle the rest.
+        processAndRespond(userMessage, currentMessages);
     }
-}, [isSending, editingMessage, messages, replyingTo, chatUser, processAndRespond, sessionId, chatTitle]);
-  
+}, [isSending, editingMessage, messages, replyingTo, chatUser, processAndRespond]);
+// ✅✅✅ END: REFACTORED & SIMPLIFIED LOGIC ✅✅✅
+
   // ENHANCEMENT: Fixed retry logic
   const handleRetry = useCallback((payload) => {
     if (isSending) return;
-    // Correctly destructure the payload
     const { userMessage, messageHistory } = payload;
-    
-    // Call processAndRespond with all required arguments.
-    processAndRespond(sessionId, chatTitle, userMessage, messageHistory, true);
+    processAndRespond(userMessage, messageHistory);
 
-}, [processAndRespond, isSending, sessionId, chatTitle]);
-
+  }, [processAndRespond, isSending]);
   const handleReactionPress = useCallback((messageId, clickedEmoji) => {
     setMessages(prev => {
       const newMessages = prev.map(msg => {
@@ -430,16 +422,16 @@ const onSendPress = useCallback(async (text) => {
         } else {
           setChatTitle(contextLessonTitle || 'New Chat');
           
-          // ✨ التعديل الصحيح: استدعاء onSendPress بدلاً من processAndRespond
+          // ✅ FIX: Correctly call onSendPress for initial messages
           if (initialMessage) {
-            // لا نعرض أي رسائل هنا، onSendPress سيتولى كل شيء
+            // Don't display any messages here, onSendPress will handle everything
             setMessages([]); 
-            // استدعاء onSendPress سيقوم بإنشاء الجلسة، توليد العنوان، وإرسال الرسالة
+            // Calling onSendPress will create the session, generate the title, and send the message
             setTimeout(() => {
                 onSendPress(initialMessage);
             }, 100);
           } else {
-            // الحالة الافتراضية: محادثة جديدة فارغة
+            // Default case: new, empty chat
             setMessages([{ type: 'intro', id: 'intro-msg' }]);
           }
         }
@@ -540,4 +532,3 @@ useEffect(() => {
     reactedChip: { backgroundColor: '#3B82F6' },
     reactionText: { color: 'white', fontSize: 12 },
   });
-

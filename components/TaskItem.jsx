@@ -5,8 +5,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { MotiText, MotiView } from 'moti';
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, Alert} from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router'; 
+import { useAppState } from '../context/AppStateContext';
 
 const ICONS = {
   review: { name: 'book-reader', color: '#60A5FA' },
@@ -28,8 +30,40 @@ const SwipeActionComponent = ({ iconName, color, align, lottieSource }) => (
 );
 
 const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isEditMode, isSelected, onSelect }) => {
-  const isCompleted = task.status === 'completed';
   const isPressable = !!task.relatedLessonId || !!task.relatedSubjectId;
+  const { timerSession, setTimerSession } = useAppState();
+  const isCompleted = task.status === 'completed';
+  const router = useRouter(); 
+  
+  const handleStartFocus = () => {
+    if (timerSession.status === 'active' || timerSession.status === 'paused') {
+      Alert.alert(
+        "جلسة نشطة",
+        "لديك جلسة مذاكرة أخرى قيد التشغيل. هل تريد إنهاء الجلسة الحالية وبدء جلسة جديدة؟",
+        [
+          { text: "إلغاء", style: "cancel" },
+          {
+            text: "إنهاء والبدء",
+            style: "destructive",
+            onPress: () => {
+              setTimerSession({ status: 'finished' });
+              router.push({
+                pathname: '/(modals)/study-timer',
+                // ✅  تمرير النوع هنا أيضاً
+                params: { relatedTaskTitle: task.title, taskId: task.id, relatedTaskType: task.type }
+              });
+            }
+          }
+        ]
+      );
+    } else {
+      router.push({
+        pathname: '/(modals)/study-timer',
+        // ✅  تمرير النوع هنا
+        params: { relatedTaskTitle: task.title, taskId: task.id, relatedTaskType: task.type }
+      });
+    }
+  };
 
   const handlePress = () => {
     if (isEditMode) {
@@ -95,6 +129,11 @@ const TaskItem = ({ task, onToggleStatus, onDelete, onLongPress, onNavigate, isE
                 {task.title}
               </MotiText>
             </View>
+            {!isCompleted && !isEditMode && (
+              <Pressable onPress={handleStartFocus} style={styles.focusButton}>
+                <FontAwesome5 name="hourglass-start" size={18} color="#a7adb8ff" />
+              </Pressable>
+            )}
             {task.isPinned && !isEditMode && (
               <MotiView from={{ scale: 0 }} animate={{ scale: 1 }}>
                 <FontAwesome5 name="thumbtack" size={16} color="#60A5FA" style={styles.pinIcon} />
@@ -120,6 +159,10 @@ const styles = StyleSheet.create({
     completedTaskTitle: { color: '#6B7280', textDecorationLine: 'line-through', },
     pinIcon: { marginLeft: 10 },
     checkboxBase: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#6B7280', justifyContent: 'center', alignItems: 'center', marginRight: 15, },
+    focusButton: {
+        padding: 10,
+        marginRight: -10,
+    },
 });
 
 export default React.memo(TaskItem);

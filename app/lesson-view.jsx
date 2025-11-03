@@ -1,14 +1,15 @@
-// LessonViewScreen.jsx
-import { FontAwesome5 } from '@expo/vector-icons'; // <--- تم استيراد FontAwesome5
+
+import { FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur'; // <--- تم استيراد BlurView
+import { BlurView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient'; // <--- تم استيراد LinearGradient
-import { useLocalSearchParams, useRouter } from 'expo-router'; // <--- تم استيراد Expo Router
-import LottieView from 'lottie-react-native'; // <--- تم استيراد LottieView
-import { AnimatePresence, MotiView } from 'moti'; // <--- تم استيراد Moti
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'; // <--- تم إصلاح استيراد React
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import LottieView from 'lottie-react-native';
+import { AnimatePresence, MotiView } from 'moti';
+import { BehavioralAnalyticsService } from '../services/behavioralAnalyticsService';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,12 +28,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
-
 import FloatingActionButton from '../components/FloatingActionButton';
 import GenerateKitButton from '../components/GenerateKitButton';
 import { apiService } from '../config/api';
@@ -49,10 +49,10 @@ const VISIBLE_INCREMENT = 8;
 const MAX_PANEL_RATIO = 0.72;
 const BASE_PANEL_RATIO = 0.38;
 const BOTTOM_EMPTY_SPACE = 60;
-const MESSAGE_HISTORY_CAP = 120;
+const MESSAGE_HISTORY_CAP = 4;
 
 /* display widths */
-const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.75); // ✨ [MODIFIED] Max width for automatic sizing
+const BOT_MAX_WIDTH = Math.round(WINDOW.width * 0.75);
 const USER_MAX_WIDTH = Math.round(WINDOW.width * 0.73);
 
 const getAccentFromSubject = (subjectId) => {
@@ -117,12 +117,17 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
   }
 
   if (message.type === 'typing') {
-    // only render typing Lottie when allowed (i.e. chat panel visible)
     if (!showTyping) return null;
     return (
       <View style={styles.botRow}>
         <View style={[styles.botBubble, { paddingVertical: 8, minWidth: 60 }]}>
-          <LottieView source={require('../assets/images/typing.json')} autoPlay loop style={styles.typingLottie} />
+          <LottieView 
+            // ✅ FIX: Corrected Lottie file path
+            source={require('../assets/images/typing.json')} 
+            autoPlay 
+            loop 
+            style={styles.typingLottie} 
+          />
         </View>
       </View>
     );
@@ -155,7 +160,7 @@ const MessageItem = React.memo(function MessageItem({ message, onLongPressMessag
       </MotiView>
     </RNAnimated.View>
   );
-}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated && a.disableAnim === b.disableAnim && a.showTyping === b.showTyping); // ✨ [FIXED] إضافة showTyping للاعتمادية
+}, (a, b) => a.message?.id === b.message?.id && a.message?.text === b.message?.text && a.message?.seenAnimated === b.message?.seenAnimated && a.disableAnim === b.disableAnim && a.showTyping === b.showTyping);
 
 /* ---------------- Screen ---------------- */
 export default function LessonViewScreen() {
@@ -172,53 +177,47 @@ export default function LessonViewScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isChatPanelVisible, setChatPanelVisible] = useState(false);
   const [promptText, setPromptText] = useState('');
-
   const [messages, setMessages] = useState([]); // oldest-first
   const messagesRef = useRef([]);
   const [loadedMessages, setLoadedMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
-
+  const [sessionId, setSessionId] = useState(null);
+  const isSendingRef = useRef(false);
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE);
   const [toastVisible, setToastVisible] = useState(false);
   const toastAnim = useRef(new RNAnimated.Value(0)).current;
 
   const backgroundLottieRef = useRef(null);
-
-  const translateY = useSharedValue(500);
   const flatListRef = useRef(null);
-  const abortControllerRef = useRef(null);
-  const mountedRef = useRef(true);
+  const [hideBackground, setHideBackground] = useState(false);
 
-  // performance helpers & timers
-  const suspendBackgroundRef = useRef(false); // when true: suspend saves/heavy work
-  const messageUpdateQueueRef = useRef(null);
-  const batchedFlushTimeoutRef = useRef(null);
-  const saveTimeoutRef = useRef(null);
-
-  const seenTimersRef = useRef({});
-  const seenToTypingRef = useRef({});
-  const responsePendingRef = useRef({});
-
-  const isAtBottomRef = useRef(true);
-  const windowHeight = WINDOW.height;
-  const basePanelHeight = Math.round(windowHeight * BASE_PANEL_RATIO);
-  const maxPanelHeight = Math.round(windowHeight * MAX_PANEL_RATIO);
-
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-
-  /* ---------- save/load (save only when mini-chat closes) ---------- */
   const saveChat = useCallback((maybeMessages) => {
     try {
       const src = Array.isArray(maybeMessages) ? maybeMessages : messagesRef.current || [];
       if (!Array.isArray(src)) return;
       const storableOldestFirst = src.filter(m => m && m.type !== 'typing' && m.type !== 'intro' && m.type !== 'seen');
       const storable = storableOldestFirst.slice().reverse();
-      // immediate write (we call saveChat when chat closed)
       AsyncStorage.setItem(CHAT_KEY, JSON.stringify(storable)).catch(e => console.error('AsyncStorage.setItem error:', e));
     } catch (e) {
       console.error('Error saving mini-chat:', e);
     }
   }, [CHAT_KEY]);
+
+  const openChatPanel = useCallback(() => {
+    BehavioralAnalyticsService.logEvent('fab_chat_opened', { lessonId });
+    setHideBackground(true);
+    setChatPanelVisible(true);
+  }, [lessonId]);
+
+  const closeChatPanel = useCallback(() => {
+    setChatPanelVisible(false);
+  }, []);
+
+  const handlePanelClosed = useCallback(() => {
+    try { saveChat(messagesRef.current); } catch (e) { console.error(e); }
+    setHideBackground(false);
+    try { Keyboard.dismiss(); } catch (e) {}
+  }, [saveChat]);
 
   const loadChat = useCallback(async () => {
     try {
@@ -247,9 +246,12 @@ export default function LessonViewScreen() {
     }
   }, [lessonId]);
 
-  // batching updates to reduce renders & disk writes
+  const suspendBackgroundRef = useRef(false);
+  const messageUpdateQueueRef = useRef(null);
+  const batchedFlushTimeoutRef = useRef(null);
+  const saveTimeoutRef = useRef(null);
+
   const enqueueMessageUpdate = useCallback((updater, options = { save: false }) => {
-    // compose updates instead of overwriting to preserve order
     if (!messageUpdateQueueRef.current) {
       messageUpdateQueueRef.current = { updater, options };
     } else {
@@ -278,7 +280,6 @@ export default function LessonViewScreen() {
           messagesRef.current = capped;
           return capped;
         });
-        // only save if explicitly requested and not suspended
         if (queued.options?.save && !suspendBackgroundRef.current) {
           saveChat(messagesRef.current);
         }
@@ -294,11 +295,15 @@ export default function LessonViewScreen() {
 
   useEffect(() => {
     return () => {
-      try { Object.values(seenTimersRef.current).forEach(o => { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }); } catch (e) {}
       try { if (abortControllerRef.current) abortControllerRef.current.abort(); } catch (e) {}
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
+  
+  const abortControllerRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const showToast = useCallback((text = 'FAB sent a reply') => {
     setToastVisible(true);
@@ -307,118 +312,101 @@ export default function LessonViewScreen() {
     setTimeout(() => RNAnimated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setToastVisible(false)), 3000);
   }, [toastAnim]);
 
-  const onToastPress = useCallback(() => { setChatPanelVisible(true); RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false)); }, [toastAnim]);
+  const onToastPress = useCallback(() => {
+    openChatPanel();
+    RNAnimated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setToastVisible(false));
+  }, [openChatPanel, toastAnim]);
 
   const handleStopGenerating = useCallback(() => {
     try { if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; } } catch (e) {}
     setIsSending(false);
-    // remove typing/seen placeholders (don't save here)
     setMessagesSafe(prev => (Array.isArray(prev) ? prev.filter(m => m.type !== 'typing' && m.type !== 'seen') : prev));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [setMessagesSafe]);
 
-  /* ---------- process & respond with SEEN flow (fixed + robust) ---------- */
+  const isAtBottomRef = useRef(true);
+  const windowHeight = WINDOW.height;
+  const basePanelHeight = Math.round(windowHeight * BASE_PANEL_RATIO);
+  const maxPanelHeight = Math.round(windowHeight * MAX_PANEL_RATIO);
+
+  // ✅✅✅ START: REFACTORED & ROBUST processAndRespond ✅✅✅
   const processAndRespond = useCallback(async (userMessage, history) => {
-    if (isSending) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // append user message immediately (batched, no save while chat open)
-    setMessagesSafe(prev => (Array.isArray(prev) ? [...prev, userMessage] : [userMessage]));
-
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
     setIsSending(true);
-    const seenId = uuidv4();
     abortControllerRef.current = new AbortController();
-    responsePendingRef.current[seenId] = false;
 
-    const apiPromise = apiService.getInteractiveChatReply({
-      message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}". Content snippet: ${typeof lessonContent === 'string' ? lessonContent.substring(0,1500) : 'No content available.'}...] ${userMessage.text}`,
-      userId: user?.uid,
-      history: Array.isArray(history) ? history.slice(-5).map(msg => ({ role: msg.author?.id === BOT_USER.id ? 'model' : 'user', text: msg.text || '' })) : [],
-    }, abortControllerRef.current.signal);
+    // 1. Add user message and a 'seen' indicator immediately
+    const seenIndicator = { type: 'seen', id: uuidv4(), author: BOT_USER };
+    setMessagesSafe(prev => [...(Array.isArray(prev) ? prev : []), userMessage, seenIndicator]);
 
-    // schedule seen after 1s (but skip if response already arrived)
-    const seenTimer = setTimeout(() => {
-      if (responsePendingRef.current[seenId]) return;
+    // 2. After a short delay, replace 'seen' with 'typing'
+    const typingIndicator = { type: 'typing', id: uuidv4(), author: BOT_USER };
+    setTimeout(() => {
+        setMessagesSafe(prev => prev.map(m => (m.id === seenIndicator.id ? typingIndicator : m)));
+    }, 400); // 400ms delay for a natural feel
 
-      setMessagesSafe(prev => {
-        const mapped = Array.isArray(prev) ? prev.map(m => (m.id === userMessage.id ? { ...m, seenAnimated: true } : m)) : [userMessage];
-        return [...mapped, { type: 'seen', id: seenId, author: userMessage.author }];
-      });
-
-      const delayMs = 2000 + Math.floor(Math.random() * 2000);
-      const typingTimer = setTimeout(() => {
-        if (responsePendingRef.current[seenId]) return;
-        const typingId = uuidv4();
-        seenToTypingRef.current[seenId] = typingId;
-        // ✨ [FIX] Replace 'seen' with 'typing' instead of just mapping
-        setMessagesSafe(prev => (Array.isArray(prev) ? prev.map(m => (m.id === seenId ? { type: 'typing', id: typingId, author: BOT_USER } : m)) : prev));
-      }, delayMs);
-
-      seenTimersRef.current[seenId] = { seenTimer: null, typingTimer };
-    }, 1000);
-
-    seenTimersRef.current[seenId] = { seenTimer, typingTimer: null };
+    const historyForAPI = history.map(msg => ({
+        role: msg.author?.id === BOT_USER.id ? 'model' : 'user',
+        text: msg.text || '',
+    }));
 
     try {
-      const response = await apiPromise;
-      responsePendingRef.current[seenId] = true;
+        const payload = {
+            message: `[CONTEXT: The user is in a lesson about: "${lessonTitle}".] ${userMessage.text}`,
+            userId: user?.uid,
+            history: historyForAPI,
+            sessionId: sessionId,
+            context: {
+                type: 'lesson_chat',
+                lessonId: lessonId,
+                lessonTitle: lessonTitle,
+            }
+        };
 
-      // clear any scheduled timers (defensive)
-      try {
-        const o = seenTimersRef.current[seenId];
-        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-      } catch (e) {}
+        const response = await apiService.getInteractiveChatReply(payload, abortControllerRef.current.signal);
 
-      const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response?.reply ?? 'Sorry, no reply.', reactions: {} };
-      
-      // ✨ [FIXED] Robustly replace typing/seen placeholders by filtering them out first
-      setMessagesSafe(prev => {
-          if (!Array.isArray(prev)) return [botResponse];
-          const typingId = seenToTypingRef.current[seenId];
-          // Filter out ANY related placeholders for this response
-          const filtered = prev.filter(m => m.id !== seenId && m.id !== typingId);
-          // Add the new bot response
-          return [...filtered, botResponse];
-      });
+        if (response.sessionId && !sessionId) {
+            setSessionId(response.sessionId);
+        }
 
-      Haptics.selectionAsync();
-      if (!isChatPanelVisible) showToast('FAB replied — اضغط للفتح');
+        const botResponse = { type: 'bot', author: BOT_USER, id: uuidv4(), text: response.reply };
+        
+        // Replace typing indicator with the final bot response
+        setMessagesSafe(prev => prev.map(m => m.id === typingIndicator.id ? botResponse : m));
+        
+        if (!isChatPanelVisible) {
+            showToast('FAB replied — اضغط للفتح');
+        }
+
     } catch (error) {
-      if (error?.name !== 'AbortError') {
-        const errorMessage = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ Network Error: Could not reach EduAI tutor. Please check your connection and try again.' };
-
-        // ✨ [FIXED] Robustly replace typing/seen placeholders with an error message
-        setMessagesSafe(prev => {
-            if (!Array.isArray(prev)) return [errorMessage];
-            const typingId = seenToTypingRef.current[seenId];
-            const filtered = prev.filter(m => m.id !== seenId && m.id !== typingId);
-            return [...filtered, errorMessage];
-        });
-      }
+        if (error?.name !== 'AbortError') {
+            console.error("Error in processAndRespond:", error); // Log the actual error
+            const errorMsg = { type: 'bot', id: uuidv4(), author: BOT_USER, text: '⚠️ تعذر الوصول للمساعد الذكي. يرجى التحقق من اتصالك.' };
+            // Replace typing indicator with an error message
+            setMessagesSafe(prev => prev.map(m => m.id === typingIndicator.id ? errorMsg : m));
+        } else {
+            // If aborted, just remove the typing indicator
+            setMessagesSafe(prev => prev.filter(m => m.id !== typingIndicator.id));
+        }
     } finally {
-      try {
-        const o = seenTimersRef.current[seenId];
-        if (o) { if (o.seenTimer) clearTimeout(o.seenTimer); if (o.typingTimer) clearTimeout(o.typingTimer); }
-      } catch (e) {}
-      delete seenTimersRef.current[seenId];
-      delete seenToTypingRef.current[seenId];
-      delete responsePendingRef.current[seenId];
-      setIsSending(false);
-      abortControllerRef.current = null;
+        isSendingRef.current = false;
+        setIsSending(false);
+        abortControllerRef.current = null;
     }
-  }, [lessonContent, lessonTitle, user?.uid, isChatPanelVisible, showToast, setMessagesSafe, isSending]);
-
-  const handleSendPrompt = useCallback(() => {
-    if (isSending) { handleStopGenerating(); return; }
-    const text = (promptText || '').trim();
-    if (text.length === 0) return;
-    setPromptText('');
-    Keyboard.dismiss();
-    const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text, reactions: {} };
-    const history = messagesRef.current.filter(m => m.type !== 'typing' && m.type !== 'seen').slice(-50);
-    processAndRespond(userMessage, history);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
+  }, [user?.uid, sessionId, lessonId, lessonTitle, isChatPanelVisible, showToast, setMessagesSafe]);
+  // ✅✅✅ END: REFACTORED processAndRespond ✅✅✅
+    
+     const handleSendPrompt = useCallback(() => {
+        if (isSendingRef.current) { handleStopGenerating(); return; }
+        const text = (promptText || '').trim();
+        if (text.length === 0) return;
+        setPromptText('');
+        Keyboard.dismiss();
+        const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text };
+        const history = messagesRef.current.filter(m => m.type !== 'typing' && m.type !== 'seen').slice(-10);
+        processAndRespond(userMessage, history);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setTimeout(() => {
       try { if (flatListRef.current) flatListRef.current.scrollToOffset({ offset: 20, animated: true }); } catch (e) {}
     }, 120);
@@ -428,13 +416,27 @@ export default function LessonViewScreen() {
     Alert.alert('اختيارات الرسالة', 'اختر إجراء', [
       { text: 'نسخ', onPress: async () => { await Clipboard.setStringAsync(message.text || ''); Alert.alert('Copied'); } },
       { text: 'حفظ كملاحظه', onPress: () => saveMessageToNotes(message) },
-      { text: 'إعادة السؤال', onPress: () => { setPromptText(message.text || ''); setChatPanelVisible(true); } },
+      { text: 'إعادة السؤال', onPress: () => { setPromptText(message.text || ''); openChatPanel(); } },
       { text: 'إلغاء', style: 'cancel' },
     ], { cancelable: true });
-  }, [saveMessageToNotes]);
+  }, [saveMessageToNotes, openChatPanel]);
+  useEffect(() => {
+  if (user?.uid && lessonId) {
+    // Send the event to the server (fire and forget)
+    apiService.logEvent(user.uid, 'lesson_view_start', { lessonId, lessonTitle });
+  }
 
+  return () => {
+    if (user?.uid && lessonId) {
+      // This part is more complex as it needs to calculate duration,
+      // but we can start by just logging the end of the view
+      apiService.logEvent(user.uid, 'lesson_view_end', { lessonId });
+    }
+  };
+}, [user?.uid, lessonId]); // Runs once when the lesson loads
   useEffect(() => {
     mountedRef.current = true;
+    BehavioralAnalyticsService.logEvent('lesson_view_start', { lessonId, subjectId });
     const load = async () => {
       if (!user?.uid || !lessonId || !subjectId || !pathId) { if (mountedRef.current) setIsLoading(false); return; }
       setIsLoading(true);
@@ -442,8 +444,9 @@ export default function LessonViewScreen() {
         const contentData = await getLessonContent(lessonId);
         if (!mountedRef.current) return;
         if (contentData) setLessonContent(contentData.content || '');
-        const total = parseInt(totalLessons, 10) || 1;
+         const total = parseInt(totalLessons, 10) || 1;
         await updateLessonProgress(user.uid, pathId, subjectId, lessonId, 'current', total);
+        
         await loadChat();
       } catch (e) {
         console.error('Failed to load lesson:', e);
@@ -453,8 +456,11 @@ export default function LessonViewScreen() {
       }
     };
     load();
-    return () => { mountedRef.current = false; };
-  }, [lessonId, user?.uid, subjectId, pathId, totalLessons, loadChat]);
+    return () => { 
+      mountedRef.current = false;  
+      BehavioralAnalyticsService.logEvent('lesson_view_end', { lessonId, subjectId });
+    };
+  }, [lessonId, subjectId, user?.uid, pathId, totalLessons, loadChat]);
 
   /* ---------- background Lottie control: pause/reset on open, play on close ---------- */
   useEffect(() => {
@@ -464,7 +470,6 @@ export default function LessonViewScreen() {
       if (isChatPanelVisible) {
         suspendBackgroundRef.current = true;
         if (typeof l.pause === 'function') l.pause();
-        // defensive: reset if available to free frames
         if (typeof l.reset === 'function') l.reset();
       } else {
         suspendBackgroundRef.current = false;
@@ -476,36 +481,44 @@ export default function LessonViewScreen() {
   }, [isChatPanelVisible]);
 
   /* ---------- chat panel open/close behavior ---------- */
+  const translateY = useSharedValue(500);
   useEffect(() => {
     if (isChatPanelVisible) {
-      // suspend saves/expensive rendering while chat open
       suspendBackgroundRef.current = true;
       InteractionManager.runAfterInteractions(() => {
         setMessagesSafe(prev => (Array.isArray(prev) && prev.length > 0 ? prev : (Array.isArray(loadedMessages) && loadedMessages.length > 0 ? loadedMessages : prev)), { save: false });
       });
       translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
     } else {
-      // when closing: persist chat ONCE and resume background
       suspendBackgroundRef.current = false;
       translateY.value = withTiming(500, { duration: 260 }, (finished) => {
         if (finished) {
-          runOnJS(saveChat)(messagesRef.current);
+          runOnJS(handlePanelClosed)();
         }
       });
       try { if (backgroundLottieRef.current && typeof backgroundLottieRef.current.play === 'function') backgroundLottieRef.current.play(); } catch (e) {}
-      runOnJS(Keyboard.dismiss)();
       handleStopGenerating();
     }
-  }, [isChatPanelVisible, loadedMessages, saveChat, handleStopGenerating, translateY, setMessagesSafe]);
+  }, [isChatPanelVisible, loadedMessages, handlePanelClosed, handleStopGenerating, translateY, setMessagesSafe]);
 
   const context = useSharedValue({ y: 0 });
   const dragGesture = Gesture.Pan()
     .onStart(() => { context.value = { y: translateY.value }; })
     .onUpdate((ev) => { translateY.value = Math.max(0, context.value.y + ev.translationY); })
-    .onEnd(() => {
-      if (translateY.value > 140) runOnJS(setChatPanelVisible)(false);
-      else translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
+     .onEnd(() => {
+      if (translateY.value > 140) {
+        runOnJS(closeChatPanel)();
+      } else {
+        translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
+      }
     });
+
+    const handleWelcomePrompt = (text) => {
+        const userMessage = { type: 'user', author: chatUser, id: uuidv4(), text };
+        const history = messagesRef.current.filter(m => m.type !== 'typing' && m.type !== 'seen').slice(-10);
+        processAndRespond(userMessage, history);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
   const animatedPanelStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
 
   const visibleMessages = useMemo(() => {
@@ -523,23 +536,22 @@ export default function LessonViewScreen() {
     if (!flatListRef.current) return;
     if (isAtBottomRef.current) {
       setTimeout(() => {
-        try { flatListRef.current.scrollToOffset({ offset: 0, animated: true }); } catch (e) {}
+        try { if (flatListRef.current) flatListRef.current.scrollToOffset({ offset: 0, animated: true }); } catch (e) {}
       }, 80);
     }
   }, [visibleMessages.length]);
 
-  const disableAnimations = messages.length > 12; // lower threshold for weaker devices
+  const disableAnimations = messages.length > 12;
 
   const renderMessageItem = useCallback(({ item }) => {
     if (!item) return null;
-    // ✨ [FIXED] تمرير isChatPanelVisible كـ showTyping
     return <MessageItem
         message={item}
         onLongPressMessage={handleLongPressMessage}
         disableAnim={disableAnimations}
         showTyping={isChatPanelVisible}
     />;
-  }, [handleLongPressMessage, disableAnimations, isChatPanelVisible]); // ✨ [FIXED] إضافة isChatPanelVisible للاعتمادية
+  }, [handleLongPressMessage, disableAnimations, isChatPanelVisible]);
 
   const computePanelHeight = () => {
     const extra = isSending ? 80 : 30;
@@ -550,15 +562,17 @@ export default function LessonViewScreen() {
   const inputTextColor = Platform.OS === 'android' ? '#0b1220' : '#FFFFFF';
   const placeholderColor = '#9CA3AF';
 
-  return (
+return (
+  <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}><FontAwesome5 name="arrow-left" size={22} color="white" /></Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
           <Text style={styles.headerTitle} numberOfLines={1}>{lessonTitle || 'Lesson'}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }} style={styles.headerIcon}>
+          <Pressable onPress={() => { Haptics.selectionAsync(); openChatPanel(); }} style={styles.headerIcon}>
             <FontAwesome5 name="comments" size={18} color="white" />
           </Pressable>
         </View>
@@ -566,8 +580,8 @@ export default function LessonViewScreen() {
 
       {isLoading ? (
         <View style={styles.centerContent}>
-          {!isChatPanelVisible && (
-            <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>
+          {!isChatPanelVisible && !hideBackground && (
+            <Pressable onPress={() => { Haptics.selectionAsync(); openChatPanel(); }}>
               <LottieView ref={backgroundLottieRef} source={require('../assets/images/robot.json')} autoPlay loop style={{ width: 220, height: 220 }} />
             </Pressable>
           )}
@@ -575,22 +589,31 @@ export default function LessonViewScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
-            <View style={{ writingDirection: 'rtl' }}>
-              <Markdown style={markdownStyles}>{lessonContent || 'No content available.'}</Markdown>
+           <ScrollView contentContainerStyle={styles.contentContainer} scrollEventThrottle={400}>
+             <View style={{ writingDirection: 'rtl' }}>
+                 <Markdown
+                style={markdownStyles}
+              >
+                {lessonContent || 'No content available.'}
+              </Markdown>
             </View>
 
             <View style={{ alignItems: 'center', marginTop: 8 }}>
-              {!isChatPanelVisible && (
-                <Pressable onPress={() => { Haptics.selectionAsync(); setChatPanelVisible(true); }}>
+              {!isChatPanelVisible && !hideBackground && (
+                <Pressable onPress={() => { Haptics.selectionAsync(); openChatPanel(); }}>
                   <LottieView ref={backgroundLottieRef} source={require('../assets/images/robot.json')} autoPlay loop style={{ width: 160, height: 160 }} />
                 </Pressable>
               )}
             </View>
           </ScrollView>
 
-          <GenerateKitButton onPress={() => router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle, subjectId, pathId } })} />
-          <FloatingActionButton onPress={() => setChatPanelVisible(true)} />
+          <GenerateKitButton
+            onPress={() => {
+              BehavioralAnalyticsService.logEvent('study_kit_generated', { lessonId, subjectId });
+              router.push({ pathname: '/study-kit', params: { lessonId, lessonTitle, subjectId, pathId } });
+            }}
+          />
+          <FloatingActionButton onPress={() => openChatPanel()} />
 
           <AnimatePresence>
             {isChatPanelVisible && (
@@ -600,7 +623,7 @@ export default function LessonViewScreen() {
                 ) : (
                   <View style={styles.backdropSimple} pointerEvents="none" />
                 )}
-                <Pressable style={styles.overlayBackground} onPress={() => setChatPanelVisible(false)} />
+                <Pressable style={styles.overlayBackground} onPress={() => closeChatPanel()} />
 
                 <Animated.View style={[styles.chatPanelContainer, animatedPanelStyle, { height: panelHeight }]}>
                   {Platform.OS === 'ios' ? (
@@ -616,7 +639,21 @@ export default function LessonViewScreen() {
                             <Text style={styles.loadMoreText}>تحميل رسائل أقدم</Text>
                           </Pressable>
                         )}
-
+                        {messages.length === 0 && !isSending && (
+                          <View style={styles.welcomeContainer}>
+                            <FontAwesome5 name="brain" size={24} color="#9CA3AF" style={{ marginBottom: 8 }} />
+                            <Text style={styles.welcomeTitle}>يمكنني مساعدتك في:</Text>
+                            <TouchableOpacity style={styles.promptButton} onPress={() => handleWelcomePrompt('لخص لي هذا الدرس في نقاط رئيسية')}>
+                              <Text style={styles.promptButtonText}>تلخيص الدرس</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.promptButton} onPress={() => handleWelcomePrompt('اشرح لي أهم مفهوم في هذا الدرس')}>
+                              <Text style={styles.promptButtonText}>شرح فكرة رئيسية</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.promptButton} onPress={() => handleWelcomePrompt('اختبر معلوماتي حول هذا الدرس')}>
+                              <Text style={styles.promptButtonText}>اختبر معلوماتي</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                         <FlatList
                           ref={flatListRef}
                           data={visibleMessages.slice().reverse()}
@@ -659,11 +696,27 @@ export default function LessonViewScreen() {
                         <View style={styles.dragHandleContainer}><View style={[styles.dragHandle, { backgroundColor: 'rgba(255,255,255,0.10)' }]} /></View>
                       </GestureDetector>
 
-                      <KeyboardAvoidingView behavior={'height'} keyboardVerticalOffset={90} style={{ flex: 1 }}>
+                     <KeyboardAvoidingView behavior={'height'} keyboardVerticalOffset={90} style={{ flex: 1 }}>
                         { (messagesRef.current.length > visibleMessages.length) && (
                           <Pressable onPress={() => { setVisibleCount(v => v + VISIBLE_INCREMENT); Haptics.selectionAsync(); }} style={styles.loadMore}>
                             <Text style={styles.loadMoreText}>تحميل رسائل أقدم</Text>
                           </Pressable>
+                        )}
+
+                        {messages.length === 0 && !isSending && (
+                          <View style={styles.welcomeContainer}>
+                            <FontAwesome5 name="brain" size={24} color="#9CA3AF" style={{ marginBottom: 8 }} />
+                            <Text style={styles.welcomeTitle}>يمكنني مساعدتك في:</Text>
+                            <TouchableOpacity style={styles.promptButton} onPress={() => handleWelcomePrompt('لخص لي هذا الدرس في نقاط رئيسية')}>
+                              <Text style={styles.promptButtonText}>تلخيص الدرس</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.promptButton} onPress={() => handleWelcomePrompt('اشرح لي أهم مفهوم في هذا الدرس')}>
+                              <Text style={styles.promptButtonText}>شرح فكرة رئيسية</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.promptButton} onPress={() => handleWelcomePrompt('اختبر معلوماتي حول هذا الدرس')}>
+                              <Text style={styles.promptButtonText}>اختبر معلوماتي</Text>
+                            </TouchableOpacity>
+                          </View>
                         )}
 
                         <FlatList
@@ -714,9 +767,10 @@ export default function LessonViewScreen() {
           )}
         </View>
       )}
-    </SafeAreaView>
-  );
-}
+        </SafeAreaView>
+  </GestureHandlerRootView>
+);}
+
 
 /* ---------------- styles ---------------- */
 const styles = StyleSheet.create({
@@ -744,7 +798,7 @@ const styles = StyleSheet.create({
 
   bodyText: { fontSize: 15, lineHeight: 20 },
 
-  typingLottie: { width: 75, height: 75 },
+  typingLottie: { width: 45, height: 45, transform: [{scale: 1.5}], alignSelf: 'center' },
 
   seenWrapper: { marginVertical: 6, maxWidth: '85%' },
   seenBadge: { paddingVertical: 2, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(0, 0, 0, 0.22)' },
@@ -785,26 +839,187 @@ const styles = StyleSheet.create({
   },
 
   dragHandleContainer: { alignItems: 'center', paddingVertical: 8 },
-  dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
+  dragHandle: { width: 46, height: 6, borderRadius: 3, backgroundColor: 'rgba(255, 255, 255, 0.26)' },
 
   promptContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.56)', borderRadius: 14, borderWidth: 1, marginTop: 10, marginHorizontal: 10 },
   promptInput: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 14, fontSize: 15 },
   sendButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginRight: 0, marginLeft: 0 },
   stopButton: { backgroundColor: '#F87171' },
-
-  swipeLeft: { backgroundColor: '#F59E0B', justifyContent: 'center', padding: 12, alignItems: 'center', flexDirection: 'row' },
-  swipeRight: { backgroundColor: '#BBF7D0', justifyContent: 'center', padding: 12, alignItems: 'center', flexDirection: 'row' },
-
   toast: { position: 'absolute', top: 18, alignSelf: 'center', zIndex: 40 },
   toastInner: { backgroundColor: 'rgba(20,20,30,0.95)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, flexDirection: 'row', alignItems: 'center' },
   toastText: { color: 'white', fontSize: 13 },
 
   loadMore: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', marginBottom: 6 },
-  loadMoreText: { color: '#D1D5DB' },
+  loadMoreText: { color: '#eee8e8ff' },
+    menuOverlay: {
+    flex: 1,
+  },
+  menuContainer: {
+    position: 'absolute',
+    backgroundColor: '#2d3748', // A dark, clean background
+    borderRadius: 12,
+    padding: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  menuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+  },
+  menuText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 20, // Space from the input field
+  },
+  welcomeTitle: {
+    color: '#E5E7EB',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 15,
+  },
+  promptButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.79)',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  promptButtonText: {
+    color: '#989696ff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+   loadMoreText: { color: '#c2cdddff' },
+    menuOverlay: {
+    flex: 1,
+  },
 });
 
-const markdownStyles = StyleSheet.create({
-  heading1: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', marginBottom: 12, borderBottomWidth: 1, borderColor: '#334155', paddingBottom: 8, textAlign: 'right' },
-  body: { color: '#D1D5DB', fontSize: 16, lineHeight: 24, textAlign: 'right' },
-  strong: { fontWeight: 'bold', color: '#10B981' },
+export const markdownStyles = StyleSheet.create({
+  // العناوين الرئيسية
+  heading1: {
+    color: '#F8FAFC', // أبيض فاتح
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 12,
+    borderBottomWidth: 2,
+    borderColor: '#334155',
+    paddingBottom: 6,
+    textAlign: 'right',
+    letterSpacing: 0.5,
+  },
+
+  // العناوين الفرعية
+  heading2: {
+    color: '#A5B4FC', // بنفسجي ناعم
+    fontSize: 22,
+    fontWeight: '600',
+    marginTop: 14,
+    marginBottom: 8,
+    textAlign: 'right',
+  },
+
+  // الفقرات
+  body: {
+    color: '#E2E8F0', // رمادي فاتح
+    fontSize: 16,
+    lineHeight: 26,
+    textAlign: 'right',
+    marginBottom: 8,
+  },
+
+  // النصوص الغامقة
+  strong: {
+    fontWeight: '700',
+    color: '#10B981', // أخضر زمردي
+  },
+
+  // الروابط
+  link: {
+    color: '#38BDF8', // أزرق سماوي
+    textDecorationLine: 'underline',
+  },
+
+  // القوائم
+  bullet_list: {
+    marginVertical: 6,
+    paddingRight: 12,
+  },
+  list_item: {
+    flexDirection: 'row-reverse', // To have bullet on the right for RTL
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  bullet_list_icon: {
+    color: '#A5B4FC',
+    fontSize: 16,
+    lineHeight: 26,
+    marginRight: 8,
+    marginLeft: 5,
+  },
+  
+  // الجداول
+  table: {
+    borderWidth: 1,
+    borderColor: '#475569',
+    marginVertical: 10,
+  },
+  th: {
+    backgroundColor: '#1E293B',
+    color: '#F8FAFC',
+    fontWeight: '700',
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#475569',
+    textAlign: 'center',
+  },
+  td: {
+    color: '#E2E8F0',
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#475569',
+    textAlign: 'center',
+  },
+
+  // الاقتباسات
+  blockquote: {
+    borderRightWidth: 4,
+    borderColor: '#10B981',
+    backgroundColor: '#0F172A',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginVertical: 8,
+    borderRadius: 6,
+  },
+
+  // الكود البرمجي
+  code_inline: {
+    backgroundColor: '#1E293B',
+    color: '#FACC15', // أصفر ذهبي
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  code_block: {
+    backgroundColor: '#0F172A',
+    color: '#F8FAFC',
+    padding: 10,
+    borderRadius: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginVertical: 8,
+  },
 });

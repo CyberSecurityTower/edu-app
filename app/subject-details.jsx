@@ -12,11 +12,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   getSubjectDetails,
   getUserProgressDocument,
   updateUserFavoriteSubject,
+  getCachedEducationalPathById
 } from '../services/firestoreService';
 import { useAppState } from '../context/AppStateContext';
 
@@ -104,40 +105,48 @@ export default function SubjectDetailsScreen() {
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+  let mounted = true;
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      if (!user?.uid || !params?.id) { // استخدم user.uid
-        if (mounted) setIsLoading(false);
-        return;
-      }
+  const fetchData = async () => {
+    setIsLoading(true);
+    if (!user?.uid || !params?.id) {
+      if (mounted) setIsLoading(false);
+      return;
+    }
 
-      try {
-        const [subjectDetails, progressDoc] = await Promise.all([
-          getSubjectDetails(user.selectedPathId, params.id),
-          getUserProgressDocument(user.uid),
-        ]);
+    try {
+      // --- ✅✅✅ التعديل الرئيسي هنا ✅✅✅ ---
+      // استدعاء الدالة الجديدة التي تقرأ من الذاكرة المؤقتة أولاً
+      const [pathDetails, progressDoc] = await Promise.all([
+        getCachedEducationalPathById(user.selectedPathId), 
+        getUserProgressDocument(user.uid),
+      ]);
 
-        if (!mounted) return;
+      if (!mounted) return;
 
+      // المنطق التالي يبقى كما هو تقريبًا
+      if (pathDetails) {
+        const subjectDetails = pathDetails.subjects.find(sub => sub.id === params.id);
         if (subjectDetails) {
           setSubjectData(subjectDetails);
-          setUserProgress(progressDoc || {});
-          setIsFavorite(!!(progressDoc?.favorites?.subjects?.includes(params.id)));
         }
-      } catch (err) {
-        console.error('Failed to load subject details:', err);
-      } finally {
-        if (mounted) setIsLoading(false);
+        setUserProgress(progressDoc || {});
+        setIsFavorite(!!(progressDoc?.favorites?.subjects?.includes(params.id)));
       }
-    };
+      // --- نهاية التعديل ---
 
-      fetchData();
-    return () => {
-      mounted = false;
-    };
-  }, [user?.uid, params?.id]);
+    } catch (err) {
+      console.error('Failed to load subject details:', err);
+    } finally {
+      if (mounted) setIsLoading(false);
+    }
+  };
+
+  fetchData();
+  return () => {
+    mounted = false;
+  };
+}, [user?.uid, params?.id]); // الاعتماديات تبقى كما هي
 
   const handleFavoritePress = async () => {
     if (!user || !params?.id) return;
@@ -175,7 +184,10 @@ export default function SubjectDetailsScreen() {
   let lastLessonCompleted = true; // Start with the assumption that the "pre-requisite" for the first lesson is met
 
   const mergedLessons = Array.isArray(subjectData.lessons)
-    ? subjectData.lessons.map((lesson, index) => {
+    ? subjectData.lessons
+      .slice() // Create a shallow copy to avoid mutating the original state
+      .sort((a, b) => (a.order || 0) - (b.order || 0)) // Sort lessons based on an 'order' field if it exists
+      .map((lesson, index) => {
         const lessonData = subjectProgress?.lessons?.[lesson.id] || {};
 
         // 1. Determine the status based on completion and sequence

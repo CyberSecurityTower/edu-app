@@ -1,3 +1,4 @@
+
 // app/(tabs)/index.jsx
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator, FlatList, Text } from 'react-native';
@@ -15,7 +16,8 @@ import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import ExpandableFAB from '../../components/ExpandableFAB';
 
 const HomeScreen = () => {
-  const { user, points } = useAppState();
+  // ✅ FIX: Get points and refreshPoints directly from the context.
+  const { user, points, refreshPoints } = useAppState();
   const router = useRouter();
   const { setFabConfig } = useFab();
 
@@ -49,6 +51,9 @@ const HomeScreen = () => {
         }
         
         try {
+            // ✅ FIX: Refresh points every time the screen is focused to ensure consistency.
+            await refreshPoints();
+
             const progressDoc = await getUserProgressDocument(user.uid);
             if (isMounted) setUserProgress(progressDoc);
 
@@ -65,7 +70,7 @@ const HomeScreen = () => {
       
       fetchAllData();
       return () => { isMounted = false; };
-    }, [user?.uid, user?.selectedPathId])
+    }, [user?.uid, user?.selectedPathId, refreshPoints]) // Add refreshPoints as a dependency
   );
 
   if (isLoading) {
@@ -105,6 +110,7 @@ const HomeScreen = () => {
         ListHeaderComponent={
           <>
             <View style={styles.headerPadding}>
+              {/* ✅ FIX: Pass the points from context directly to the header. */}
               <MainHeader title={`Hi, ${user?.firstName || 'Student'}!`} points={points} />
             </View>
             <DailyTasks 

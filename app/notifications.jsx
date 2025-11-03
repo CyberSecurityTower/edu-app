@@ -27,8 +27,10 @@ const NOTIFICATION_ICONS = {
 
 // ✨ [FIX] Correctly access the animated value from the progress object
 // ✨ [الحل النهائي] هذا هو الكود الصحيح الذي يتوافق مع Swipeable
+
+
 const SwipeToDeleteAction = ({ dragX }) => {
-  // dragX.interpolate هي الطريقة القديمة لربط حركة السحب بالأنماط
+  // dragX.interpolate هي الطريقة الصحيحة لربط حركة السحب بالأنماط في هذه الحالة
   const backgroundColor = dragX.interpolate({
     inputRange: [-80, 0], // نطاق الإدخال: من السحب الكامل (-80px) إلى الحالة العادية (0px)
     outputRange: ['#B91C1C', '#374151'], // نطاق الإخراج: من اللون الأحمر إلى الرمادي
@@ -36,7 +38,6 @@ const SwipeToDeleteAction = ({ dragX }) => {
   });
 
   return (
-    // نستخدم هنا RNAnimated.View بدلاً من View العادية
     <RNAnimated.View style={[styles.deleteAction, { backgroundColor }]}>
       <FontAwesome5 name="trash-alt" size={20} color="white" />
     </RNAnimated.View>
@@ -49,7 +50,7 @@ const NotificationItem = ({ item, onNavigate, onDelete }) => {
   const iconInfo = NOTIFICATION_ICONS[item.meta?.source] || NOTIFICATION_ICONS.default;
   const swipeableRef = useRef(null);
 
-  const renderRightActions = (progress, dragX) => {
+   const renderRightActions = (progress, dragX) => {
     return <SwipeToDeleteAction dragX={dragX} />;
   };
   

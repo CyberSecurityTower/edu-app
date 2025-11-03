@@ -1,35 +1,70 @@
-import React, { useCallback, useEffect } from 'react';
-import { ActivityIndicator, LogBox, StyleSheet, View } from 'react-native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { collection, getFirestore, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import React, { useCallback, useEffect } from 'react';
+import { ActivityIndicator, LogBox, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import 'react-native-get-random-values';
 import Toast from 'react-native-toast-message';
+import { AnimatePresence } from 'moti';
 
+// Components & Config
 import OnboardingScreen from '../components/OnboardingScreen';
+import DynamicTimerIsland from '../components/timer/DynamicTimerIsland';
 import { toastConfig } from '../config/toastConfig';
+import { apiService } from '../config/api';
+
+// Contexts & Services
 import { ActionSheetProvider } from '../context/ActionSheetContext';
 import { AppStateProvider, useAppState } from '../context/AppStateContext';
 import { EditModeProvider } from '../context/EditModeContext';
 import { FabProvider, useFab } from '../context/FabContext';
-import 'react-native-get-random-values';
-LogBox.ignoreLogs(['WARN  [Layout children]']);
+import { BehavioralAnalyticsService } from '../services/behavioralAnalyticsService';
 
+LogBox.ignoreLogs(['WARN  [Layout children]']);
+function AppContent() {
+  // ✅ هذا الـ Hook الآن "آمن". لن يتم استدعاؤه كل ثانية.
+  const { timerSession } = useAppState(); 
+  const segments = useSegments() ?? [];
+  const lastSegment = segments.length ? segments[segments.length - 1] : null;
+  const isOnTimerScreen = lastSegment === 'study-timer';
+
+  const shouldShowTimerIsland =
+    timerSession &&
+    timerSession.status !== 'idle' &&
+    timerSession.status !== 'finished' &&
+    !isOnTimerScreen;
+
+  return (
+    // ✅ [THE FIX] استخدم View بدلاً من Fragment لإنشاء سياق تكديس صحيح
+    <View style={{ flex: 1 }}>
+      {/* RootLayoutNav سيرسم المحتوى الرئيسي (الtabs، إلخ) */}
+      <RootLayoutNav />
+
+      {/* DynamicTimerIsland الآن ستطفو بشكل موثوق فوق RootLayoutNav */}
+      <AnimatePresence>
+        {shouldShowTimerIsland && <DynamicTimerIsland />}
+      </AnimatePresence>
+      
+      {/* FabRenderer يظل كما هو */}
+      <FabRenderer />
+    </View>
+  );
+}
+
+
+
+// مكون مساعد لعرض زر FAB العائم
 function FabRenderer() {
   const { fabConfig, isSheetVisible } = useFab();
-
-  if (isSheetVisible || !fabConfig) {
-    return null;
-  }
-
+  if (isSheetVisible || !fabConfig) return null;
   const { component: FabComponent, props } = fabConfig;
-
-  if (!FabComponent) {
-    return null;
-  }
-
+  if (!FabComponent) return null;
   return <FabComponent {...props} />;
 }
 
+// إدارة مكدس الصفحات الرئيسي والتوجيه
 function RootLayoutNav() {
   const { user, authLoading, hasCompletedOnboarding } = useAppState();
   const segments = useSegments();
@@ -55,47 +90,87 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/* Group screens */}
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(setup)" />
       <Stack.Screen name="(tabs)" />
-
-      {/* Regular screens */}
       <Stack.Screen name="subject-details" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="lesson-view" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="study-kit" options={{ animation: 'slide_from_bottom' }} />
-
-      {/* Modal screens */}
+      <Stack.Screen name="(modals)/study-timer" options={{ presentation: 'modal' }} />
       <Stack.Screen name="ai-chatbot" options={{ presentation: 'modal' }} />
       <Stack.Screen name="chat-history" options={{ presentation: 'modal' }} />
-      {/* ✨ [CONFIRMED] The notification screen is correctly registered as a modal */}
       <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }
 
+// --- المكون "الحارس" الذي يعالج التهيئة والمستمعين العالميين ---
 function MainLayout() {
-  const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding } = useAppState();
+  const { authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, user } = useAppState();
+  const router = useRouter();
 
   const handleOnboardingComplete = useCallback(async () => {
     try {
       await AsyncStorage.setItem('@hasCompletedOnboarding', 'true');
       setHasCompletedOnboarding(true);
     } catch (e) {
-      console.log('Error saving onboarding status:', e);
+      console.error('Error saving onboarding status:', e);
     }
   }, [setHasCompletedOnboarding]);
 
+  useEffect(() => {
+    apiService.wakeUp().catch(() => {}); // Fire and forget
+  }, []); 
+
+  // useEffect للاستماع إلى الإشعارات الجديدة
+  useEffect(() => {
+    if (!user?.uid) return;
+    const db = getFirestore();
+    const notificationsRef = collection(db, 'userNotifications', user.uid, 'inbox');
+    const q = query(notificationsRef, where('read', '==', false), orderBy('createdAt', 'desc'), limit(1));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const newNotification = change.doc.data();
+          Toast.show({
+            type: 'info',
+            text1: newNotification.title || 'رسالة جديدة من EduAI',
+            text2: newNotification.message,
+            onPress: () => {
+              router.push('/notifications');
+              Toast.hide();
+            }
+          });
+        }
+      });
+    });
+    return () => unsubscribe();
+  }, [user, router]);
+
+  // useEffect لتهيئة خدمة التحليلات
+  useEffect(() => {
+    BehavioralAnalyticsService.init();
+  }, []);
+
+  // --- ✅ [FINAL FIX] شرط التحميل المبسط ---
   if (authLoading || hasCompletedOnboarding === null) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#10B981" /></View>;
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10B981" />
+      </View>
+    );
   }
 
   if (hasCompletedOnboarding === false) {
     return <OnboardingScreen onComplete={handleOnboardingComplete} />;
   }
 
-  return <RootLayoutNav />;
+  // --- ✅ عرض التطبيق بالكامل بعد انتهاء التحميل ---
+  return <AppContent />;
 }
+
+// المكون الأعلى مستوى الذي يغلف التطبيق بالـ Providers
 
 export default function RootLayout() {
   return (
@@ -105,7 +180,6 @@ export default function RootLayout() {
           <EditModeProvider>
             <ActionSheetProvider>
               <MainLayout />
-              <FabRenderer />
               <Toast config={toastConfig} />
             </ActionSheetProvider>
           </EditModeProvider>

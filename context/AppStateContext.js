@@ -1,5 +1,5 @@
 
-
+// AppStateContext.js
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -19,24 +19,27 @@ const DEFAULT_MODES = [
 
 const DEFAULT_SETTINGS = DEFAULT_MODES[0].settings;
 
+// ✅ NEW: A function to generate a clean, guaranteed-safe initial state.
+const createInitialTimerState = () => ({
+  status: 'idle',
+  sessionType: 'focus',
+  duration: DEFAULT_SETTINGS.sessions[0].focus,
+  timeLeft: DEFAULT_SETTINGS.sessions[0].focus,
+  currentCycle: 1,
+  taskTitle: null,
+  taskId: null,
+  selectedSound: null,
+  settings: DEFAULT_SETTINGS,
+  activeModeKey: DEFAULT_MODES[0].key,
+});
+
 export const AppStateProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
   const [points, setPoints] = useState(0);
 
-  const [timerSession, setTimerSession] = useState({
-    status: 'idle',
-    sessionType: 'focus',
-    duration: DEFAULT_SETTINGS.sessions[0].focus,
-    timeLeft: DEFAULT_SETTINGS.sessions[0].focus,
-    currentCycle: 1,
-    taskTitle: null,
-    taskId: null,
-    selectedSound: null,
-    settings: DEFAULT_SETTINGS,
-    activeModeKey: DEFAULT_MODES[0].key,
-  });
+  const [timerSession, setTimerSession] = useState(createInitialTimerState());
 
   // ... (useEffect for loading data and auth remains the same)
   useEffect(() => {
@@ -63,8 +66,7 @@ export const AppStateProvider = ({ children }) => {
         setTimerSession(prev => ({ ...prev, settings, duration: initialDuration, timeLeft: initialDuration, activeModeKey: key }));
       } catch (e) {
         console.error('Failed to load initial data.', e);
-        const initialDuration = DEFAULT_SETTINGS.sessions[0].focus;
-        setTimerSession(prev => ({ ...prev, settings: DEFAULT_SETTINGS, duration: initialDuration, timeLeft: initialDuration, activeModeKey: DEFAULT_MODES[0].key }));
+        setTimerSession(createInitialTimerState()); // Reset to safe state on error
       }
     };
     loadInitialData();
@@ -91,6 +93,10 @@ export const AppStateProvider = ({ children }) => {
   }, []);
 
   const _transitionToNextSession = useCallback((currentSession) => {
+    if (!currentSession.settings || !currentSession.settings.sessions) {
+        console.error("Transition failed: session settings are missing. Resetting timer to a safe state.");
+        return createInitialTimerState(); // Return a completely safe state
+    }
     const { sessionType, currentCycle, settings } = currentSession;
     const sessionIndex = currentCycle - 1;
     const currentSessionConfig = settings.sessions[sessionIndex];
@@ -107,14 +113,13 @@ export const AppStateProvider = ({ children }) => {
 
   const handleSessionFinish = useCallback(() => {
     setTimerSession(prev => {
-      if (prev.settings.enableAudioNotifications) {
+      if (prev.settings?.enableAudioNotifications) {
         audioService.playEffect('end-effect');
       }
       const nextState = _transitionToNextSession(prev);
-      if (nextState.status === 'active' && prev.settings.autoStartNextSession) {
+      if (nextState.status === 'active' && prev.settings?.autoStartNextSession) {
         startTimerLogic(nextState);
-      } else if (nextState.status === 'finished') {
-        // Ensure timer is stopped if the whole cycle is finished
+      } else if (nextState.status === 'finished' || nextState.status === 'idle') {
         BackgroundTimer.stopBackgroundTimer();
       }
       return nextState;
@@ -122,10 +127,7 @@ export const AppStateProvider = ({ children }) => {
   }, [_transitionToNextSession]);
 
   const startTimerLogic = (sessionState) => {
-    // ✅ FIX [1/2]: The most important fix. Always stop any potential old timer before starting a new one.
-    // This prevents multiple timers from running simultaneously.
     BackgroundTimer.stopBackgroundTimer();
-
     BackgroundTimer.runBackgroundTimer(() => {
       setTimerSession(prev => {
         if (prev.status !== 'active') {
@@ -146,13 +148,14 @@ export const AppStateProvider = ({ children }) => {
   const startTimer = useCallback((soundId) => {
     setTimerSession(prev => {
       if (prev.status === 'idle' || prev.status === 'finished') {
-        if (prev.settings.enableAudioNotifications) audioService.playEffect('start-effect');
+        const safeSettings = prev.settings && prev.settings.sessions ? prev.settings : DEFAULT_SETTINGS;
+        if (safeSettings.enableAudioNotifications) audioService.playEffect('start-effect');
         let newState;
         if (prev.status === 'finished') {
-          const firstSessionDuration = prev.settings.sessions[0].focus;
-          newState = { ...prev, status: 'active', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: soundId };
+          const firstSessionDuration = safeSettings.sessions[0].focus;
+          newState = { ...prev, status: 'active', sessionType: 'focus', settings: safeSettings, duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: soundId };
         } else {
-          newState = { ...prev, status: 'active', selectedSound: soundId };
+          newState = { ...prev, status: 'active', settings: safeSettings, selectedSound: soundId };
         }
         startTimerLogic(newState);
         return newState;
@@ -182,16 +185,15 @@ export const AppStateProvider = ({ children }) => {
     handleSessionFinish();
   }, [handleSessionFinish]);
 
+  // ✅ THE ULTIMATE CURE: The "Hard Reset" function.
   const endTimer = useCallback(() => {
     BackgroundTimer.stopBackgroundTimer();
-    setTimerSession(prev => {
-      const firstSessionDuration = prev.settings.sessions[0].focus;
-      return { ...prev, status: 'idle', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: null };
-    });
+    // This ignores the previous state completely and builds a new, 100% safe state.
+    // This is the ultimate failsafe against state corruption.
+    setTimerSession(createInitialTimerState());
   }, []);
 
   const updateSettings = useCallback(async (newMode) => {
-    // ✅ ENHANCED: Enhanced guard clause with logging to help debug if it ever happens again.
     if (!newMode || !newMode.settings || !newMode.key) {
       console.error("CRITICAL: updateSettings was called with an invalid mode object. Aborting update.", newMode);
       return;

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager, ActivityIndicator } from 'react-native'; // Import ActivityIndicator
+import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,7 +14,9 @@ import SoundsModal from '../../components/timer/SoundsModal';
 import TimerControls from '../../components/timer/TimerControls';
 import { audioService } from '../../services/audioService';
 
-// ... (if/UIManager setup remains the same)
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const ASYNC_STORAGE_MODES_KEY = '@timerModes';
 const DEFAULT_MODES = [
@@ -25,12 +26,10 @@ const DEFAULT_MODES = [
 const SESSION_COLORS = { focus: '#34D399', break: '#60A5FA' };
 
 const TimerStatusIndicator = React.memo(({ timerSession }) => {
-  // ✅ Defensive check inside the component as well
   const { status, sessionType, currentCycle, settings } = timerSession || {};
-  if (!settings || !settings.sessions) return null; // Don't render if data is invalid
+  if (!settings || !settings.sessions) return null;
 
   const totalSessions = settings.sessions.length;
-  // ... (rest of the component is the same)
   const { icon, text } = useMemo(() => {
     const isRunning = status === 'active' || status === 'paused';
     if (status === 'finished') {
@@ -64,7 +63,6 @@ export default function StudyTimerScreen() {
   const params = useLocalSearchParams();
   const { timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
 
-  // ... (state hooks remain the same)
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [isSoundsVisible, setIsSoundsVisible] = useState(false);
   const [selectedSound, setSelectedSound] = useState(timerSession?.selectedSound ?? 'complete-silence');
@@ -73,7 +71,6 @@ export default function StudyTimerScreen() {
   const [modeLayouts, setModeLayouts] = useState({});
   const scrollViewRef = useRef(null);
 
-  // ... (useEffect hooks remain the same)
   useEffect(() => {
     const loadModes = async () => {
       try {
@@ -93,8 +90,6 @@ export default function StudyTimerScreen() {
   useEffect(() => () => audioService?.stopPreview?.(), []);
   useEffect(() => { if (params.relatedTaskTitle && timerSession?.status === 'idle') { setTimerSession(prev => ({ ...prev, taskTitle: params.relatedTaskTitle, taskId: params.taskId || null })); } }, [params.relatedTaskTitle, params.taskId, timerSession?.status, setTimerSession]);
 
-  // ✅ FIX: THE BULLETPROOF GUARD. This will prevent the crash 100%.
-  // If the timer session or its settings are not ready, show a loading indicator instead of crashing.
   if (!timerSession || !timerSession.settings) {
     return (
       <ImageBackground source={require('../../assets/images/timer-background.jpg')} style={styles.backgroundImage}>
@@ -105,14 +100,14 @@ export default function StudyTimerScreen() {
     );
   }
 
-  // Destructure AFTER the guard clause to ensure they are safe to use.
-  const { timeLeft, activeModeKey } = timerSession;
+  const { timeLeft, activeModeKey, status } = timerSession;
+  // ✅ NEW: A flag to disable settings changes while the timer is running.
+  const isTimerRunning = status === 'active' || status === 'paused';
 
-  // ... (all handler functions like handleSelectMode, handleSaveMode, etc. remain the same)
   const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
   
   const handleSelectMode = useCallback((mode) => {
-    if (timerSession.status === 'active' || timerSession.status === 'paused') return;
+    if (isTimerRunning) return; // This check is now redundant but safe to keep.
     if (!mode || !mode.key) {
       console.warn("handleSelectMode was called with an invalid mode object.", mode);
       return;
@@ -122,18 +117,23 @@ export default function StudyTimerScreen() {
     if (layout && scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ x: layout.x - 15, animated: true });
     }
-  }, [timerSession.status, updateSettings, modeLayouts]);
+  }, [isTimerRunning, updateSettings, modeLayouts]);
 
   const handleAddNewMode = useCallback(() => {
+    if (isTimerRunning) return;
     const newMode = {
       key: `custom-${Date.now()}`, name: 'New Custom Mode', icon: 'pen-alt',
       settings: { sessions: [{ focus: 30 * 60, break: 5 * 60 }], autoStartNextSession: true, enableAudioNotifications: true },
     };
     setModeToEdit(newMode);
     setIsSettingsVisible(true);
-  }, []);
+  }, [isTimerRunning]);
 
-  const handleEditMode = useCallback((mode) => { setModeToEdit(mode); setIsSettingsVisible(true); }, []);
+  const handleEditMode = useCallback((mode) => {
+    if (isTimerRunning) return;
+    setModeToEdit(mode);
+    setIsSettingsVisible(true);
+  }, [isTimerRunning]);
   
   const handleSaveMode = useCallback(async (savedMode) => {
     const wasActiveMode = modeToEdit?.key === activeModeKey;
@@ -167,7 +167,6 @@ export default function StudyTimerScreen() {
   const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
   const handleModeLayout = useCallback((event, key) => { const { x, width, height } = event.nativeEvent.layout; setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } })); }, []);
 
-
   const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
   const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : 'Break';
   const progressColor = useMemo(() => SESSION_COLORS[timerSession?.sessionType] || SESSION_COLORS.focus, [timerSession?.sessionType]);
@@ -175,7 +174,6 @@ export default function StudyTimerScreen() {
   return (
     <ImageBackground source={require('../../assets/images/timer-background.jpg')} style={styles.backgroundImage}>
       <SafeAreaView style={styles.container}>
-        {/* ... (Header and other components remain the same) ... */}
         <View style={styles.header}>
           <Pressable style={styles.headerIcon} onPress={() => router.back()}><FontAwesome5 name="chevron-down" size={22} color="#E5E7EB" /></Pressable>
           <Pressable style={styles.headerIcon} onPress={() => { audioService?.stopPreview?.(); setIsSoundsVisible(true); }}><FontAwesome5 name="music" size={22} color="#E5E7EB" /></Pressable>
@@ -187,17 +185,13 @@ export default function StudyTimerScreen() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'timing', duration: 250 }}
         >
-          <View style={styles.titleContainer}>
-            <Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text>
-          </View>
+          <View style={styles.titleContainer}><Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text></View>
           <CircularProgress duration={timerSession?.duration ?? 0} timeLeft={timeLeft} sessionType={timerSession?.sessionType} progressColor={progressColor} />
           <TimerStatusIndicator timerSession={timerSession} />
-          <View style={styles.controlsContainer}>
-            <TimerControls status={timerSession?.status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} />
-          </View>
+          <View style={styles.controlsContainer}><TimerControls status={status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} /></View>
         </MotiView>
 
-        <View style={styles.modeSelectorSection}>
+        <View style={[styles.modeSelectorSection, isTimerRunning && styles.disabledOverlay]}>
           <ScrollView ref={scrollViewRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScrollContent}>
             <AnimatePresence>
               {activeModeLayout && (
@@ -207,13 +201,15 @@ export default function StudyTimerScreen() {
             {availableModes.map((mode) => {
               const isActive = activeModeKey === mode.key;
               return (
-                <Pressable key={mode.key} onLayout={(event) => handleModeLayout(event, mode.key)} style={styles.modeCard} onPress={() => handleSelectMode(mode)} onLongPress={() => handleEditMode(mode)} disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}>
+                <Pressable key={mode.key} onLayout={(event) => handleModeLayout(event, mode.key)} style={styles.modeCard} onPress={() => handleSelectMode(mode)} onLongPress={() => handleEditMode(mode)} disabled={isTimerRunning}>
                   <FontAwesome5 name={mode.icon ?? 'clock'} size={20} color={isActive ? 'white' : '#9CA3AF'} />
                   <Text style={[styles.modeCardTitle, isActive && styles.modeCardTitleActive]}>{mode.name}</Text>
                 </Pressable>
               );
             })}
-            <Pressable style={styles.addModeCard} onPress={handleAddNewMode}><FontAwesome5 name="plus" size={20} color="#9CA3AF" /></Pressable>
+            <Pressable style={styles.addModeCard} onPress={handleAddNewMode} disabled={isTimerRunning}>
+              <FontAwesome5 name="plus" size={20} color="#9CA3AF" />
+            </Pressable>
           </ScrollView>
         </View>
       </SafeAreaView>
@@ -225,7 +221,7 @@ export default function StudyTimerScreen() {
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: { flex: 1 },
+ backgroundImage: { flex: 1 },
   container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingTop: 10 },
   headerIcon: { padding: 10 },
@@ -244,4 +240,7 @@ const styles = StyleSheet.create({
   modeCardTitleActive: { color: 'white' },
   addModeCard: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginHorizontal: 5, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.2)', borderStyle: 'dashed' },
   activeIndicator: { position: 'absolute', top: 0, borderRadius: 16, borderWidth: 2 },
-});
+  // ✅ NEW: Style to visually indicate that the settings are disabled.
+  disabledOverlay: {
+    opacity: 0.5,
+  }});

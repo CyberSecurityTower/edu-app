@@ -1,5 +1,7 @@
+
+// app/(tabs)/profile.jsx
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Image, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppState } from '../../context/AppStateContext';
@@ -10,6 +12,7 @@ import { auth } from '../../firebase';
 import { getUserProgressDocument, getEducationalPathById, getLeaderboard } from '../../services/firestoreService';
 import SubjectCard from '../../components/SubjectCard';
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
+import CustomAlert from '../../components/CustomAlert'; // Import CustomAlert
 
 const SmartSubscriptionCard = ({ subscription }) => {
   if (!subscription) return null;
@@ -94,6 +97,7 @@ export default function ProfileScreen() {
   const [savedSubjects, setSavedSubjects] = useState([]);
   const [userProgress, setUserProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [alertInfo, setAlertInfo] = useState({ isVisible: false }); // State for custom alert
 
   const fetchData = useCallback(async () => {
     if (!user?.uid) {
@@ -141,22 +145,26 @@ export default function ProfileScreen() {
   );
 
   const handleLogout = () => {
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out?",
-      [
+    setAlertInfo({
+      isVisible: true,
+      title: "Log Out",
+      message: "Are you sure you want to log out?",
+      buttons: [
         { text: "Cancel", style: "cancel" },
-        { text: "Log Out", style: "destructive", onPress: async () => {
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
             try {
               await signOut(auth);
               setUser(null);
             } catch (error) {
               console.error("Error signing out: ", error);
             }
-          } 
+          }
         }
       ]
-    );
+    });
   };
  
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Guest';
@@ -201,6 +209,13 @@ export default function ProfileScreen() {
           <MenuItem icon="sign-out-alt" name="Log Out" onPress={handleLogout} isLogout={true} />
         </View>
       </ScrollView>
+      <CustomAlert 
+        isVisible={alertInfo.isVisible}
+        onClose={() => setAlertInfo({ isVisible: false })}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+      />
     </SafeAreaView>
   );
 }

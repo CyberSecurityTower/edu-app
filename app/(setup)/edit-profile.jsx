@@ -1,5 +1,7 @@
+
+// app/(setup)/edit-profile.jsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppState } from '../../context/AppStateContext';
 import { useRouter } from 'expo-router';
@@ -7,6 +9,7 @@ import { updateUserProfile, updateUserProgressProfileData } from '../../services
 import AnimatedGradientButton from '../../components/AnimatedGradientButton';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FontAwesome5 } from '@expo/vector-icons';
+import CustomAlert from '../../components/CustomAlert'; // Import CustomAlert
 
 export default function EditProfileScreen() {
   const { user, setUser } = useAppState();
@@ -20,6 +23,7 @@ export default function EditProfileScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [alertInfo, setAlertInfo] = useState({ isVisible: false }); // State for custom alert
 
   const onDateChange = (event, selectedDate) => {
     const currentDate = selectedDate || date;
@@ -29,7 +33,7 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!firstName || !lastName) {
-      Alert.alert("Validation Error", "First name and last name cannot be empty.");
+      setAlertInfo({ isVisible: true, title: 'Validation Error', message: 'First name and last name cannot be empty.', buttons: [{ text: 'OK' }] });
       return;
     }
     
@@ -51,16 +55,20 @@ export default function EditProfileScreen() {
       
       setUser(prevUser => ({ ...prevUser, ...updatedData }));
       
-      Alert.alert("Success", "Your profile has been updated.", [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      setAlertInfo({
+        isVisible: true,
+        title: 'Success',
+        message: 'Your profile has been updated.',
+        buttons: [{ text: 'OK', onPress: () => router.back() }]
+      });
 
     } catch (error) {
       console.error("Error saving profile:", error);
-      Alert.alert("Error", "Could not update your profile. Please try again.");
+      setAlertInfo({ isVisible: true, title: 'Error', message: 'Could not update your profile. Please try again.', buttons: [{ text: 'OK' }] });
     } finally {
       setIsSaving(false);
-    }};
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -127,6 +135,13 @@ export default function EditProfileScreen() {
           />
         </View>
       </ScrollView>
+      <CustomAlert 
+        isVisible={alertInfo.isVisible}
+        onClose={() => setAlertInfo({ isVisible: false })}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+      />
     </SafeAreaView>
   );
 }

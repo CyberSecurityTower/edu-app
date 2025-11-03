@@ -21,19 +21,16 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const ASYNC_STORAGE_MODES_KEY = '@timerModes';
 
-// ✅ NEW: Default modes with the new "sessions" array structure
 const DEFAULT_MODES = [
   { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
   { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
 ];
 
-// ✅ NEW: Simplified color mapping
 const SESSION_COLORS = {
-  focus: '#34D399', // Green
-  break: '#60A5FA', // Blue
+  focus: '#34D399',
+  break: '#60A5FA',
 };
 
-// ✅ REPLACED: areSettingsEqual is no longer reliable. We will compare by key.
 const TimerStatusIndicator = React.memo(({ timerSession }) => {
   const { status, sessionType, currentCycle, settings } = timerSession;
   const totalSessions = settings.sessions.length;
@@ -70,7 +67,9 @@ TimerStatusIndicator.displayName = 'TimerStatusIndicator';
 export default function StudyTimerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { timerSession, setTimerSession, timeLeft, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
+  // ✅ Destructure activeModeKey directly from timerSession
+  const { timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
+  const { timeLeft, activeModeKey } = timerSession;
 
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [isSoundsVisible, setIsSoundsVisible] = useState(false);
@@ -101,9 +100,10 @@ export default function StudyTimerScreen() {
 
   const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
   
+  // ✅ MODIFIED: Pass the entire mode object to updateSettings
   const handleSelectMode = useCallback((mode) => {
     if (timerSession.status === 'active' || timerSession.status === 'paused') return;
-    updateSettings(mode.settings);
+    updateSettings(mode); // Pass the whole mode object
     const layout = modeLayouts[mode.key];
     if (layout && scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ x: layout.x - 15, animated: true });
@@ -122,7 +122,8 @@ export default function StudyTimerScreen() {
   const handleEditMode = useCallback((mode) => { setModeToEdit(mode); setIsSettingsVisible(true); }, []);
   
   const handleSaveMode = useCallback(async (savedMode) => {
-    const wasActiveMode = modeToEdit?.key === timerSession.settings.key;
+    const wasActiveMode = modeToEdit?.key === activeModeKey; // ✅ Compare keys
+    
     const updatedModes = await new Promise(resolve => {
       setAvailableModes(prevModes => {
         const isNew = !prevModes.some(m => m.key === savedMode.key);
@@ -131,29 +132,34 @@ export default function StudyTimerScreen() {
         return newModeList;
       });
     });
+
     await saveModes(updatedModes);
-    if (wasActiveMode) updateSettings(savedMode.settings);
+    
+    // ✅ If the mode being edited was the active one, update the main state
+    if (wasActiveMode) {
+      updateSettings(savedMode);
+    }
+
     setModeToEdit(null);
     setIsSettingsVisible(false);
-  }, [timerSession.settings, updateSettings, modeToEdit]);
+  }, [activeModeKey, updateSettings, modeToEdit]);
     
   const handleDeleteMode = useCallback(async (modeKey) => {
     const updatedModes = availableModes.filter(m => m.key !== modeKey);
     setAvailableModes(updatedModes);
     await saveModes(updatedModes);
+    // ✅ If the deleted mode was active, switch to the default one
+    if (modeKey === activeModeKey) {
+      updateSettings(DEFAULT_MODES[0]);
+    }
     setModeToEdit(null);
     setIsSettingsVisible(false);
-  }, [availableModes]);
+  }, [availableModes, activeModeKey, updateSettings]);
 
   const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
   const handleModeLayout = useCallback((event, key) => { const { x, width, height } = event.nativeEvent.layout; setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } })); }, []);
 
-  // ✅ UPDATED: Find active mode by comparing the whole settings object stringified. It's a simple way to check for deep equality.
-  const activeModeKey = useMemo(() => {
-    const currentSettingsString = JSON.stringify(timerSession?.settings);
-    const active = availableModes.find(mode => JSON.stringify(mode.settings) === currentSettingsString);
-    return active ? active.key : null;
-  }, [availableModes, timerSession?.settings]);
+  // ✅ SIMPLIFIED: No more complex useMemo. The active layout is found directly.
   const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
 
   const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : 'Break';
@@ -182,7 +188,7 @@ export default function StudyTimerScreen() {
               )}
             </AnimatePresence>
             {availableModes.map((mode) => {
-              const isActive = activeModeKey === mode.key;
+              const isActive = activeModeKey === mode.key; // ✅ SIMPLIFIED: Direct key comparison
               return (
                 <Pressable key={mode.key} onLayout={(event) => handleModeLayout(event, mode.key)} style={styles.modeCard} onPress={() => handleSelectMode(mode)} onLongPress={() => handleEditMode(mode)} disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}>
                   <FontAwesome5 name={mode.icon ?? 'clock'} size={20} color={isActive ? 'white' : '#9CA3AF'} />

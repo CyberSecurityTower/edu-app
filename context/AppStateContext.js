@@ -12,12 +12,13 @@ const AppStateContext = createContext();
 const ASYNC_STORAGE_SETTINGS_KEY = '@lastActiveTimerSettings';
 
 const DEFAULT_SETTINGS = {
-  focusDuration: 25 * 60,
-  shortBreakDuration: 5 * 60,
-  longBreakDuration: 15 * 60,
-  pomodorosPerCycle: 4,
-  // ✅ THE FIX: Auto-start is now the default behavior.
-  autoStartNextSession: true, 
+  sessions: [
+    { focus: 25 * 60, break: 5 * 60 },
+    { focus: 25 * 60, break: 5 * 60 },
+    { focus: 25 * 60, break: 5 * 60 },
+    { focus: 25 * 60, break: 5 * 60 },
+  ],
+  autoStartNextSession: true,
   enableAudioNotifications: true,
 };
 
@@ -28,37 +29,64 @@ export const AppStateProvider = ({ children }) => {
   const [points, setPoints] = useState(0);
 
   const [timerSession, setTimerSession] = useState({
-    status: 'idle', // idle, active, paused, finished
-    sessionType: 'focus', // focus, shortBreak, longBreak
-    duration: DEFAULT_SETTINGS.focusDuration,
+    status: 'idle',
+    sessionType: 'focus',
+    duration: DEFAULT_SETTINGS.sessions[0].focus,
     currentCycle: 1,
     taskTitle: null,
     taskId: null,
     selectedSound: null,
     settings: DEFAULT_SETTINGS,
   });
-  const [timeLeft, setTimeLeft] = useState(DEFAULT_SETTINGS.focusDuration);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_SETTINGS.sessions[0].focus);
   const intervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
   const backgroundTime = useRef(null);
 
   useEffect(() => {
+    // ✅ THE FIX: A robust function to validate settings from storage.
+    const getValidatedSettings = (storedSettingsString) => {
+      if (!storedSettingsString) {
+        return DEFAULT_SETTINGS;
+      }
+      try {
+        const parsed = JSON.parse(storedSettingsString);
+        // This check ensures the settings are in the new format.
+        if (parsed && Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
+          return parsed;
+        }
+        // If the check fails, it's an old format or corrupted. Fallback to default.
+        return DEFAULT_SETTINGS;
+      } catch (error) {
+        console.error("Failed to parse stored settings, using default.", error);
+        return DEFAULT_SETTINGS;
+      }
+    };
+
     const loadInitialData = async () => {
       try {
         const onboarding = await AsyncStorage.getItem('@hasCompletedOnboarding');
         setHasCompletedOnboarding(onboarding === 'true');
         
-        const storedSettings = await AsyncStorage.getItem(ASYNC_STORAGE_SETTINGS_KEY);
-        const settings = storedSettings ? JSON.parse(storedSettings) : DEFAULT_SETTINGS;
+        const storedSettingsString = await AsyncStorage.getItem(ASYNC_STORAGE_SETTINGS_KEY);
+        // Use the validation function to get safe settings
+        const settings = getValidatedSettings(storedSettingsString);
         
         setTimerSession(prev => ({
           ...prev,
           settings,
-          duration: settings.focusDuration,
+          duration: settings.sessions[0].focus, // This is now safe
         }));
-        setTimeLeft(settings.focusDuration);
+        setTimeLeft(settings.sessions[0].focus); // This is also safe
       } catch (e) {
         console.error("Failed to load initial data.", e);
+        // Final fallback in case of any other error
+        setTimerSession(prev => ({
+            ...prev,
+            settings: DEFAULT_SETTINGS,
+            duration: DEFAULT_SETTINGS.sessions[0].focus,
+        }));
+        setTimeLeft(DEFAULT_SETTINGS.sessions[0].focus);
       }
     };
     loadInitialData();
@@ -67,64 +95,40 @@ export const AppStateProvider = ({ children }) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          setUser({ uid: firebaseUser.uid, ...userDoc.data() });
-        }
+        if (userDoc.exists()) setUser({ uid: firebaseUser.uid, ...userDoc.data() });
       } else {
         setUser(null);
       }
       setAuthLoading(false);
     });
-    return () => unsubscribeAuth();
+    return unsubscribeAuth;
   }, []);
 
-  // ✅ GOD-TIER: The new and improved, fully automatic state machine.
   const _transitionToNextSession = useCallback(() => {
     const { sessionType, currentCycle, settings } = timerSession;
-    
-    // Case 1: A long break just finished. The entire cycle is now complete.
-    if (sessionType === 'longBreak') {
+    const sessionIndex = currentCycle - 1;
+    const currentSessionConfig = settings.sessions[sessionIndex];
+
+    if (sessionType === 'focus') {
+      if (currentSessionConfig.break > 0) {
+        setTimerSession(prev => ({ ...prev, status: 'active', sessionType: 'break', duration: currentSessionConfig.break }));
+        setTimeLeft(currentSessionConfig.break);
+        return;
+      }
+    }
+
+    const nextSessionIndex = sessionIndex + 1;
+    if (nextSessionIndex < settings.sessions.length) {
+      const nextSessionConfig = settings.sessions[nextSessionIndex];
+      setTimerSession(prev => ({ ...prev, status: 'active', sessionType: 'focus', duration: nextSessionConfig.focus, currentCycle: prev.currentCycle + 1 }));
+      setTimeLeft(nextSessionConfig.focus);
+    } else {
       setTimerSession(prev => ({ ...prev, status: 'finished' }));
       setTimeLeft(0);
-      return;
     }
-
-    let nextSessionType = 'focus';
-    let nextDuration = settings.focusDuration;
-    let nextCycle = currentCycle;
-
-    // Case 2: A focus session just finished.
-    if (sessionType === 'focus') {
-      if (currentCycle >= settings.pomodorosPerCycle) {
-        nextSessionType = 'longBreak';
-        nextDuration = settings.longBreakDuration;
-        // The cycle count will reset to 1 after this long break is complete.
-      } else {
-        nextSessionType = 'shortBreak';
-        nextDuration = settings.shortBreakDuration;
-      }
-    } 
-    // Case 3: A short break just finished. Go back to focus and increment the cycle.
-    else if (sessionType === 'shortBreak') {
-        nextSessionType = 'focus';
-        nextDuration = settings.focusDuration;
-        nextCycle = currentCycle + 1;
-    }
-    
-    setTimerSession(prev => ({
-      ...prev,
-      // ✅ THE FIX: Always transition to 'active' for a seamless flow.
-      status: 'active',
-      sessionType: nextSessionType,
-      duration: nextDuration,
-      currentCycle: nextCycle,
-    }));
-    setTimeLeft(nextDuration);
-
   }, [timerSession]);
 
   const handleSessionFinish = useCallback(() => {
-    // ✅ THE FIX: The sound now plays on every transition.
     if (timerSession.settings.enableAudioNotifications) {
       audioService.playEffect('end-effect');
     }
@@ -167,28 +171,18 @@ export const AppStateProvider = ({ children }) => {
 
   useEffect(() => {
     const { status, selectedSound } = timerSession;
-    if (status === 'active') {
-      audioService.playSessionSound(selectedSound);
-    } else if (status === 'paused') {
-      audioService.pauseSessionSound();
-    } else {
-      audioService.stopSessionSound();
-    }
+    if (status === 'active') audioService.playSessionSound(selectedSound);
+    else if (status === 'paused') audioService.pauseSessionSound();
+    else audioService.stopSessionSound();
   }, [timerSession.status, timerSession.selectedSound]);
 
   const startTimer = useCallback((soundId) => {
     if (timerSession.status === 'idle' || timerSession.status === 'finished') {
-      if (timerSession.settings.enableAudioNotifications) {
-        audioService.playEffect('start-effect');
-      }
-      
+      if (timerSession.settings.enableAudioNotifications) audioService.playEffect('start-effect');
+      const firstSessionDuration = timerSession.settings.sessions[0].focus;
       if (timerSession.status === 'finished') {
-        const newSettings = timerSession.settings;
-        setTimeLeft(newSettings.focusDuration);
-        setTimerSession(prev => ({
-          ...prev, status: 'active', sessionType: 'focus',
-          duration: newSettings.focusDuration, currentCycle: 1, selectedSound: soundId,
-        }));
+        setTimeLeft(firstSessionDuration);
+        setTimerSession(prev => ({ ...prev, status: 'active', sessionType: 'focus', duration: firstSessionDuration, currentCycle: 1, selectedSound: soundId }));
       } else {
          setTimeLeft(timerSession.duration);
          setTimerSession(prev => ({ ...prev, status: 'active', selectedSound: soundId }));
@@ -196,34 +190,16 @@ export const AppStateProvider = ({ children }) => {
     }
   }, [timerSession]);
 
-  const pauseTimer = useCallback(() => {
-    if (timerSession.status === 'active') {
-      setTimerSession(prev => ({ ...prev, status: 'paused' }));
-    }
-  }, [timerSession.status]);
-
-  const resumeTimer = useCallback(() => {
-    if (timerSession.status === 'paused') {
-      setTimerSession(prev => ({ ...prev, status: 'active' }));
-    }
-  }, [timerSession.status]);
-
-  const skipTimer = useCallback(() => {
-    if (timerSession.status === 'active' || timerSession.status === 'paused') {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        handleSessionFinish(); // Use the same finish logic for consistency
-    }
-  }, [timerSession.status, handleSessionFinish]);
-
-  // This function now acts as a full reset.
+  const pauseTimer = useCallback(() => { if (timerSession.status === 'active') setTimerSession(prev => ({ ...prev, status: 'paused' })); }, [timerSession.status]);
+  const resumeTimer = useCallback(() => { if (timerSession.status === 'paused') setTimerSession(prev => ({ ...prev, status: 'active' })); }, [timerSession.status]);
+  const skipTimer = useCallback(() => { if (timerSession.status === 'active' || timerSession.status === 'paused') { if (intervalRef.current) clearInterval(intervalRef.current); handleSessionFinish(); } }, [timerSession.status, handleSessionFinish]);
+  
   const endTimer = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     const currentSettings = timerSession.settings;
-    setTimerSession(prev => ({
-      ...prev, status: 'idle', sessionType: 'focus',
-      duration: currentSettings.focusDuration, currentCycle: 1, selectedSound: null,
-    }));
-    setTimeLeft(currentSettings.focusDuration);
+    const firstSessionDuration = currentSettings.sessions[0].focus;
+    setTimerSession(prev => ({ ...prev, status: 'idle', sessionType: 'focus', duration: firstSessionDuration, currentCycle: 1, selectedSound: null }));
+    setTimeLeft(firstSessionDuration);
   }, [timerSession.settings]);
 
   const updateSettings = useCallback(async (newSettings) => {
@@ -231,30 +207,19 @@ export const AppStateProvider = ({ children }) => {
       await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, JSON.stringify(newSettings));
       setTimerSession(prev => {
         const shouldResetTimer = prev.status === 'idle' || prev.status === 'finished';
+        const firstSessionDuration = newSettings.sessions[0].focus;
         if (shouldResetTimer) {
-          setTimeLeft(newSettings.focusDuration);
-          return {
-            ...prev,
-            settings: newSettings,
-            duration: newSettings.focusDuration,
-            sessionType: 'focus',
-            currentCycle: 1,
-          };
+          setTimeLeft(firstSessionDuration);
+          return { ...prev, settings: newSettings, duration: firstSessionDuration, sessionType: 'focus', currentCycle: 1 };
         }
         return { ...prev, settings: newSettings };
       });
-    } catch (e) {
-      console.error("Failed to save settings.", e);
-    }
+    } catch (e) { console.error("Failed to save settings.", e); }
   }, []);
 
-  const refreshPoints = useCallback(async () => { if (user?.uid) { const progressDoc = await getDoc(doc(db, 'userProgress', user.uid)); if (progressDoc.exists()) { setPoints(progressDoc.data().stats?.points || 0); } } }, [user?.uid]);
+  const refreshPoints = useCallback(async () => { if (user?.uid) { const progressDoc = await getDoc(doc(db, 'userProgress', user.uid)); if (progressDoc.exists()) setPoints(progressDoc.data().stats?.points || 0); } }, [user?.uid]);
   
-  const value = {
-    user, setUser, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, points, refreshPoints,
-    timerSession, setTimerSession, timeLeft, startTimer, pauseTimer,
-    resumeTimer, endTimer, resetTimer: endTimer, skipTimer, updateSettings,
-  };
+  const value = { user, setUser, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, points, refreshPoints, timerSession, setTimerSession, timeLeft, startTimer, pauseTimer, resumeTimer, endTimer, resetTimer: endTimer, skipTimer, updateSettings };
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };

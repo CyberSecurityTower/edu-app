@@ -1,15 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ImageBackground,
-  Pressable,
-  ScrollView,
-  Platform,
-  UIManager,
-} from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,30 +21,22 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const ASYNC_STORAGE_MODES_KEY = '@timerModes';
 
+// ✅ NEW: Default modes with the new "sessions" array structure
 const DEFAULT_MODES = [
-  { key: 'default-pomodoro', name: 'Pomodoro', icon: 'brain', settings: { focusDuration: 25 * 60, shortBreakDuration: 5 * 60, longBreakDuration: 15 * 60, pomodorosPerCycle: 4, autoStartNextSession: true, enableAudioNotifications: true }},
-  { key: 'default-50-10', name: '50/10 Rule', icon: 'hourglass-half', settings: { focusDuration: 50 * 60, shortBreakDuration: 10 * 60, longBreakDuration: 20 * 60, pomodorosPerCycle: 2, autoStartNextSession: true, enableAudioNotifications: true }},
+  { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
+  { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
 ];
 
+// ✅ NEW: Simplified color mapping
 const SESSION_COLORS = {
-  focus: '#34D399',
-  shortBreak: '#60A5FA',
-  longBreak: '#FBBF24',
+  focus: '#34D399', // Green
+  break: '#60A5FA', // Blue
 };
 
-const areSettingsEqual = (settingsA, settingsB) => {
-  if (!settingsA || !settingsB) return false;
-  return (
-    settingsA.focusDuration === settingsB.focusDuration &&
-    settingsA.shortBreakDuration === settingsB.shortBreakDuration &&
-    settingsA.longBreakDuration === settingsB.longBreakDuration &&
-    settingsA.pomodorosPerCycle === settingsB.pomodorosPerCycle
-  );
-};
-
+// ✅ REPLACED: areSettingsEqual is no longer reliable. We will compare by key.
 const TimerStatusIndicator = React.memo(({ timerSession }) => {
   const { status, sessionType, currentCycle, settings } = timerSession;
-  const { pomodorosPerCycle } = settings;
+  const totalSessions = settings.sessions.length;
 
   const { icon, text } = useMemo(() => {
     const isRunning = status === 'active' || status === 'paused';
@@ -63,18 +46,16 @@ const TimerStatusIndicator = React.memo(({ timerSession }) => {
     if (isRunning) {
       switch (sessionType) {
         case 'focus':
-          return { icon: 'brain', text: `Focus: Session ${currentCycle} of ${pomodorosPerCycle}` };
-        case 'shortBreak':
-          return { icon: 'coffee', text: `Short Break. Next is focus ${currentCycle + 1} of ${pomodorosPerCycle}` };
-        case 'longBreak':
-          return { icon: 'couch', text: 'Long Break. A new cycle begins next.' };
+          return { icon: 'brain', text: `Focus: Session ${currentCycle} of ${totalSessions}` };
+        case 'break':
+          return { icon: 'coffee', text: `Break after Session ${currentCycle}` };
         default:
           return { icon: 'clock', text: '...' };
       }
     } else {
-      return { icon: 'play-circle', text: `Ready to start Focus: ${currentCycle} of ${pomodorosPerCycle}` };
+      return { icon: 'play-circle', text: `Ready to start Session ${currentCycle} of ${totalSessions}` };
     }
-  }, [status, sessionType, currentCycle, pomodorosPerCycle]);
+  }, [status, sessionType, currentCycle, totalSessions]);
 
   return (
     <View style={styles.statusIndicatorContainer}>
@@ -96,8 +77,6 @@ export default function StudyTimerScreen() {
   const [selectedSound, setSelectedSound] = useState(timerSession?.selectedSound ?? 'complete-silence');
   const [availableModes, setAvailableModes] = useState([]);
   const [modeToEdit, setModeToEdit] = useState(null);
-  
-  // ✅ NEW: State to store the layout of each mode card for the animation
   const [modeLayouts, setModeLayouts] = useState({});
   const scrollViewRef = useRef(null);
 
@@ -122,7 +101,6 @@ export default function StudyTimerScreen() {
 
   const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
   
-  // ✅ MODIFIED: Removed LayoutAnimation for a smoother Moti-based animation
   const handleSelectMode = useCallback((mode) => {
     if (timerSession.status === 'active' || timerSession.status === 'paused') return;
     updateSettings(mode.settings);
@@ -132,11 +110,19 @@ export default function StudyTimerScreen() {
     }
   }, [timerSession.status, updateSettings, modeLayouts]);
 
-  const handleAddNewMode = useCallback(() => { const newMode = { key: `custom-${Date.now()}`, name: 'New Mode', icon: 'brain', settings: { focusDuration: 25 * 60, shortBreakDuration: 5 * 60, longBreakDuration: 15 * 60, pomodorosPerCycle: 4, autoStartNextSession: true, enableAudioNotifications: true }, }; setModeToEdit(newMode); setIsSettingsVisible(true); }, []);
+  const handleAddNewMode = useCallback(() => {
+    const newMode = {
+      key: `custom-${Date.now()}`, name: 'New Custom Mode', icon: 'pen-alt',
+      settings: { sessions: [{ focus: 30 * 60, break: 5 * 60 }], autoStartNextSession: true, enableAudioNotifications: true },
+    };
+    setModeToEdit(newMode);
+    setIsSettingsVisible(true);
+  }, []);
+
   const handleEditMode = useCallback((mode) => { setModeToEdit(mode); setIsSettingsVisible(true); }, []);
   
   const handleSaveMode = useCallback(async (savedMode) => {
-    const wasActiveMode = areSettingsEqual(timerSession.settings, modeToEdit?.settings);
+    const wasActiveMode = modeToEdit?.key === timerSession.settings.key;
     const updatedModes = await new Promise(resolve => {
       setAvailableModes(prevModes => {
         const isNew = !prevModes.some(m => m.key === savedMode.key);
@@ -160,21 +146,17 @@ export default function StudyTimerScreen() {
   }, [availableModes]);
 
   const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
+  const handleModeLayout = useCallback((event, key) => { const { x, width, height } = event.nativeEvent.layout; setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } })); }, []);
 
-  // ✅ NEW: Function to capture the layout of each mode button
-  const handleModeLayout = useCallback((event, key) => {
-    const { x, width, height } = event.nativeEvent.layout;
-    setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } }));
-  }, []);
-
-  // ✅ NEW: Find the key and layout of the active mode to position the animated indicator
+  // ✅ UPDATED: Find active mode by comparing the whole settings object stringified. It's a simple way to check for deep equality.
   const activeModeKey = useMemo(() => {
-    const active = availableModes.find(mode => areSettingsEqual(timerSession?.settings, mode.settings));
+    const currentSettingsString = JSON.stringify(timerSession?.settings);
+    const active = availableModes.find(mode => JSON.stringify(mode.settings) === currentSettingsString);
     return active ? active.key : null;
   }, [availableModes, timerSession?.settings]);
   const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
 
-  const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : timerSession?.sessionType === 'shortBreak' ? 'Short Break' : 'Long Break';
+  const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : 'Break';
   const progressColor = useMemo(() => SESSION_COLORS[timerSession?.sessionType] || SESSION_COLORS.focus, [timerSession?.sessionType]);
 
   return (
@@ -192,30 +174,17 @@ export default function StudyTimerScreen() {
           <MotiView from={{ opacity: 0, translateY: 30 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 400 }} style={styles.controlsContainer}><TimerControls status={timerSession?.status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} /></MotiView>
         </View>
 
-        {/* ✅ THE FIX: The entire mode selector is now animated */}
         <View style={styles.modeSelectorSection}>
           <ScrollView ref={scrollViewRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScrollContent}>
             <AnimatePresence>
               {activeModeLayout && (
-                <MotiView
-                  from={{ opacity: 0 }}
-                  animate={{ opacity: 1, left: activeModeLayout.x, width: activeModeLayout.width, height: activeModeLayout.height }}
-                  transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-                  style={[styles.modeCardActive, styles.activeIndicator]}
-                />
+                <MotiView from={{ opacity: 0 }} animate={{ opacity: 1, left: activeModeLayout.x, width: activeModeLayout.width, height: activeModeLayout.height }} transition={{ type: 'spring', damping: 20, stiffness: 200 }} style={[styles.modeCardActive, styles.activeIndicator]} />
               )}
             </AnimatePresence>
             {availableModes.map((mode) => {
               const isActive = activeModeKey === mode.key;
               return (
-                <Pressable
-                  key={mode.key}
-                  onLayout={(event) => handleModeLayout(event, mode.key)}
-                  style={styles.modeCard}
-                  onPress={() => handleSelectMode(mode)}
-                  onLongPress={() => handleEditMode(mode)}
-                  disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}
-                >
+                <Pressable key={mode.key} onLayout={(event) => handleModeLayout(event, mode.key)} style={styles.modeCard} onPress={() => handleSelectMode(mode)} onLongPress={() => handleEditMode(mode)} disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}>
                   <FontAwesome5 name={mode.icon ?? 'clock'} size={20} color={isActive ? 'white' : '#9CA3AF'} />
                   <Text style={[styles.modeCardTitle, isActive && styles.modeCardTitleActive]}>{mode.name}</Text>
                 </Pressable>
@@ -251,11 +220,5 @@ const styles = StyleSheet.create({
   modeCardTitle: { color: '#9CA3AF', fontSize: 15, fontWeight: '600', marginTop: 8 },
   modeCardTitleActive: { color: 'white' },
   addModeCard: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginHorizontal: 5, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.2)', borderStyle: 'dashed' },
-  // ✅ NEW: Style for the absolutely positioned animated indicator
-  activeIndicator: {
-    position: 'absolute',
-    top: 0, // It will align with the top of the scroll content
-    borderRadius: 16,
-    borderWidth: 2,
-  },
+  activeIndicator: { position: 'absolute', top: 0, borderRadius: 16, borderWidth: 2 },
 });

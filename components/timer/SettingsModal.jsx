@@ -1,4 +1,3 @@
-
 // components/timer/SettingsModal.jsx
 import React, { useState, useEffect } from 'react';
 import {
@@ -25,16 +24,19 @@ const AVAILABLE_ICONS = [
 const toMinutes = (seconds) => (seconds / 60).toString();
 const toSeconds = (minutes) => (parseInt(minutes, 10) || 0) * 60;
 
-const SettingsInput = ({ label, value, onChangeText, keyboardType = 'numeric' }) => (
+// ✅ NEW: Component for the session number stepper
+const SessionCounter = ({ count, onCountChange }) => (
   <View style={styles.inputContainer}>
-    <Text style={styles.inputLabel}>{label}</Text>
-    <TextInput
-      style={styles.input}
-      value={value}
-      onChangeText={onChangeText}
-      keyboardType={keyboardType}
-      placeholderTextColor="#9CA3AF"
-    />
+    <Text style={styles.inputLabel}>Number of Sessions</Text>
+    <View style={styles.counterContainer}>
+      <Pressable style={styles.counterButton} onPress={() => onCountChange(Math.max(1, count - 1))}>
+        <FontAwesome5 name="minus" size={16} color="#E5E7EB" />
+      </Pressable>
+      <Text style={styles.counterText}>{count}</Text>
+      <Pressable style={styles.counterButton} onPress={() => onCountChange(count + 1)}>
+        <FontAwesome5 name="plus" size={16} color="#E5E7EB" />
+      </Pressable>
+    </View>
   </View>
 );
 
@@ -43,7 +45,12 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
 
   useEffect(() => {
     if (modeToEdit) {
+      // Deep copy to avoid mutating the original state
       const editableMode = JSON.parse(JSON.stringify(modeToEdit));
+      // Ensure sessions array exists
+      if (!editableMode.settings.sessions) {
+        editableMode.settings.sessions = [{ focus: 25 * 60, break: 5 * 60 }];
+      }
       setMode(editableMode);
     } else {
       setMode(null);
@@ -55,7 +62,19 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
       Alert.alert('Validation Error', 'Mode name cannot be empty.');
       return;
     }
-    onSave(mode);
+    // Create a clean version of the mode to save, removing old properties
+    const modeToSave = {
+      key: mode.key,
+      name: mode.name,
+      icon: mode.icon,
+      settings: {
+        sessions: mode.settings.sessions,
+        // Keep these for compatibility, though they are not used in the new logic
+        autoStartNextSession: true,
+        enableAudioNotifications: mode.settings.enableAudioNotifications,
+      }
+    };
+    onSave(modeToSave);
   };
 
   const handleDelete = () => {
@@ -66,29 +85,42 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
     Alert.alert(
       'Confirm Deletion',
       `Are you sure you want to delete "${mode.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => onDelete(mode.key) },
-      ],
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => onDelete(mode.key) }],
       { cancelable: true }
     );
   };
+  
+  // ✅ NEW: Handle changes to the number of sessions
+  const handleSessionCountChange = (newCount) => {
+    setMode(prev => {
+      const currentSessions = prev.settings.sessions || [];
+      const lastSession = currentSessions[currentSessions.length - 1] || { focus: 25 * 60, break: 5 * 60 };
+      const newSessions = [...currentSessions];
+      if (newCount > currentSessions.length) {
+        for (let i = currentSessions.length; i < newCount; i++) {
+          newSessions.push({ ...lastSession }); // Add new sessions based on the last one
+        }
+      } else {
+        newSessions.length = newCount; // Truncate the array
+      }
+      return { ...prev, settings: { ...prev.settings, sessions: newSessions } };
+    });
+  };
 
-  const updateSetting = (key, value) => {
-    setMode(prev => ({
-      ...prev,
-      settings: { ...prev.settings, [key]: value },
-    }));
+  // ✅ NEW: Handle changes for a specific session's focus or break time
+  const handleSessionValueChange = (index, type, value) => {
+    setMode(prev => {
+      const newSessions = [...prev.settings.sessions];
+      newSessions[index] = { ...newSessions[index], [type]: toSeconds(value) };
+      return { ...prev, settings: { ...prev.settings, sessions: newSessions } };
+    });
   };
 
   if (!mode) return null;
 
   return (
     <Modal visible={isVisible} transparent animationType="fade">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill}>
           <Pressable style={styles.modalBackdrop} onPress={onClose}>
             <MotiView
@@ -96,66 +128,45 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
               animate={{ opacity: 1, scale: 1, translateY: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
               onStartShouldSetResponder={() => true}
-              style={styles.motiViewContainer} // ✅ Use a style here to control layout
+              style={styles.motiViewContainer}
             >
-              {/* ✅ Main container for content and buttons */}
               <View style={styles.modalContainer}>
-                {/* ✅ Scrollable content area */}
-                <ScrollView
-                  style={styles.scrollArea}
-                  contentContainerStyle={styles.scrollContent}
-                  showsVerticalScrollIndicator={false}
-                >
+                <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                   <Text style={styles.modalTitle}>{mode.key.startsWith('custom') ? 'New Mode' : 'Edit Mode'}</Text>
                   
-                  <SettingsInput
-                    label="Mode Name"
+                  <TextInput
+                    style={[styles.input, styles.modeNameInput]}
                     value={mode.name}
                     onChangeText={(text) => setMode(prev => ({ ...prev, name: text }))}
-                    keyboardType="default"
+                    placeholder="Mode Name"
+                    placeholderTextColor="#9CA3AF"
                   />
                   
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Icon</Text>
                     <View style={styles.iconGrid}>
-                      {AVAILABLE_ICONS.map((iconName) => {
-                        const isActive = mode.icon === iconName;
-                        return (
-                          <Pressable
-                            key={iconName}
-                            style={[styles.iconButton, isActive && styles.iconButtonActive]}
-                            onPress={() => setMode(prev => ({ ...prev, icon: iconName }))}
-                          >
-                            <FontAwesome5 name={iconName} size={22} color={isActive ? '#FFFFFF' : '#E5E7EB'} />
-                          </Pressable>
-                        );
-                      })}
+                      {AVAILABLE_ICONS.map(iconName => (
+                        <Pressable key={iconName} style={[styles.iconButton, mode.icon === iconName && styles.iconButtonActive]} onPress={() => setMode(prev => ({ ...prev, icon: iconName }))}>
+                          <FontAwesome5 name={iconName} size={22} color={mode.icon === iconName ? '#FFFFFF' : '#E5E7EB'} />
+                        </Pressable>
+                      ))}
                     </View>
                   </View>
 
-                  <SettingsInput
-                    label="Focus Duration (minutes)"
-                    value={toMinutes(mode.settings.focusDuration)}
-                    onChangeText={(text) => updateSetting('focusDuration', toSeconds(text))}
-                  />
-                  <SettingsInput
-                    label="Short Break (minutes)"
-                    value={toMinutes(mode.settings.shortBreakDuration)}
-                    onChangeText={(text) => updateSetting('shortBreakDuration', toSeconds(text))}
-                  />
-                  <SettingsInput
-                    label="Long Break (minutes)"
-                    value={toMinutes(mode.settings.longBreakDuration)}
-                    onChangeText={(text) => updateSetting('longBreakDuration', toSeconds(text))}
-                  />
-                  <SettingsInput
-                    label="Sessions per Cycle"
-                    value={mode.settings.pomodorosPerCycle.toString()}
-                    onChangeText={(text) => updateSetting('pomodorosPerCycle', parseInt(text, 10) || 1)}
-                  />
+                  <SessionCounter count={mode.settings.sessions.length} onCountChange={handleSessionCountChange} />
+
+                  {/* ✅ NEW: Dynamically render inputs for each session */}
+                  {mode.settings.sessions.map((session, index) => (
+                    <View key={index} style={styles.sessionRow}>
+                      <Text style={styles.sessionLabel}>Session {index + 1}</Text>
+                      <View style={styles.sessionInputContainer}>
+                        <TextInput style={styles.sessionInput} value={toMinutes(session.focus)} onChangeText={(text) => handleSessionValueChange(index, 'focus', text)} keyboardType="numeric" placeholder="Focus" />
+                        <TextInput style={styles.sessionInput} value={toMinutes(session.break)} onChangeText={(text) => handleSessionValueChange(index, 'break', text)} keyboardType="numeric" placeholder="Break" />
+                      </View>
+                    </View>
+                  ))}
                 </ScrollView>
 
-                {/* ✅ FIXED Button area, outside of the ScrollView */}
                 <View style={styles.buttonRow}>
                   {!mode.key.startsWith('default-') && (
                      <Pressable style={[styles.button, styles.deleteButton]} onPress={handleDelete}>
@@ -176,108 +187,31 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
 };
 
 const styles = StyleSheet.create({
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  // ✅ NEW: Style for MotiView to constrain size
-  motiViewContainer: {
-    width: '92%',
-    maxHeight: '85%',
-  },
-  // ✅ MODIFIED: This is now the main wrapper for scroll + buttons
-  modalContainer: {
-    backgroundColor: 'rgba(30, 41, 59, 0.95)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    overflow: 'hidden', // Important to keep rounded corners
-    flexShrink: 1, // Ensure it doesn't grow beyond maxHeight
-  },
-  // ✅ NEW: Style for the scrollable part
-  scrollArea: {
-    flexGrow: 0,
-  },
-  // ✅ NEW: Padding is now applied here
-  scrollContent: {
-    padding: 25,
-  },
-  modalTitle: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 25,
-  },
-  inputContainer: {
-    marginBottom: 18,
-  },
-  inputLabel: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 10,
-    padding: 14,
-    color: 'white',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  iconButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  iconButtonActive: {
-    borderColor: '#34D399',
-    backgroundColor: 'rgba(52, 211, 153, 0.2)',
-  },
-  // ✅ MODIFIED: This is now the fixed bottom bar
-  buttonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(30, 41, 59, 0.95)', // Match modal background
-  },
-  button: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  deleteButton: {
-    backgroundColor: 'rgba(248, 113, 113, 0.1)',
-    marginRight: 'auto',
-    paddingHorizontal: 20,
-  },
-  saveButton: {
-    backgroundColor: '#10B981',
-    flex: 1,
-    marginLeft: 10,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  modalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.4)' },
+  motiViewContainer: { width: '92%', maxHeight: '85%' },
+  modalContainer: { backgroundColor: 'rgba(30, 41, 59, 0.95)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden', flexShrink: 1 },
+  scrollArea: { flexGrow: 0 },
+  scrollContent: { padding: 25 },
+  modalTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
+  modeNameInput: { marginBottom: 18, textAlign: 'center', fontSize: 18, padding: 16 },
+  inputContainer: { marginBottom: 20 },
+  inputLabel: { color: '#9CA3AF', fontSize: 14, marginBottom: 8, fontWeight: '500' },
+  input: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 10, padding: 14, color: 'white', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  iconButton: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 2, borderColor: 'transparent' },
+  iconButtonActive: { borderColor: '#34D399', backgroundColor: 'rgba(52, 211, 153, 0.2)' },
+  counterContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 10, padding: 8 },
+  counterButton: { padding: 10, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+  counterText: { color: 'white', fontSize: 20, fontWeight: 'bold', marginHorizontal: 20 },
+  sessionRow: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 12, padding: 15, marginBottom: 12 },
+  sessionLabel: { color: 'white', fontWeight: '600', marginBottom: 10 },
+  sessionInputContainer: { flexDirection: 'row', gap: 10 },
+  sessionInput: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.2)', borderRadius: 8, padding: 12, color: 'white', fontSize: 16, textAlign: 'center' },
+  buttonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 25, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(30, 41, 59, 0.95)' },
+  button: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  deleteButton: { backgroundColor: 'rgba(248, 113, 113, 0.1)', marginRight: 'auto', paddingHorizontal: 20 },
+  saveButton: { backgroundColor: '#10B981', flex: 1, marginLeft: 10 },
+  saveButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
 
 export default SettingsModal;

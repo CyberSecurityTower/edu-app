@@ -1,3 +1,4 @@
+
 // components/timer/SettingsModal.jsx
 import React, { useState, useEffect } from 'react';
 import {
@@ -24,7 +25,6 @@ const AVAILABLE_ICONS = [
 const toMinutes = (seconds) => (seconds / 60).toString();
 const toSeconds = (minutes) => (parseInt(minutes, 10) || 0) * 60;
 
-// ✅ NEW: Component for the session number stepper
 const SessionCounter = ({ count, onCountChange }) => (
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>Number of Sessions</Text>
@@ -45,9 +45,7 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
 
   useEffect(() => {
     if (modeToEdit) {
-      // Deep copy to avoid mutating the original state
       const editableMode = JSON.parse(JSON.stringify(modeToEdit));
-      // Ensure sessions array exists
       if (!editableMode.settings.sessions) {
         editableMode.settings.sessions = [{ focus: 25 * 60, break: 5 * 60 }];
       }
@@ -62,14 +60,12 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
       Alert.alert('Validation Error', 'Mode name cannot be empty.');
       return;
     }
-    // Create a clean version of the mode to save, removing old properties
     const modeToSave = {
       key: mode.key,
       name: mode.name,
       icon: mode.icon,
       settings: {
         sessions: mode.settings.sessions,
-        // Keep these for compatibility, though they are not used in the new logic
         autoStartNextSession: true,
         enableAudioNotifications: mode.settings.enableAudioNotifications,
       }
@@ -90,7 +86,6 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
     );
   };
   
-  // ✅ NEW: Handle changes to the number of sessions
   const handleSessionCountChange = (newCount) => {
     setMode(prev => {
       const currentSessions = prev.settings.sessions || [];
@@ -98,16 +93,15 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
       const newSessions = [...currentSessions];
       if (newCount > currentSessions.length) {
         for (let i = currentSessions.length; i < newCount; i++) {
-          newSessions.push({ ...lastSession }); // Add new sessions based on the last one
+          newSessions.push({ ...lastSession });
         }
       } else {
-        newSessions.length = newCount; // Truncate the array
+        newSessions.length = newCount;
       }
       return { ...prev, settings: { ...prev.settings, sessions: newSessions } };
     });
   };
 
-  // ✅ NEW: Handle changes for a specific session's focus or break time
   const handleSessionValueChange = (index, type, value) => {
     setMode(prev => {
       const newSessions = [...prev.settings.sessions];
@@ -127,57 +121,60 @@ const SettingsModal = ({ isVisible, onClose, onSave, onDelete, modeToEdit }) => 
               from={{ opacity: 0, scale: 0.8, translateY: 50 }}
               animate={{ opacity: 1, scale: 1, translateY: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              onStartShouldSetResponder={() => true}
+              // ✅ THE FIX: Removed `onStartShouldSetResponder` to allow scrolling.
+              // The Pressable below now prevents the modal from closing on touch.
               style={styles.motiViewContainer}
             >
-              <View style={styles.modalContainer}>
-                <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                  <Text style={styles.modalTitle}>{mode.key.startsWith('custom') ? 'New Mode' : 'Edit Mode'}</Text>
-                  
-                  <TextInput
-                    style={[styles.input, styles.modeNameInput]}
-                    value={mode.name}
-                    onChangeText={(text) => setMode(prev => ({ ...prev, name: text }))}
-                    placeholder="Mode Name"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Icon</Text>
-                    <View style={styles.iconGrid}>
-                      {AVAILABLE_ICONS.map(iconName => (
-                        <Pressable key={iconName} style={[styles.iconButton, mode.icon === iconName && styles.iconButtonActive]} onPress={() => setMode(prev => ({ ...prev, icon: iconName }))}>
-                          <FontAwesome5 name={iconName} size={22} color={mode.icon === iconName ? '#FFFFFF' : '#E5E7EB'} />
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-
-                  <SessionCounter count={mode.settings.sessions.length} onCountChange={handleSessionCountChange} />
-
-                  {/* ✅ NEW: Dynamically render inputs for each session */}
-                  {mode.settings.sessions.map((session, index) => (
-                    <View key={index} style={styles.sessionRow}>
-                      <Text style={styles.sessionLabel}>Session {index + 1}</Text>
-                      <View style={styles.sessionInputContainer}>
-                        <TextInput style={styles.sessionInput} value={toMinutes(session.focus)} onChangeText={(text) => handleSessionValueChange(index, 'focus', text)} keyboardType="numeric" placeholder="Focus" />
-                        <TextInput style={styles.sessionInput} value={toMinutes(session.break)} onChangeText={(text) => handleSessionValueChange(index, 'break', text)} keyboardType="numeric" placeholder="Break" />
+              {/* This Pressable captures touches on the modal content so they don't fall through to the backdrop */}
+              <Pressable> 
+                <View style={styles.modalContainer}>
+                  <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.modalTitle}>{mode.key.startsWith('custom') ? 'New Mode' : 'Edit Mode'}</Text>
+                    
+                    <TextInput
+                      style={[styles.input, styles.modeNameInput]}
+                      value={mode.name}
+                      onChangeText={(text) => setMode(prev => ({ ...prev, name: text }))}
+                      placeholder="Mode Name"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>Icon</Text>
+                      <View style={styles.iconGrid}>
+                        {AVAILABLE_ICONS.map(iconName => (
+                          <Pressable key={iconName} style={[styles.iconButton, mode.icon === iconName && styles.iconButtonActive]} onPress={() => setMode(prev => ({ ...prev, icon: iconName }))}>
+                            <FontAwesome5 name={iconName} size={22} color={mode.icon === iconName ? '#FFFFFF' : '#E5E7EB'} />
+                          </Pressable>
+                        ))}
                       </View>
                     </View>
-                  ))}
-                </ScrollView>
 
-                <View style={styles.buttonRow}>
-                  {!mode.key.startsWith('default-') && (
-                     <Pressable style={[styles.button, styles.deleteButton]} onPress={handleDelete}>
-                        <FontAwesome5 name="trash" size={16} color="#F87171" />
-                     </Pressable>
-                  )}
-                  <Pressable style={[styles.button, styles.saveButton]} onPress={handleSave}>
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  </Pressable>
+                    <SessionCounter count={mode.settings.sessions.length} onCountChange={handleSessionCountChange} />
+
+                    {mode.settings.sessions.map((session, index) => (
+                      <View key={index} style={styles.sessionRow}>
+                        <Text style={styles.sessionLabel}>Session {index + 1}</Text>
+                        <View style={styles.sessionInputContainer}>
+                          <TextInput style={styles.sessionInput} value={toMinutes(session.focus)} onChangeText={(text) => handleSessionValueChange(index, 'focus', text)} keyboardType="numeric" placeholder="Focus" />
+                          <TextInput style={styles.sessionInput} value={toMinutes(session.break)} onChangeText={(text) => handleSessionValueChange(index, 'break', text)} keyboardType="numeric" placeholder="Break" />
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+
+                  <View style={styles.buttonRow}>
+                    {!mode.key.startsWith('default-') && (
+                       <Pressable style={[styles.button, styles.deleteButton]} onPress={handleDelete}>
+                          <FontAwesome5 name="trash" size={16} color="#F87171" />
+                       </Pressable>
+                    )}
+                    <Pressable style={[styles.button, styles.saveButton]} onPress={handleSave}>
+                      <Text style={styles.saveButtonText}>Save</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
+              </Pressable>
             </MotiView>
           </Pressable>
         </BlurView>

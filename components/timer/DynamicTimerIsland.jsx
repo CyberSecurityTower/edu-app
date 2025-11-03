@@ -1,5 +1,4 @@
 
-
 // components/timer/DynamicTimerIsland.jsx
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, AccessibilityInfo, Dimensions } from 'react-native';
@@ -20,7 +19,6 @@ const { height: screenHeight } = Dimensions.get('window');
 const ANIMATION_CONFIG = { mainSpring: { damping: 22, stiffness: 350 }, pressSpring: { damping: 15, stiffness: 500, mass: 0.5 }, longPressDuration: 300 };
 const CONSTANTS = { COMPACT_HEIGHT: 50, EXPANDED_HEIGHT: 92, SAFE_AREA_TOP_MARGIN: 10 };
 
-// ✅ NEW: Simplified ICONS object for the new logic
 const ICONS = {
   focus: { name: 'brain', color: '#34D399' },
   break: { name: 'coffee', color: '#60A5FA' },
@@ -29,12 +27,15 @@ const ICONS = {
 };
 
 const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMotion, isExpanded, isFlashing, showDoneMessage }, ref) => {
+  // ✅ THE FIX: Add a defensive check to ensure timeLeft is a valid number.
+  const safeTimeLeft = typeof timeLeft === 'number' && isFinite(timeLeft) ? timeLeft : 0;
+
   if (status === 'finished') {
     if (showDoneMessage) return <Text style={styles.doneText}>You're done!</Text>;
     return <Text style={[isExpanded ? styles.expandedTimerText : styles.timerText, { opacity: isFlashing ? 1 : 0.4 }]}>00:00</Text>;
   }
-  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-  const seconds = (timeLeft % 60).toString().padStart(2, '0');
+  const minutes = Math.floor(safeTimeLeft / 60).toString().padStart(2, '0');
+  const seconds = (safeTimeLeft % 60).toString().padStart(2, '0');
   const textStyle = isExpanded ? styles.expandedTimerText : styles.timerText;
   return (
     <View style={isExpanded ? styles.expandedRight : styles.timerContainer}>
@@ -51,7 +52,9 @@ TimerDisplay.displayName = 'TimerDisplay';
 
 function DynamicTimerIslandInner() {
   const router = useRouter();
-  const { timerSession, timeLeft, pauseTimer, resumeTimer, endTimer } = useAppState();
+  // ✅ THE FIX: Destructure timeLeft directly from timerSession
+  const { timerSession, pauseTimer, resumeTimer, endTimer } = useAppState();
+  const { duration, taskTitle, status, sessionType, currentCycle, timeLeft } = timerSession || {};
   const insets = useSafeAreaInsets();
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -65,8 +68,6 @@ function DynamicTimerIslandInner() {
   const expansion = useSharedValue(0);
   const pressScale = useSharedValue(1);
   const transitionProgress = useSharedValue(0);
-
-  const { duration, taskTitle, status, sessionType, currentCycle } = timerSession || {};
 
   useEffect(() => {
     let flashInterval, doneMessageTimeout, endTimerTimeout;
@@ -113,10 +114,7 @@ function DynamicTimerIslandInner() {
   const handleEndSession = useCallback(() => { triggerHaptic(); setIsExpanded(false); setTimeout(endTimer, 260); }, [triggerHaptic, endTimer]);
   
   const progress = useMemo(() => { if (status === 'finished') return 1; return duration > 0 ? (duration - timeLeft) / duration : 0; }, [duration, timeLeft, status]);
-  
-  // ✅ UPDATED: Simplified icon logic
   const iconConfig = useMemo(() => ICONS[status === 'finished' ? 'finished' : sessionType] || ICONS.default, [sessionType, status]);
-  
   const SAFE_TOP = Math.max(8, insets.top || 0) + CONSTANTS.SAFE_AREA_TOP_MARGIN;
 
   const animatedContainerStyle = useAnimatedStyle(() => ({ height: CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT), transform: [{ scale: pressScale.value }], width: `${94 + (100 - 94) * transitionProgress.value}%` }), []);
@@ -134,7 +132,6 @@ function DynamicTimerIslandInner() {
     else if (status === 'idle' || status === 'finished') audioService.stopSessionSound?.();
   }, [status, timerSession?.selectedSound]);
 
-  // ✅ UPDATED: Simplified display title logic
   const displayTitle = status === 'finished' ? 'Cycle Complete!' : (sessionType === 'focus' ? (taskTitle || 'Focus') : 'Break');
 
   return (

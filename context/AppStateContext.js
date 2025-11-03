@@ -1,5 +1,4 @@
 
---- START OF FILE AppStateContext.js ---
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,7 +28,6 @@ export const AppStateProvider = ({ children }) => {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(null);
   const [points, setPoints] = useState(0);
 
-  // ✅ THE FIX: timeLeft is now part of the timerSession object for atomic updates.
   const [timerSession, setTimerSession] = useState({
     status: 'idle',
     sessionType: 'focus',
@@ -119,7 +117,6 @@ export const AppStateProvider = ({ children }) => {
       return;
     }
     intervalRef.current = setInterval(() => {
-      // ✅ THE FIX: Use functional update to avoid stale state issues inside the interval.
       setTimerSession(prev => {
         if (prev.timeLeft <= 1) {
           clearInterval(intervalRef.current);
@@ -155,16 +152,20 @@ export const AppStateProvider = ({ children }) => {
     else audioService.stopSessionSound();
   }, [timerSession.status, timerSession.selectedSound]);
 
+  // ✅ THE FIX: Simplified startTimer logic. It no longer touches timeLeft for the 'idle' state.
+  // The timeLeft value is already correct from updateSettings.
   const startTimer = useCallback((soundId) => {
     setTimerSession(prev => {
       if (prev.status === 'idle' || prev.status === 'finished') {
         if (prev.settings.enableAudioNotifications) audioService.playEffect('start-effect');
+        
         if (prev.status === 'finished') {
           const firstSessionDuration = prev.settings.sessions[0].focus;
           return { ...prev, status: 'active', sessionType: 'focus', duration: firstSessionDuration, timeLeft: firstSessionDuration, currentCycle: 1, selectedSound: soundId };
         }
-        // When starting from idle, ensure timeLeft is synced with duration.
-        return { ...prev, status: 'active', timeLeft: prev.duration, selectedSound: soundId };
+        
+        // For 'idle' state, just change the status. timeLeft is already correct.
+        return { ...prev, status: 'active', selectedSound: soundId };
       }
       return prev;
     });
@@ -182,6 +183,7 @@ export const AppStateProvider = ({ children }) => {
     });
   }, []);
 
+  // ✅ THE FIX: Ensured that when settings are updated in 'idle' state, both duration and timeLeft are updated.
   const updateSettings = useCallback(async (newSettings) => {
     try {
       await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, JSON.stringify(newSettings));
@@ -197,11 +199,9 @@ export const AppStateProvider = ({ children }) => {
 
   const refreshPoints = useCallback(async () => { if (user?.uid) { const progressDoc = await getDoc(doc(db, 'userProgress', user.uid)); if (progressDoc.exists()) setPoints(progressDoc.data().stats?.points || 0); } }, [user?.uid]);
   
-  // ✅ Pass the whole timerSession object. Consumers will destructure what they need.
   const value = { user, setUser, authLoading, hasCompletedOnboarding, setHasCompletedOnboarding, points, refreshPoints, timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, resetTimer: endTimer, skipTimer, updateSettings };
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
-
 
 export const useAppState = () => useContext(AppStateContext);

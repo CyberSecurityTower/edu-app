@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -11,7 +12,6 @@ const AppStateContext = createContext();
 
 const ASYNC_STORAGE_SETTINGS_KEY = '@lastActiveTimerSettings';
 
-// ✅ NEW: Default modes are also defined here to get the key of the default mode
 const DEFAULT_MODES = [
   { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
   { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
@@ -35,7 +35,7 @@ export const AppStateProvider = ({ children }) => {
     taskId: null,
     selectedSound: null,
     settings: DEFAULT_SETTINGS,
-    activeModeKey: DEFAULT_MODES[0].key, // ✅ NEW: Track the active mode key
+    activeModeKey: DEFAULT_MODES[0].key,
   });
 
   // ... (useEffect for loading data and auth remains the same)
@@ -44,7 +44,6 @@ export const AppStateProvider = ({ children }) => {
       if (!storedSettingsString) return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
       try {
         const parsed = JSON.parse(storedSettingsString);
-        // ✅ We now expect an object { settings, key }
         if (parsed && parsed.settings && Array.isArray(parsed.settings.sessions) && parsed.settings.sessions.length > 0 && parsed.key) {
           return parsed;
         }
@@ -54,7 +53,6 @@ export const AppStateProvider = ({ children }) => {
         return { settings: DEFAULT_SETTINGS, key: DEFAULT_MODES[0].key };
       }
     };
-
     const loadInitialData = async () => {
       try {
         const onboarding = await AsyncStorage.getItem('@hasCompletedOnboarding');
@@ -70,7 +68,6 @@ export const AppStateProvider = ({ children }) => {
       }
     };
     loadInitialData();
-
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
@@ -87,29 +84,24 @@ export const AppStateProvider = ({ children }) => {
       }
       setAuthLoading(false);
     });
-
     return () => {
       unsubscribeAuth();
       BackgroundTimer.stopBackgroundTimer();
     };
   }, []);
 
-
   const _transitionToNextSession = useCallback((currentSession) => {
     const { sessionType, currentCycle, settings } = currentSession;
     const sessionIndex = currentCycle - 1;
     const currentSessionConfig = settings.sessions[sessionIndex];
-
     if (sessionType === 'focus' && currentSessionConfig.break > 0) {
       return { ...currentSession, status: 'active', sessionType: 'break', duration: currentSessionConfig.break, timeLeft: currentSessionConfig.break };
     }
-
     const nextSessionIndex = sessionIndex + 1;
     if (nextSessionIndex < settings.sessions.length) {
       const nextSessionConfig = settings.sessions[nextSessionIndex];
       return { ...currentSession, status: 'active', sessionType: 'focus', duration: nextSessionConfig.focus, timeLeft: nextSessionConfig.focus, currentCycle: currentSession.currentCycle + 1 };
     }
-
     return { ...currentSession, status: 'finished', timeLeft: 0 };
   }, []);
 
@@ -119,21 +111,27 @@ export const AppStateProvider = ({ children }) => {
         audioService.playEffect('end-effect');
       }
       const nextState = _transitionToNextSession(prev);
-      if (nextState.status === 'active') {
+      if (nextState.status === 'active' && prev.settings.autoStartNextSession) {
         startTimerLogic(nextState);
+      } else if (nextState.status === 'finished') {
+        // Ensure timer is stopped if the whole cycle is finished
+        BackgroundTimer.stopBackgroundTimer();
       }
       return nextState;
     });
   }, [_transitionToNextSession]);
 
   const startTimerLogic = (sessionState) => {
+    // ✅ FIX [1/2]: The most important fix. Always stop any potential old timer before starting a new one.
+    // This prevents multiple timers from running simultaneously.
+    BackgroundTimer.stopBackgroundTimer();
+
     BackgroundTimer.runBackgroundTimer(() => {
       setTimerSession(prev => {
         if (prev.status !== 'active') {
           BackgroundTimer.stopBackgroundTimer();
           return prev;
         }
-        
         const newTimeLeft = prev.timeLeft - 1;
         if (newTimeLeft < 1) {
           BackgroundTimer.stopBackgroundTimer();
@@ -149,7 +147,6 @@ export const AppStateProvider = ({ children }) => {
     setTimerSession(prev => {
       if (prev.status === 'idle' || prev.status === 'finished') {
         if (prev.settings.enableAudioNotifications) audioService.playEffect('start-effect');
-
         let newState;
         if (prev.status === 'finished') {
           const firstSessionDuration = prev.settings.sessions[0].focus;
@@ -157,7 +154,6 @@ export const AppStateProvider = ({ children }) => {
         } else {
           newState = { ...prev, status: 'active', selectedSound: soundId };
         }
-        
         startTimerLogic(newState);
         return newState;
       }
@@ -194,34 +190,20 @@ export const AppStateProvider = ({ children }) => {
     });
   }, []);
 
-  // ✅ MODIFIED: The function now accepts the entire mode object for robustness
   const updateSettings = useCallback(async (newMode) => {
-    // ✅ GUARD CLAUSE: Prevent crash if undefined is passed
+    // ✅ ENHANCED: Enhanced guard clause with logging to help debug if it ever happens again.
     if (!newMode || !newMode.settings || !newMode.key) {
-      console.error("updateSettings was called with an invalid mode object. Aborting.", newMode);
+      console.error("CRITICAL: updateSettings was called with an invalid mode object. Aborting update.", newMode);
       return;
     }
-
     try {
-      // ✅ Save both settings and the key
       const dataToStore = JSON.stringify({ settings: newMode.settings, key: newMode.key });
       await AsyncStorage.setItem(ASYNC_STORAGE_SETTINGS_KEY, dataToStore);
-      
       setTimerSession(prev => {
         const firstSessionDuration = newMode.settings.sessions[0].focus;
-        // Only reset timer values if it's not running
         if (prev.status === 'idle' || prev.status === 'finished') {
-          return { 
-            ...prev, 
-            settings: newMode.settings, 
-            activeModeKey: newMode.key,
-            duration: firstSessionDuration, 
-            timeLeft: firstSessionDuration, 
-            sessionType: 'focus', 
-            currentCycle: 1 
-          };
+          return { ...prev, settings: newMode.settings, activeModeKey: newMode.key, duration: firstSessionDuration, timeLeft: firstSessionDuration, sessionType: 'focus', currentCycle: 1 };
         }
-        // If a session is active/paused, just update the settings and key for the next run
         return { ...prev, settings: newMode.settings, activeModeKey: newMode.key };
       });
     } catch (e) { 
@@ -229,7 +211,6 @@ export const AppStateProvider = ({ children }) => {
     }
   }, []);
 
-  // ... (rest of the provider remains the same)
   useEffect(() => {
     const { status, selectedSound } = timerSession;
     if (status === 'active') audioService.playSessionSound(selectedSound);

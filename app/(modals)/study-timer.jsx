@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -67,7 +68,6 @@ TimerStatusIndicator.displayName = 'TimerStatusIndicator';
 export default function StudyTimerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  // ✅ Destructure activeModeKey directly from timerSession
   const { timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
   const { timeLeft, activeModeKey } = timerSession;
 
@@ -100,10 +100,13 @@ export default function StudyTimerScreen() {
 
   const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
   
-  // ✅ MODIFIED: Pass the entire mode object to updateSettings
   const handleSelectMode = useCallback((mode) => {
     if (timerSession.status === 'active' || timerSession.status === 'paused') return;
-    updateSettings(mode); // Pass the whole mode object
+    if (!mode || !mode.key) {
+      console.warn("handleSelectMode was called with an invalid mode object.", mode);
+      return;
+    }
+    updateSettings(mode);
     const layout = modeLayouts[mode.key];
     if (layout && scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ x: layout.x - 15, animated: true });
@@ -122,8 +125,7 @@ export default function StudyTimerScreen() {
   const handleEditMode = useCallback((mode) => { setModeToEdit(mode); setIsSettingsVisible(true); }, []);
   
   const handleSaveMode = useCallback(async (savedMode) => {
-    const wasActiveMode = modeToEdit?.key === activeModeKey; // ✅ Compare keys
-    
+    const wasActiveMode = modeToEdit?.key === activeModeKey;
     const updatedModes = await new Promise(resolve => {
       setAvailableModes(prevModes => {
         const isNew = !prevModes.some(m => m.key === savedMode.key);
@@ -132,14 +134,10 @@ export default function StudyTimerScreen() {
         return newModeList;
       });
     });
-
     await saveModes(updatedModes);
-    
-    // ✅ If the mode being edited was the active one, update the main state
     if (wasActiveMode) {
       updateSettings(savedMode);
     }
-
     setModeToEdit(null);
     setIsSettingsVisible(false);
   }, [activeModeKey, updateSettings, modeToEdit]);
@@ -148,7 +146,6 @@ export default function StudyTimerScreen() {
     const updatedModes = availableModes.filter(m => m.key !== modeKey);
     setAvailableModes(updatedModes);
     await saveModes(updatedModes);
-    // ✅ If the deleted mode was active, switch to the default one
     if (modeKey === activeModeKey) {
       updateSettings(DEFAULT_MODES[0]);
     }
@@ -159,9 +156,7 @@ export default function StudyTimerScreen() {
   const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
   const handleModeLayout = useCallback((event, key) => { const { x, width, height } = event.nativeEvent.layout; setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } })); }, []);
 
-  // ✅ SIMPLIFIED: No more complex useMemo. The active layout is found directly.
   const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
-
   const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : 'Break';
   const progressColor = useMemo(() => SESSION_COLORS[timerSession?.sessionType] || SESSION_COLORS.focus, [timerSession?.sessionType]);
 
@@ -173,12 +168,22 @@ export default function StudyTimerScreen() {
           <Pressable style={styles.headerIcon} onPress={() => { audioService?.stopPreview?.(); setIsSoundsVisible(true); }}><FontAwesome5 name="music" size={22} color="#E5E7EB" /></Pressable>
         </View>
 
-        <View style={styles.content}>
-          <MotiView from={{ opacity: 0, translateY: -20 }} animate={{ opacity: 1, translateY: 0 }} style={styles.titleContainer}><Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text></MotiView>
-          <MotiView from={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', delay: 200 }}><CircularProgress duration={timerSession?.duration ?? 0} timeLeft={timeLeft} sessionType={timerSession?.sessionType} progressColor={progressColor} /></MotiView>
-          <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 300 }}><TimerStatusIndicator timerSession={timerSession} /></MotiView>
-          <MotiView from={{ opacity: 0, translateY: 30 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 400 }} style={styles.controlsContainer}><TimerControls status={timerSession?.status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} /></MotiView>
-        </View>
+        {/* ✅ FIX: Wrap the entire content in a single MotiView for a fast, unified animation */}
+        <MotiView 
+          style={styles.content}
+          from={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'timing', duration: 250 }} // Very fast animation
+        >
+          <View style={styles.titleContainer}>
+            <Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text>
+          </View>
+          <CircularProgress duration={timerSession?.duration ?? 0} timeLeft={timeLeft} sessionType={timerSession?.sessionType} progressColor={progressColor} />
+          <TimerStatusIndicator timerSession={timerSession} />
+          <View style={styles.controlsContainer}>
+            <TimerControls status={timerSession?.status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} />
+          </View>
+        </MotiView>
 
         <View style={styles.modeSelectorSection}>
           <ScrollView ref={scrollViewRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScrollContent}>
@@ -188,7 +193,7 @@ export default function StudyTimerScreen() {
               )}
             </AnimatePresence>
             {availableModes.map((mode) => {
-              const isActive = activeModeKey === mode.key; // ✅ SIMPLIFIED: Direct key comparison
+              const isActive = activeModeKey === mode.key;
               return (
                 <Pressable key={mode.key} onLayout={(event) => handleModeLayout(event, mode.key)} style={styles.modeCard} onPress={() => handleSelectMode(mode)} onLongPress={() => handleEditMode(mode)} disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}>
                   <FontAwesome5 name={mode.icon ?? 'clock'} size={20} color={isActive ? 'white' : '#9CA3AF'} />

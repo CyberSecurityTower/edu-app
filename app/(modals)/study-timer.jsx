@@ -1,6 +1,5 @@
 
-// app/(modals)/study-timer.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +7,6 @@ import {
   ImageBackground,
   Pressable,
   ScrollView,
-  LayoutAnimation,
   Platform,
   UIManager,
 } from 'react-native';
@@ -16,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppState } from '../../context/AppStateContext';
-import { MotiView } from 'moti';
+import { MotiView, AnimatePresence } from 'moti';
 import * as Haptics from 'expo-haptics';
 import { FontAwesome5 } from '@expo/vector-icons';
 
@@ -33,11 +31,16 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const ASYNC_STORAGE_MODES_KEY = '@timerModes';
 
 const DEFAULT_MODES = [
-  { key: 'default-pomodoro', name: 'Pomodoro', icon: 'brain', settings: { focusDuration: 25 * 60, shortBreakDuration: 5 * 60, longBreakDuration: 15 * 60, pomodorosPerCycle: 4, autoStartNextSession: false, enableAudioNotifications: true }},
-  { key: 'default-50-10', name: '50/10 Rule', icon: 'hourglass-half', settings: { focusDuration: 50 * 60, shortBreakDuration: 10 * 60, longBreakDuration: 20 * 60, pomodorosPerCycle: 2, autoStartNextSession: false, enableAudioNotifications: true }},
+  { key: 'default-pomodoro', name: 'Pomodoro', icon: 'brain', settings: { focusDuration: 25 * 60, shortBreakDuration: 5 * 60, longBreakDuration: 15 * 60, pomodorosPerCycle: 4, autoStartNextSession: true, enableAudioNotifications: true }},
+  { key: 'default-50-10', name: '50/10 Rule', icon: 'hourglass-half', settings: { focusDuration: 50 * 60, shortBreakDuration: 10 * 60, longBreakDuration: 20 * 60, pomodorosPerCycle: 2, autoStartNextSession: true, enableAudioNotifications: true }},
 ];
 
-// ✅ FIXED: Corrected the typo from 'B' to 'settingsB'
+const SESSION_COLORS = {
+  focus: '#34D399',
+  shortBreak: '#60A5FA',
+  longBreak: '#FBBF24',
+};
+
 const areSettingsEqual = (settingsA, settingsB) => {
   if (!settingsA || !settingsB) return false;
   return (
@@ -54,13 +57,15 @@ const TimerStatusIndicator = React.memo(({ timerSession }) => {
 
   const { icon, text } = useMemo(() => {
     const isRunning = status === 'active' || status === 'paused';
-
+    if (status === 'finished') {
+        return { icon: 'check-circle', text: 'Cycle Complete! Well done.' };
+    }
     if (isRunning) {
       switch (sessionType) {
         case 'focus':
           return { icon: 'brain', text: `Focus: Session ${currentCycle} of ${pomodorosPerCycle}` };
         case 'shortBreak':
-          return { icon: 'coffee', text: `Short Break. Next is focus ${currentCycle} of ${pomodorosPerCycle}` };
+          return { icon: 'coffee', text: `Short Break. Next is focus ${currentCycle + 1} of ${pomodorosPerCycle}` };
         case 'longBreak':
           return { icon: 'couch', text: 'Long Break. A new cycle begins next.' };
         default:
@@ -84,90 +89,54 @@ TimerStatusIndicator.displayName = 'TimerStatusIndicator';
 export default function StudyTimerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-
-  const {
-    timerSession,
-    setTimerSession,
-    timeLeft,
-    startTimer,
-    pauseTimer,
-    resumeTimer,
-    endTimer,
-    skipTimer,
-    updateSettings,
-  } = useAppState();
+  const { timerSession, setTimerSession, timeLeft, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
 
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [isSoundsVisible, setIsSoundsVisible] = useState(false);
   const [selectedSound, setSelectedSound] = useState(timerSession?.selectedSound ?? 'complete-silence');
   const [availableModes, setAvailableModes] = useState([]);
   const [modeToEdit, setModeToEdit] = useState(null);
+  
+  // ✅ NEW: State to store the layout of each mode card for the animation
+  const [modeLayouts, setModeLayouts] = useState({});
+  const scrollViewRef = useRef(null);
 
   useEffect(() => {
     const loadModes = async () => {
       try {
         const storedModes = await AsyncStorage.getItem(ASYNC_STORAGE_MODES_KEY);
         setAvailableModes(storedModes ? JSON.parse(storedModes) : DEFAULT_MODES);
-      } catch (e) {
-        console.error('Failed to load modes', e);
-        setAvailableModes(DEFAULT_MODES);
-      }
+      } catch (e) { console.error('Failed to load modes', e); setAvailableModes(DEFAULT_MODES); }
     };
     loadModes();
   }, []);
 
   const saveModes = async (modes) => {
-    try {
-      await AsyncStorage.setItem(ASYNC_STORAGE_MODES_KEY, JSON.stringify(modes));
-    } catch (e) {
-      console.error('Failed to save modes', e);
-    }
+    try { await AsyncStorage.setItem(ASYNC_STORAGE_MODES_KEY, JSON.stringify(modes)); } 
+    catch (e) { console.error('Failed to save modes', e); }
   };
 
-  useEffect(() => {
-    if (timerSession?.selectedSound !== selectedSound) {
-      setSelectedSound(timerSession.selectedSound ?? 'complete-silence');
-    }
-  }, [timerSession?.selectedSound]);
-
+  useEffect(() => { if (timerSession?.selectedSound !== selectedSound) { setSelectedSound(timerSession.selectedSound ?? 'complete-silence'); } }, [timerSession?.selectedSound]);
   useEffect(() => () => audioService?.stopPreview?.(), []);
+  useEffect(() => { if (params.relatedTaskTitle && timerSession.status === 'idle') { setTimerSession(prev => ({ ...prev, taskTitle: params.relatedTaskTitle, taskId: params.taskId || null })); } }, [params.relatedTaskTitle, params.taskId, timerSession.status, setTimerSession]);
 
-  useEffect(() => {
-    if (params.relatedTaskTitle && timerSession.status === 'idle') {
-      setTimerSession(prev => ({ ...prev, taskTitle: params.relatedTaskTitle, taskId: params.taskId || null }));
-    }
-  }, [params.relatedTaskTitle, params.taskId, timerSession.status, setTimerSession]);
-
-  const handleSelectSound = useCallback((soundId) => {
-    setSelectedSound(soundId);
-    setTimerSession(prev => ({ ...prev, selectedSound: soundId }));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-  }, [setTimerSession]);
-
+  const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
+  
+  // ✅ MODIFIED: Removed LayoutAnimation for a smoother Moti-based animation
   const handleSelectMode = useCallback((mode) => {
     if (timerSession.status === 'active' || timerSession.status === 'paused') return;
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     updateSettings(mode.settings);
-  }, [timerSession.status, updateSettings]);
+    const layout = modeLayouts[mode.key];
+    if (layout && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ x: layout.x - 15, animated: true });
+    }
+  }, [timerSession.status, updateSettings, modeLayouts]);
 
-  const handleAddNewMode = useCallback(() => {
-    const newMode = {
-      key: `custom-${Date.now()}`, name: 'New Mode', icon: 'brain',
-      settings: { focusDuration: 25 * 60, shortBreakDuration: 5 * 60, longBreakDuration: 15 * 60, pomodorosPerCycle: 4, autoStartNextSession: false, enableAudioNotifications: true },
-    };
-    setModeToEdit(newMode);
-    setIsSettingsVisible(true);
-  }, []);
-
-  const handleEditMode = useCallback((mode) => {
-    setModeToEdit(mode);
-    setIsSettingsVisible(true);
-  }, []);
-
+  const handleAddNewMode = useCallback(() => { const newMode = { key: `custom-${Date.now()}`, name: 'New Mode', icon: 'brain', settings: { focusDuration: 25 * 60, shortBreakDuration: 5 * 60, longBreakDuration: 15 * 60, pomodorosPerCycle: 4, autoStartNextSession: true, enableAudioNotifications: true }, }; setModeToEdit(newMode); setIsSettingsVisible(true); }, []);
+  const handleEditMode = useCallback((mode) => { setModeToEdit(mode); setIsSettingsVisible(true); }, []);
+  
   const handleSaveMode = useCallback(async (savedMode) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const wasActiveMode = areSettingsEqual(timerSession.settings, modeToEdit?.settings);
-    
     const updatedModes = await new Promise(resolve => {
       setAvailableModes(prevModes => {
         const isNew = !prevModes.some(m => m.key === savedMode.key);
@@ -176,17 +145,13 @@ export default function StudyTimerScreen() {
         return newModeList;
       });
     });
-    
     await saveModes(updatedModes);
-    if (wasActiveMode) {
-      updateSettings(savedMode.settings);
-    }
+    if (wasActiveMode) updateSettings(savedMode.settings);
     setModeToEdit(null);
     setIsSettingsVisible(false);
   }, [timerSession.settings, updateSettings, modeToEdit]);
     
   const handleDeleteMode = useCallback(async (modeKey) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const updatedModes = availableModes.filter(m => m.key !== modeKey);
     setAvailableModes(updatedModes);
     await saveModes(updatedModes);
@@ -194,64 +159,59 @@ export default function StudyTimerScreen() {
     setIsSettingsVisible(false);
   }, [availableModes]);
 
-  const handleStart = useCallback(() => {
-    startTimer(selectedSound);
-  }, [startTimer, selectedSound]);
+  const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
 
-  const sessionDisplayName =
-    timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session')
-    : timerSession?.sessionType === 'shortBreak' ? 'Short Break'
-    : 'Long Break';
+  // ✅ NEW: Function to capture the layout of each mode button
+  const handleModeLayout = useCallback((event, key) => {
+    const { x, width, height } = event.nativeEvent.layout;
+    setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } }));
+  }, []);
+
+  // ✅ NEW: Find the key and layout of the active mode to position the animated indicator
+  const activeModeKey = useMemo(() => {
+    const active = availableModes.find(mode => areSettingsEqual(timerSession?.settings, mode.settings));
+    return active ? active.key : null;
+  }, [availableModes, timerSession?.settings]);
+  const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
+
+  const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : timerSession?.sessionType === 'shortBreak' ? 'Short Break' : 'Long Break';
+  const progressColor = useMemo(() => SESSION_COLORS[timerSession?.sessionType] || SESSION_COLORS.focus, [timerSession?.sessionType]);
 
   return (
     <ImageBackground source={require('../../assets/images/timer-background.jpg')} style={styles.backgroundImage}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.headerIcon} onPress={() => router.back()}>
-            <FontAwesome5 name="chevron-down" size={22} color="#E5E7EB" />
-          </Pressable>
-          <Pressable style={styles.headerIcon} onPress={() => { audioService?.stopPreview?.(); setIsSoundsVisible(true); }}>
-            <FontAwesome5 name="music" size={22} color="#E5E7EB" />
-          </Pressable>
+          <Pressable style={styles.headerIcon} onPress={() => router.back()}><FontAwesome5 name="chevron-down" size={22} color="#E5E7EB" /></Pressable>
+          <Pressable style={styles.headerIcon} onPress={() => { audioService?.stopPreview?.(); setIsSoundsVisible(true); }}><FontAwesome5 name="music" size={22} color="#E5E7EB" /></Pressable>
         </View>
 
         <View style={styles.content}>
-          <MotiView from={{ opacity: 0, translateY: -20 }} animate={{ opacity: 1, translateY: 0 }} style={styles.titleContainer}>
-            <Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text>
-          </MotiView>
-
-          <MotiView from={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', delay: 200 }}>
-            <CircularProgress
-              duration={timerSession?.duration ?? 0}
-              timeLeft={timeLeft}
-              sessionType={timerSession?.sessionType}
-            />
-          </MotiView>
-          
-          <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 300 }}>
-            <TimerStatusIndicator timerSession={timerSession} />
-          </MotiView>
-
-          <MotiView from={{ opacity: 0, translateY: 30 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 400 }} style={styles.controlsContainer}>
-            <TimerControls
-              status={timerSession?.status}
-              onStart={handleStart}
-              onPause={pauseTimer}
-              onResume={resumeTimer}
-              onEnd={endTimer}
-              onSkip={skipTimer}
-            />
-          </MotiView>
+          <MotiView from={{ opacity: 0, translateY: -20 }} animate={{ opacity: 1, translateY: 0 }} style={styles.titleContainer}><Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text></MotiView>
+          <MotiView from={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', delay: 200 }}><CircularProgress duration={timerSession?.duration ?? 0} timeLeft={timeLeft} sessionType={timerSession?.sessionType} progressColor={progressColor} /></MotiView>
+          <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 300 }}><TimerStatusIndicator timerSession={timerSession} /></MotiView>
+          <MotiView from={{ opacity: 0, translateY: 30 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', delay: 400 }} style={styles.controlsContainer}><TimerControls status={timerSession?.status} onStart={handleStart} onPause={pauseTimer} onResume={resumeTimer} onEnd={endTimer} onSkip={skipTimer} /></MotiView>
         </View>
 
+        {/* ✅ THE FIX: The entire mode selector is now animated */}
         <View style={styles.modeSelectorSection}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScrollContent}>
+          <ScrollView ref={scrollViewRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScrollContent}>
+            <AnimatePresence>
+              {activeModeLayout && (
+                <MotiView
+                  from={{ opacity: 0 }}
+                  animate={{ opacity: 1, left: activeModeLayout.x, width: activeModeLayout.width, height: activeModeLayout.height }}
+                  transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+                  style={[styles.modeCardActive, styles.activeIndicator]}
+                />
+              )}
+            </AnimatePresence>
             {availableModes.map((mode) => {
-              const isActive = areSettingsEqual(timerSession?.settings, mode.settings);
+              const isActive = activeModeKey === mode.key;
               return (
                 <Pressable
                   key={mode.key}
-                  style={[styles.modeCard, isActive && styles.modeCardActive]}
+                  onLayout={(event) => handleModeLayout(event, mode.key)}
+                  style={styles.modeCard}
                   onPress={() => handleSelectMode(mode)}
                   onLongPress={() => handleEditMode(mode)}
                   disabled={timerSession?.status === 'active' || timerSession?.status === 'paused'}
@@ -261,9 +221,7 @@ export default function StudyTimerScreen() {
                 </Pressable>
               );
             })}
-            <Pressable style={styles.addModeCard} onPress={handleAddNewMode}>
-              <FontAwesome5 name="plus" size={20} color="#9CA3AF" />
-            </Pressable>
+            <Pressable style={styles.addModeCard} onPress={handleAddNewMode}><FontAwesome5 name="plus" size={20} color="#9CA3AF" /></Pressable>
           </ScrollView>
         </View>
       </SafeAreaView>
@@ -279,32 +237,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingTop: 10 },
   headerIcon: { padding: 10 },
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
+  content: { flex: 1, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20 },
   titleContainer: { alignItems: 'center', paddingHorizontal: 30 },
   taskTitle: { color: 'white', fontSize: 24, fontWeight: '600', textAlign: 'center' },
-  statusIndicatorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  statusIndicatorIcon: {
-    fontSize: 14,
-    color: '#E5E7EB',
-    marginRight: 10,
-  },
-  statusIndicatorText: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  statusIndicatorContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  statusIndicatorIcon: { fontSize: 14, color: '#E5E7EB', marginRight: 10 },
+  statusIndicatorText: { color: '#E5E7EB', fontSize: 14, fontWeight: '600' },
   controlsContainer: { width: '100%', alignItems: 'center' },
   modeSelectorSection: { height: 100, justifyContent: 'center', paddingBottom: 10, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)' },
   modeScrollContent: { paddingHorizontal: 15, alignItems: 'center' },
@@ -313,4 +251,11 @@ const styles = StyleSheet.create({
   modeCardTitle: { color: '#9CA3AF', fontSize: 15, fontWeight: '600', marginTop: 8 },
   modeCardTitleActive: { color: 'white' },
   addModeCard: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', width: 80, height: 80, marginHorizontal: 5, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.2)', borderStyle: 'dashed' },
+  // ✅ NEW: Style for the absolutely positioned animated indicator
+  activeIndicator: {
+    position: 'absolute',
+    top: 0, // It will align with the top of the scroll content
+    borderRadius: 16,
+    borderWidth: 2,
+  },
 });

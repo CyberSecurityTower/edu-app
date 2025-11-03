@@ -44,18 +44,13 @@ export const AppStateProvider = ({ children }) => {
   const backgroundTime = useRef(null);
 
   useEffect(() => {
-    // ✅ THE FIX: A robust function to validate settings from storage.
     const getValidatedSettings = (storedSettingsString) => {
-      if (!storedSettingsString) {
-        return DEFAULT_SETTINGS;
-      }
+      if (!storedSettingsString) return DEFAULT_SETTINGS;
       try {
         const parsed = JSON.parse(storedSettingsString);
-        // This check ensures the settings are in the new format.
         if (parsed && Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
           return parsed;
         }
-        // If the check fails, it's an old format or corrupted. Fallback to default.
         return DEFAULT_SETTINGS;
       } catch (error) {
         console.error("Failed to parse stored settings, using default.", error);
@@ -69,23 +64,13 @@ export const AppStateProvider = ({ children }) => {
         setHasCompletedOnboarding(onboarding === 'true');
         
         const storedSettingsString = await AsyncStorage.getItem(ASYNC_STORAGE_SETTINGS_KEY);
-        // Use the validation function to get safe settings
         const settings = getValidatedSettings(storedSettingsString);
         
-        setTimerSession(prev => ({
-          ...prev,
-          settings,
-          duration: settings.sessions[0].focus, // This is now safe
-        }));
-        setTimeLeft(settings.sessions[0].focus); // This is also safe
+        setTimerSession(prev => ({ ...prev, settings, duration: settings.sessions[0].focus }));
+        setTimeLeft(settings.sessions[0].focus);
       } catch (e) {
         console.error("Failed to load initial data.", e);
-        // Final fallback in case of any other error
-        setTimerSession(prev => ({
-            ...prev,
-            settings: DEFAULT_SETTINGS,
-            duration: DEFAULT_SETTINGS.sessions[0].focus,
-        }));
+        setTimerSession(prev => ({ ...prev, settings: DEFAULT_SETTINGS, duration: DEFAULT_SETTINGS.sessions[0].focus }));
         setTimeLeft(DEFAULT_SETTINGS.sessions[0].focus);
       }
     };
@@ -176,15 +161,21 @@ export const AppStateProvider = ({ children }) => {
     else audioService.stopSessionSound();
   }, [timerSession.status, timerSession.selectedSound]);
 
+  // ✅ THE FIX: The problematic line `setTimeLeft(timerSession.duration)` has been removed.
   const startTimer = useCallback((soundId) => {
     if (timerSession.status === 'idle' || timerSession.status === 'finished') {
       if (timerSession.settings.enableAudioNotifications) audioService.playEffect('start-effect');
-      const firstSessionDuration = timerSession.settings.sessions[0].focus;
+      
       if (timerSession.status === 'finished') {
+        const firstSessionDuration = timerSession.settings.sessions[0].focus;
         setTimeLeft(firstSessionDuration);
-        setTimerSession(prev => ({ ...prev, status: 'active', sessionType: 'focus', duration: firstSessionDuration, currentCycle: 1, selectedSound: soundId }));
+        setTimerSession(prev => ({
+          ...prev, status: 'active', sessionType: 'focus',
+          duration: firstSessionDuration, currentCycle: 1, selectedSound: soundId,
+        }));
       } else {
-         setTimeLeft(timerSession.duration);
+         // The timeLeft is already correct from the initial load or mode selection.
+         // We only need to change the status.
          setTimerSession(prev => ({ ...prev, status: 'active', selectedSound: soundId }));
       }
     }

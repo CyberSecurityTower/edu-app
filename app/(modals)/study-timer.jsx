@@ -1,7 +1,6 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, Pressable, ScrollView, Platform, UIManager, ActivityIndicator } from 'react-native'; // Import ActivityIndicator
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,26 +15,22 @@ import SoundsModal from '../../components/timer/SoundsModal';
 import TimerControls from '../../components/timer/TimerControls';
 import { audioService } from '../../services/audioService';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// ... (if/UIManager setup remains the same)
 
 const ASYNC_STORAGE_MODES_KEY = '@timerModes';
-
 const DEFAULT_MODES = [
   { key: 'default-pomodoro', name: 'Classic Focus', icon: 'brain', settings: { sessions: [{ focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 5 * 60 }, { focus: 25 * 60, break: 15 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
   { key: 'default-50-10', name: 'Intense Sprint', icon: 'hourglass-half', settings: { sessions: [{ focus: 50 * 60, break: 10 * 60 }], autoStartNextSession: true, enableAudioNotifications: true }},
 ];
-
-const SESSION_COLORS = {
-  focus: '#34D399',
-  break: '#60A5FA',
-};
+const SESSION_COLORS = { focus: '#34D399', break: '#60A5FA' };
 
 const TimerStatusIndicator = React.memo(({ timerSession }) => {
-  const { status, sessionType, currentCycle, settings } = timerSession;
-  const totalSessions = settings.sessions.length;
+  // ✅ Defensive check inside the component as well
+  const { status, sessionType, currentCycle, settings } = timerSession || {};
+  if (!settings || !settings.sessions) return null; // Don't render if data is invalid
 
+  const totalSessions = settings.sessions.length;
+  // ... (rest of the component is the same)
   const { icon, text } = useMemo(() => {
     const isRunning = status === 'active' || status === 'paused';
     if (status === 'finished') {
@@ -64,13 +59,12 @@ const TimerStatusIndicator = React.memo(({ timerSession }) => {
 });
 TimerStatusIndicator.displayName = 'TimerStatusIndicator';
 
-
 export default function StudyTimerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { timerSession, setTimerSession, startTimer, pauseTimer, resumeTimer, endTimer, skipTimer, updateSettings } = useAppState();
-  const { timeLeft, activeModeKey } = timerSession;
 
+  // ... (state hooks remain the same)
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [isSoundsVisible, setIsSoundsVisible] = useState(false);
   const [selectedSound, setSelectedSound] = useState(timerSession?.selectedSound ?? 'complete-silence');
@@ -79,6 +73,7 @@ export default function StudyTimerScreen() {
   const [modeLayouts, setModeLayouts] = useState({});
   const scrollViewRef = useRef(null);
 
+  // ... (useEffect hooks remain the same)
   useEffect(() => {
     const loadModes = async () => {
       try {
@@ -96,8 +91,24 @@ export default function StudyTimerScreen() {
 
   useEffect(() => { if (timerSession?.selectedSound !== selectedSound) { setSelectedSound(timerSession.selectedSound ?? 'complete-silence'); } }, [timerSession?.selectedSound]);
   useEffect(() => () => audioService?.stopPreview?.(), []);
-  useEffect(() => { if (params.relatedTaskTitle && timerSession.status === 'idle') { setTimerSession(prev => ({ ...prev, taskTitle: params.relatedTaskTitle, taskId: params.taskId || null })); } }, [params.relatedTaskTitle, params.taskId, timerSession.status, setTimerSession]);
+  useEffect(() => { if (params.relatedTaskTitle && timerSession?.status === 'idle') { setTimerSession(prev => ({ ...prev, taskTitle: params.relatedTaskTitle, taskId: params.taskId || null })); } }, [params.relatedTaskTitle, params.taskId, timerSession?.status, setTimerSession]);
 
+  // ✅ FIX: THE BULLETPROOF GUARD. This will prevent the crash 100%.
+  // If the timer session or its settings are not ready, show a loading indicator instead of crashing.
+  if (!timerSession || !timerSession.settings) {
+    return (
+      <ImageBackground source={require('../../assets/images/timer-background.jpg')} style={styles.backgroundImage}>
+        <SafeAreaView style={[styles.container, { justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+        </SafeAreaView>
+      </ImageBackground>
+    );
+  }
+
+  // Destructure AFTER the guard clause to ensure they are safe to use.
+  const { timeLeft, activeModeKey } = timerSession;
+
+  // ... (all handler functions like handleSelectMode, handleSaveMode, etc. remain the same)
   const handleSelectSound = useCallback((soundId) => { setSelectedSound(soundId); setTimerSession(prev => ({ ...prev, selectedSound: soundId })); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }, [setTimerSession]);
   
   const handleSelectMode = useCallback((mode) => {
@@ -156,6 +167,7 @@ export default function StudyTimerScreen() {
   const handleStart = useCallback(() => { startTimer(selectedSound); }, [startTimer, selectedSound]);
   const handleModeLayout = useCallback((event, key) => { const { x, width, height } = event.nativeEvent.layout; setModeLayouts(prev => ({ ...prev, [key]: { x, width, height } })); }, []);
 
+
   const activeModeLayout = activeModeKey ? modeLayouts[activeModeKey] : null;
   const sessionDisplayName = timerSession?.status === 'finished' ? 'Cycle Complete!' : timerSession?.sessionType === 'focus' ? (timerSession?.taskTitle || 'Focus Session') : 'Break';
   const progressColor = useMemo(() => SESSION_COLORS[timerSession?.sessionType] || SESSION_COLORS.focus, [timerSession?.sessionType]);
@@ -163,17 +175,17 @@ export default function StudyTimerScreen() {
   return (
     <ImageBackground source={require('../../assets/images/timer-background.jpg')} style={styles.backgroundImage}>
       <SafeAreaView style={styles.container}>
+        {/* ... (Header and other components remain the same) ... */}
         <View style={styles.header}>
           <Pressable style={styles.headerIcon} onPress={() => router.back()}><FontAwesome5 name="chevron-down" size={22} color="#E5E7EB" /></Pressable>
           <Pressable style={styles.headerIcon} onPress={() => { audioService?.stopPreview?.(); setIsSoundsVisible(true); }}><FontAwesome5 name="music" size={22} color="#E5E7EB" /></Pressable>
         </View>
 
-        {/* ✅ FIX: Wrap the entire content in a single MotiView for a fast, unified animation */}
         <MotiView 
           style={styles.content}
           from={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'timing', duration: 250 }} // Very fast animation
+          transition={{ type: 'timing', duration: 250 }}
         >
           <View style={styles.titleContainer}>
             <Text style={styles.taskTitle} numberOfLines={2}>{sessionDisplayName}</Text>

@@ -12,10 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import MiniCircularProgress from './MiniCircularProgress';
 import ActionButton from './ActionButton';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, interpolateColor } from 'react-native-reanimated'; // Import interpolateColor
 import { audioService } from '../../services/audioService';
-
-// ✅ The incorrect import for firebase has been REMOVED from this file.
 
 const { height: screenHeight } = Dimensions.get('window');
 const ANIMATION_CONFIG = { mainSpring: { damping: 22, stiffness: 350 }, pressSpring: { damping: 15, stiffness: 500, mass: 0.5 }, longPressDuration: 300 };
@@ -24,10 +22,11 @@ const CONSTANTS = { COMPACT_HEIGHT: 50, EXPANDED_HEIGHT: 92, SAFE_AREA_TOP_MARGI
 const ICONS = {
   focus: { name: 'brain', color: '#34D399' },
   break: { name: 'coffee', color: '#60A5FA' },
-  finished: { name: 'check-circle', color: '#A78BFA' },
+  finished: { name: 'check-circle', color: '#A78BFA' }, // Finished color
   default: { name: 'brain', color: '#34D399' }
 };
 
+// ... (TimerDisplay component remains the same)
 const TimerDisplay = React.memo(React.forwardRef(({ timeLeft, status, reduceMotion, isExpanded, isFlashing, showDoneMessage }, ref) => {
   const safeTimeLeft = typeof timeLeft === 'number' && isFinite(timeLeft) ? timeLeft : 0;
 
@@ -73,14 +72,24 @@ function DynamicTimerIslandInner() {
   const expansion = useSharedValue(0);
   const pressScale = useSharedValue(1);
   const transitionProgress = useSharedValue(0);
+  const finishedAnimation = useSharedValue(0); // ✅ NEW: Shared value for the finished animation
 
+  const triggerHaptic = useCallback((style = Haptics.ImpactFeedbackStyle.Light) => { if (!reduceMotion) Haptics.impactAsync(style).catch(() => {}); }, [reduceMotion]);
+
+  // ✅ NEW: useEffect to handle the "finished" state animation and haptics
   useEffect(() => {
     let flashInterval, doneMessageTimeout, endTimerTimeout;
     if (status === 'finished') {
       setIsExpanded(true);
+      triggerHaptic(Haptics.NotificationFeedbackType.Success); // Vibrate on finish
+      finishedAnimation.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.quad) }); // Animate to "finished" state
+
       flashInterval = setInterval(() => setIsFlashing(prev => !prev), 500);
       doneMessageTimeout = setTimeout(() => { clearInterval(flashInterval); setIsFlashing(false); setShowDoneMessage(true); }, 4000);
       endTimerTimeout = setTimeout(() => endTimer(), 5000);
+    } else {
+      // Reset animation when status is no longer 'finished'
+      finishedAnimation.value = withTiming(0, { duration: 600 });
     }
     return () => {
       clearInterval(flashInterval);
@@ -88,7 +97,7 @@ function DynamicTimerIslandInner() {
       clearTimeout(endTimerTimeout);
       if (status === 'finished') { setIsFlashing(true); setShowDoneMessage(false); }
     };
-  }, [status, endTimer]);
+  }, [status, endTimer, triggerHaptic]);
 
   useEffect(() => { expansion.value = withSpring(isExpanded ? 1 : 0, ANIMATION_CONFIG.mainSpring); }, [isExpanded]);
   useEffect(() => {
@@ -102,7 +111,7 @@ function DynamicTimerIslandInner() {
     else { compactLottieRef.current?.reset(); expandedLottieRef.current?.reset(); }
   }, [status, reduceMotion]);
 
-  const triggerHaptic = useCallback((style = Haptics.ImpactFeedbackStyle.Light) => { if (!reduceMotion) Haptics.impactAsync(style).catch(() => {}); }, [reduceMotion]);
+  // ... (other handlers remain the same)
   const handlePress = useCallback(() => { if (isTransitioning || status === 'finished') return; if (!isExpanded) triggerHaptic(Haptics.ImpactFeedbackStyle.Medium); setIsExpanded(p => !p); }, [isExpanded, isTransitioning, triggerHaptic, status]);
   const handleLongPress = useCallback(() => {
     if (isTransitioning || status === 'finished') return;
@@ -118,12 +127,26 @@ function DynamicTimerIslandInner() {
   const handleTogglePause = useCallback(() => { triggerHaptic(); if (status === 'active') pauseTimer(); else if (status === 'paused') resumeTimer(); }, [status, triggerHaptic, pauseTimer, resumeTimer]);
   const handleEndSession = useCallback(() => { triggerHaptic(); setIsExpanded(false); setTimeout(endTimer, 260); }, [triggerHaptic, endTimer]);
   const handleSkipSession = useCallback(() => { triggerHaptic(); skipTimer(); }, [triggerHaptic, skipTimer]);
-  
+
   const progress = useMemo(() => { if (status === 'finished') return 1; return duration > 0 ? (duration - timeLeft) / duration : 0; }, [duration, timeLeft, status]);
   const iconConfig = useMemo(() => ICONS[status === 'finished' ? 'finished' : sessionType] || ICONS.default, [sessionType, status]);
   const SAFE_TOP = Math.max(8, insets.top || 0) + CONSTANTS.SAFE_AREA_TOP_MARGIN;
 
-  const animatedContainerStyle = useAnimatedStyle(() => ({ height: CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT), transform: [{ scale: pressScale.value }], width: `${94 + (100 - 94) * transitionProgress.value}%` }), []);
+  // ✅ MODIFIED: Animated style now includes the background color interpolation
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      finishedAnimation.value,
+      [0, 1],
+      ['#1C1C1E', ICONS.finished.color] // From black to purple
+    );
+    return {
+      height: CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT),
+      transform: [{ scale: pressScale.value }],
+      width: `${94 + (100 - 94) * transitionProgress.value}%`,
+      backgroundColor,
+    };
+  }, []);
+
   const animatedTransitionStyle = useAnimatedStyle(() => { const currentIslandHeight = CONSTANTS.COMPACT_HEIGHT + expansion.value * (CONSTANTS.EXPANDED_HEIGHT - CONSTANTS.COMPACT_HEIGHT); return { top: SAFE_TOP - (SAFE_TOP * transitionProgress.value), height: currentIslandHeight + (screenHeight - currentIslandHeight) * transitionProgress.value }; }, [SAFE_TOP]);
   const animatedInnerContainerStyle = useAnimatedStyle(() => ({ borderRadius: 50 * (1 - transitionProgress.value) }), []);
   const animatedCompactStyle = useAnimatedStyle(() => ({ opacity: 1 - expansion.value, transform: [{ translateY: -expansion.value * 6 }] }), []);
@@ -131,6 +154,7 @@ function DynamicTimerIslandInner() {
   const onPressIn = useCallback(() => { pressScale.value = withSpring(0.97, ANIMATION_CONFIG.pressSpring); }, []);
   const onPressOut = useCallback(() => { pressScale.value = withSpring(1, ANIMATION_CONFIG.pressSpring); }, []);
   
+  // ... (rest of the component remains the same)
   useEffect(() => {
     const soundId = timerSession?.selectedSound || null;
     if (status === 'active') audioService.resumeSessionSound?.() ?? audioService.playSessionSound?.(soundId);
@@ -173,7 +197,8 @@ function DynamicTimerIslandInner() {
 const styles = StyleSheet.create({
   mainContainer: { ...StyleSheet.absoluteFillObject, zIndex: 1000 },
   contentPositioner: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  container: { backgroundColor: '#1C1C1E', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 15, elevation: 15, width: '94%', alignSelf: 'center', overflow: 'hidden' },
+  // ✅ MODIFIED: Removed the hardcoded background color from here, as it's now handled by the animation.
+  container: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 15, elevation: 15, width: '94%', alignSelf: 'center', overflow: 'hidden' },
   pressableArea: { flex: 1, justifyContent: 'center' },
   contentWrapper: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
   compactView: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
@@ -192,7 +217,7 @@ const styles = StyleSheet.create({
   lottieClockExpanded: { width: 44, height: 44, marginLeft: 8 },
   pauseIcon: { marginLeft: 8 },
   pauseIconExpanded: { marginLeft: 12 },
-  doneText: { color: '#A78BFA', fontSize: 18, fontWeight: 'bold' },
+  doneText: { color: 'white', fontSize: 18, fontWeight: 'bold' }, // Changed to white to look good on the purple background
 });
 
 const DynamicTimerIsland = React.memo(DynamicTimerIslandInner);

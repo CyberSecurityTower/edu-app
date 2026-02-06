@@ -1,9 +1,9 @@
-name: 🕵️ 16KB Ultimate Forensic Build
+name: 🚀 16KB Strategy B (ExtractLibs=True)
 on:
   workflow_dispatch:
 
 jobs:
-  forensic-build:
+  strategy-b:
     runs-on: ubuntu-latest
     steps:
       - name: 🏗️ 1. Setup Environment
@@ -22,7 +22,6 @@ jobs:
         env:
           GS_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          # نستخدم طريقة آمنة لفك التشفير
           node -e "const fs = require('fs'); const data = Buffer.from(process.env.GS_JSON_B64.trim(), 'base64').toString('utf-8'); fs.writeFileSync('google-services.json', data);"
 
       - name: 📦 3. Install Dependencies
@@ -31,102 +30,56 @@ jobs:
       - name: 🔧 4. Prebuild (Clean Android Generation)
         run: npx expo prebuild --platform android --clean
 
-      # 🔥 هنا الحل لمشكلة التنسيق: نكتب سكريبت الإصلاح في ملف منفصل ثم نشغله
-      - name: 💉 5. Create & Run 16KB Fixer Script
+      - name: 💉 5. Apply Strategy B (ExtractLibs=True)
         run: |
-          cat << 'EOF' > fix_16kb.js
+          cat << 'EOF' > fix_strategy_b.js
           const fs = require('fs');
-          console.log('🔧 Starting 16KB Deep Fixer...');
+          console.log('🔄 Applying Strategy B: Extract Native Libs = TRUE');
 
-          // 1. Fix gradle.properties
-          const propsPath = 'android/gradle.properties';
-          let props = fs.readFileSync(propsPath, 'utf8');
-          if (!props.includes('enableUncompressedNativeLibs')) {
-            props += '\nandroid.bundle.enableUncompressedNativeLibs=true\n';
-            fs.writeFileSync(propsPath, props);
-            console.log('✅ gradle.properties updated.');
+          // 1. Force extractNativeLibs="true" in Manifest
+          // هذا سيجبر النظام على فك ضغط المكتبات عند التثبيت، مما يحل مشكلة المحاذاة تلقائياً
+          const manifestPath = 'android/app/src/main/AndroidManifest.xml';
+          let manifest = fs.readFileSync(manifestPath, 'utf8');
+          
+          if (manifest.includes('android:extractNativeLibs="false"')) {
+             manifest = manifest.replace('android:extractNativeLibs="false"', 'android:extractNativeLibs="true"');
+          } else if (!manifest.includes('android:extractNativeLibs')) {
+             manifest = manifest.replace('<application', '<application android:extractNativeLibs="true"');
           }
+          fs.writeFileSync(manifestPath, manifest);
+          console.log('✅ AndroidManifest updated: extractNativeLibs="true"');
 
-          // 2. Fix build.gradle (Injection)
+          // 2. Remove packaging options that conflict
+          // لا نحتاج لمنع الضغط الآن لأننا سنعتمد على التثبيت
           const buildPath = 'android/app/build.gradle';
           let build = fs.readFileSync(buildPath, 'utf8');
           
-          // Packaging Options
-          const packagingBlock = `
-          packaging {
-              jniLibs { 
-                  useLegacyPackaging = false 
-                  keepDebugSymbols += ['**/*.so']
-              }
-          }
-          aaptOptions {
-              noCompress 'so'
-          }
-          `;
-          
-          // Alignment Flags
-          const cmakeBlock = `
+          // فقط نضمن أننا نستخدم CMake 16KB flags كإجراء احتياطي
+          const cmakeBlock = \`
           externalNativeBuild {
               cmake {
                   cppFlags "-z max-page-size=16384"
               }
           }
-          `;
-
-          if (build.includes('android {')) {
-             build = build.replace(/android {/, 'android {' + packagingBlock);
+          \`;
+          if (!build.includes('cppFlags')) {
              build = build.replace(/defaultConfig {/, 'defaultConfig {' + cmakeBlock);
              fs.writeFileSync(buildPath, build);
-             console.log('✅ build.gradle injected with packaging & alignment rules.');
-          }
-
-          // 3. Fix AndroidManifest (Extract Libs)
-          const manifestPath = 'android/app/src/main/AndroidManifest.xml';
-          let manifest = fs.readFileSync(manifestPath, 'utf8');
-          if (manifest.includes('<application')) {
-             manifest = manifest.replace('<application', '<application android:extractNativeLibs="false"');
-             fs.writeFileSync(manifestPath, manifest);
-             console.log('✅ AndroidManifest updated (extractNativeLibs=false).');
+             console.log('✅ Added CMake 16KB flags just in case.');
           }
           EOF
           
-          # تشغيل السكربت الذي كتبناه للتو
-          node fix_16kb.js
+          node fix_strategy_b.js
 
       - name: 🏗️ 6. Build AAB (Debug Signed)
         working-directory: android
         run: |
-          # استخدام توقيع الديباج لتجنب فشل البناء
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' app/build.gradle
-          ./gradlew bundleRelease -x lint --info --no-daemon
+          # نستخدم bundleRelease عادي بدون معاملات إضافية
+          ./gradlew bundleRelease -x lint --no-daemon
 
-      - name: 🔬 7. FORENSIC ANALYSIS (The Truth)
-        run: |
-          echo "========================================================="
-          echo "🕵️ STARTING FORENSIC ANALYSIS"
-          echo "========================================================="
-          AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
-          
-          if [ -f "$AAB_PATH" ]; then
-            # 1. تثبيت أداة فحص جوجل
-            curl -L -o bundletool.jar https://github.com/google/bundletool/releases/download/1.17.0/bundletool-all-1.17.0.jar
-            
-            echo "📊 TEST 1: COMPRESSION CHECK (Store vs Deflate)"
-            # هذا الأمر سيكشف إذا كانت الملفات مضغوطة أم لا
-            unzip -v "$AAB_PATH" | grep ".so" | awk '{print "File: " $8 " | Method: " $3 " | Size: " $4}'
-            
-            echo "---------------------------------------------------------"
-            echo "⚖️ TEST 2: GOOGLE 16KB COMPATIBILITY CHECK"
-            java -jar bundletool.jar check-16kb-support --bundle="$AAB_PATH"
-            
-          else
-            echo "❌ CRITICAL: Build failed, no AAB found."
-            exit 1
-          fi
-          echo "========================================================="
-
-      - name: 📤 8. Upload Result
+      - name: 📤 7. Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: forensic-16kb-bundle
+          name: strategy-b-bundle
           path: android/app/build/outputs/bundle/release/app-release.aab

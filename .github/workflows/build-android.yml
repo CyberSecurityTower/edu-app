@@ -21,29 +21,35 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 🔥 استعادة الملف بطريقة Base64 لضمان سلامة الـ JSON
+      # 🔥 الحل القاطع لملف الـ JSON باستخدام Node.js
       - name: 🔓 Create Google Services JSON
         env:
-          GOOGLE_SERVICES_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GS_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          # استخدام printf لضمان عدم إضافة أسطر جديدة (نظافة تامة للملف)
-          printf "%s" "$GOOGLE_SERVICES_BASE64" | base64 --decode > google-services.json
+          node -e "
+          const fs = require('fs');
+          const data = Buffer.from(process.env.GS_JSON_B64.trim(), 'base64').toString('utf-8');
+          fs.writeFileSync('google-services.json', data);
+          console.log('google-services.json created successfully');
+          "
+
       - name: 📦 Install Dependencies
         run: npm install
 
       - name: 🔧 Prebuild (Clean Android Generation)
         run: npx expo prebuild --platform android --clean
 
-      - name: 🛡️ Bypass Signing Config
+      # 🛡️ تعديل التوقيع لنسخة الديباج لضمان نجاح البناء بدون ملف Keystore
+      - name: 🛡️ Bypass Signing
         run: |
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' android/app/build.gradle
 
-      - name: 📝 Inject 16KB Config (Final Force)
+      # 📝 حقن إعدادات 16KB بطريقة برمجية في ملف gradle.properties (الأكثر استقراراً)
+      - name: 📝 Inject 16KB Config
         run: |
-          # حقن الكود بطريقة تضمن عدم تكرار البلوك
-          sed -i '/android {/a \    aaptOptions { noCompress "so" }' android/app/build.gradle
-          # التأكد من عدم الضغط في الخصائص
           echo "android.bundle.enableUncompressedNativeLibs=true" >> android/gradle.properties
+          # إضافة إعداد منع الضغط في ملف build.gradle
+          sed -i '/android {/a \    aaptOptions { noCompress "so" }' android/app/build.gradle
 
       - name: 🏗 Build AAB (Production)
         working-directory: android

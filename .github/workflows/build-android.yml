@@ -21,7 +21,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 🔥 الخطوة الجديدة: استعادة ملف google-services من السر
       - name: 🔓 Create Google Services JSON
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -33,24 +32,22 @@ jobs:
       - name: 🔧 Prebuild (Clean Android Generation)
         run: npx expo prebuild --platform android --clean
 
-      # 🔥 خطوة ذكية: إزالة إعدادات التوقيع لكي لا يطلب ملف Keystore المفقود
-      # (نحن نحتاج AAB لفحص 16KB ولا يهمنا التوقيع الآن)
-      - name: 🛡️ Bypass Signing Config
+      # 🔥 الحيلة الجديدة: إجبار نسخة الـ Release على استخدام توقيع الـ Debug ليتخطى الخطأ
+      - name: 🛡️ Bypass Signing Config (Safe Mode)
         run: |
-          sed -i '/MYAPP_UPLOAD/d' android/gradle.properties
-          sed -i '/signingConfigs/,/}/d' android/app/build.gradle
-          sed -i 's/signingConfig signingConfigs.release//g' android/app/build.gradle
+          sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' android/app/build.gradle
+          echo "Bypassed signing by pointing to debug config."
 
       - name: 📝 Inject 16KB Config (Force)
         run: |
-          echo "" >> android/app/build.gradle
+          # إضافة إعدادات 16KB في نهاية الملف بشكل صحيح
           echo "android { aaptOptions { noCompress 'so' } }" >> android/app/build.gradle
           echo "android.bundle.enableUncompressedNativeLibs=true" >> android/gradle.properties
 
       - name: 🏗 Build AAB (Production)
         working-directory: android
-        # نستخدم assembleRelease بدلاً من bundleRelease أحياناً لتجاوز التوقيع، لكن سنجرب bundle
-        run: ./gradlew bundleRelease -Pandroid.bundle.enableUncompressedNativeLibs=true -x lint
+        # استخدمنا --no-daemon لتوفير الذاكرة ومنع التعليق
+        run: ./gradlew bundleRelease -Pandroid.bundle.enableUncompressedNativeLibs=true -x lint --no-daemon
 
       - name: 📤 Upload AAB Artifact
         uses: actions/upload-artifact@v4

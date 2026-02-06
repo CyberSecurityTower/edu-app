@@ -32,22 +32,23 @@ jobs:
       - name: 🔧 Prebuild (Clean Android Generation)
         run: npx expo prebuild --platform android --clean
 
-      # 🔥 الحيلة الجديدة: إجبار نسخة الـ Release على استخدام توقيع الـ Debug ليتخطى الخطأ
-      - name: 🛡️ Bypass Signing Config (Safe Mode)
+      # 🛡️ تغيير التوقيع لنسخة الديباج ليتخطى أخطاء الـ Keystore
+      - name: 🛡️ Bypass Signing Config
         run: |
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' android/app/build.gradle
-          echo "Bypassed signing by pointing to debug config."
 
-      - name: 📝 Inject 16KB Config (Force)
+      # 📝 حقن الإعدادات داخل بلوك android الأصلي (طريقة احترافية)
+      - name: 📝 Inject 16KB Config (Safe Injection)
         run: |
-          # إضافة إعدادات 16KB في نهاية الملف بشكل صحيح
-          echo "android { aaptOptions { noCompress 'so' } }" >> android/app/build.gradle
-          echo "android.bundle.enableUncompressedNativeLibs=true" >> android/gradle.properties
+          # سنبحث عن كلمة android { ونضيف بعدها مباشرة إعدادات عدم الضغط
+          sed -i '/android {/a \    aaptOptions { noCompress "so" }' android/app/build.gradle
+          # التأكد من أن التغليف لا يستخدم الطريقة القديمة
+          sed -i '/jniLibs {/a \            useLegacyPackaging = false' android/app/build.gradle || true
 
       - name: 🏗 Build AAB (Production)
         working-directory: android
-        # استخدمنا --no-daemon لتوفير الذاكرة ومنع التعليق
-        run: ./gradlew bundleRelease -Pandroid.bundle.enableUncompressedNativeLibs=true -x lint --no-daemon
+        # حذفنا الخيار الملغي -Pandroid.bundle.enableUncompressedNativeLibs لأن النظام يفعله تلقائياً
+        run: ./gradlew bundleRelease -x lint --no-daemon
 
       - name: 📤 Upload AAB Artifact
         uses: actions/upload-artifact@v4

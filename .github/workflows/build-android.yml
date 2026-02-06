@@ -21,10 +21,12 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      # 🔥 استعادة الملف بطريقة Base64 لضمان سلامة الـ JSON
       - name: 🔓 Create Google Services JSON
         env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: echo "$GOOGLE_SERVICES_JSON" > google-services.json
+          GOOGLE_SERVICES_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          echo "$GOOGLE_SERVICES_BASE64" | base64 --decode > google-services.json
 
       - name: 📦 Install Dependencies
         run: npm install
@@ -32,22 +34,19 @@ jobs:
       - name: 🔧 Prebuild (Clean Android Generation)
         run: npx expo prebuild --platform android --clean
 
-      # 🛡️ تغيير التوقيع لنسخة الديباج ليتخطى أخطاء الـ Keystore
       - name: 🛡️ Bypass Signing Config
         run: |
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' android/app/build.gradle
 
-      # 📝 حقن الإعدادات داخل بلوك android الأصلي (طريقة احترافية)
-      - name: 📝 Inject 16KB Config (Safe Injection)
+      - name: 📝 Inject 16KB Config (Final Force)
         run: |
-          # سنبحث عن كلمة android { ونضيف بعدها مباشرة إعدادات عدم الضغط
+          # حقن الكود بطريقة تضمن عدم تكرار البلوك
           sed -i '/android {/a \    aaptOptions { noCompress "so" }' android/app/build.gradle
-          # التأكد من أن التغليف لا يستخدم الطريقة القديمة
-          sed -i '/jniLibs {/a \            useLegacyPackaging = false' android/app/build.gradle || true
+          # التأكد من عدم الضغط في الخصائص
+          echo "android.bundle.enableUncompressedNativeLibs=true" >> android/gradle.properties
 
       - name: 🏗 Build AAB (Production)
         working-directory: android
-        # حذفنا الخيار الملغي -Pandroid.bundle.enableUncompressedNativeLibs لأن النظام يفعله تلقائياً
         run: ./gradlew bundleRelease -x lint --no-daemon
 
       - name: 📤 Upload AAB Artifact

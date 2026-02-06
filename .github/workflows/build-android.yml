@@ -1,0 +1,46 @@
+name: Build Android 16KB Support
+on:
+  workflow_dispatch: # يسمح لك بتشغيل البناء بضغطة زر
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # يعمل على لينكس (نظيف وسريع)
+    steps:
+      - name: 🏗 Setup Repo
+        uses: actions/checkout@v4
+
+      - name: 🏗 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: 📦 Install Dependencies
+        run: npm install
+
+      - name: 🔧 Prebuild (Clean Android Generation)
+        run: npx expo prebuild --platform android --clean
+
+      - name: 📝 Inject 16KB Config (Force)
+        run: |
+          # إضافة كود عدم الضغط مباشرة في الملف
+          echo "" >> android/app/build.gradle
+          echo "android { aaptOptions { noCompress 'so' } }" >> android/app/build.gradle
+          # التأكد من الخصائص
+          echo "android.bundle.enableUncompressedNativeLibs=true" >> android/gradle.properties
+
+      - name: 🏗 Build AAB (Production)
+        working-directory: android
+        run: ./gradlew bundleRelease -Pandroid.bundle.enableUncompressedNativeLibs=true
+
+      - name: 📤 Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-16kb
+          path: android/app/build/outputs/bundle/release/app-release.aab

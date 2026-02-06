@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "scripts",
+    "slug": "scripts",
+    "version": "1.0.0",
+    "description": "",
+    "sdkVersion": "51.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "android": {
+      "package": "com.islam.znx1.scripts"
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "EduApp",
+    "slug": "edu-app",
+    "version": "2.0.4",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.islamzn.eduapp",
+      "versionCode": 146, 
+      "googleServicesFile": "./google-services.json",
+      "icon": "./assets/images/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/desk-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "intentFilters": [],
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "splash": {
+      "image": "./assets/images/splash.png", 
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-logo.png",
+          "color": "#ffffff"
+        }
+      ],
+    [
+  "expo-build-properties",
+  {
+    "android": {
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "buildToolsVersion": "35.0.0",
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true,
+      "useLegacyPackaging": false, 
+      "extraGradleParams": [
+        "-Pandroid.useAndroidX=true",
+        "-Pandroid.enableJetifier=true",
+        "-Pandroid.bundle.enableUncompressedNativeLibs=true"
+      ],
+      "packagingOptions": {
+        "jniLibs": {
+          "useLegacyPackaging": false
+        },
+        "pickFirsts": ["**/*.so"]
+      }
+    }
+  }
+],
+      "expo-font",
+      "@react-native-community/datetimepicker",
+      "expo-asset"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "2c0c9221-7057-4dea-a0ec-47da1105d893"
+      }
+    }
+  }
+}

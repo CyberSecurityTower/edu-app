@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3">
+  <style>
+    body { margin: 0; background-color: #0B1220; /* نفس لون خلفية تطبيقك */ }
+    #the-canvas { direction: ltr; display: block; margin: 0 auto; }
+    /* طبقة النص المخفية المهمة للتحديد */
+    .textLayer {
+        position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+        overflow: hidden; opacity: 0.2; line-height: 1.0;
+        transform-origin: 0 0;
+    }
+    .textLayer > span {
+        color: transparent; position: absolute; white-space: pre; cursor: text;
+        transform-origin: 0% 0%;
+    }
+    /* وعاء الصفحة */
+    #page-container { position: relative; margin: 10px auto; overflow: hidden; }
+  </style>
+  <script src="./pdf.js"></script>
+</head>
+<body>
+
+  <div id="page-container">
+    <canvas id="the-canvas"></canvas>
+    <div class="textLayer"></div>
+  </div>
+
+  <script>
+    // إعداد الـ Worker (ضروري جداً)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.js';
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let scale = 1.5; // مقياس الزووم المبدئي
+    const canvas = document.getElementById('the-canvas');
+    const ctx = canvas.getContext('2d');
+    const textLayerDiv = document.querySelector(".textLayer");
+
+    // استقبال البيانات من React Native
+    // سنرسل رابط الملف أو Base64 لاحقاً
+    window.addEventListener("message", async (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'LOAD_PDF') {
+            loadPDF(data.url); // url أو base64 data uri
+        }
+    });
+
+    async function loadPDF(url) {
+        try {
+            const loadingTask = pdfjsLib.getDocument(url);
+            pdfDoc = await loadingTask.promise;
+            renderPage(pageNum);
+            
+            // إخبار التطبيق أن الملف تم تحميله
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PDF_LOADED', pages: pdfDoc.numPages }));
+        } catch (error) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: error.message }));
+        }
+    }
+
+    async function renderPage(num) {
+        const page = await pdfDoc.getPage(num);
+        const viewport = page.getViewport({ scale: scale });
+
+        // ضبط أبعاد الكانفاس
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        // ضبط أبعاد طبقة النصوص لتطابق الكانفاس
+        document.getElementById('page-container').style.width = `${viewport.width}px`;
+        document.getElementById('page-container').style.height = `${viewport.height}px`;
+
+        // رسم الـ PDF
+        const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+        };
+        await page.render(renderContext).promise;
+
+        // **السحر هنا: رسم طبقة النصوص لتفعيل التحديد**
+        const textContent = await page.getTextContent();
+        textLayerDiv.innerHTML = ""; // تنظيف القديم
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+        
+        pdfjsLib.renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: viewport,
+            textDivs: []
+        });
+    }
+  </script>
+</body>
+</html>

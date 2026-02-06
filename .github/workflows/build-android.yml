@@ -21,17 +21,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 🔥 الحل القاطع لملف الـ JSON باستخدام Node.js
       - name: 🔓 Create Google Services JSON
         env:
           GS_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          node -e "
-          const fs = require('fs');
-          const data = Buffer.from(process.env.GS_JSON_B64.trim(), 'base64').toString('utf-8');
-          fs.writeFileSync('google-services.json', data);
-          console.log('google-services.json created successfully');
-          "
+          node -e "const fs = require('fs'); const data = Buffer.from(process.env.GS_JSON_B64.trim(), 'base64').toString('utf-8'); fs.writeFileSync('google-services.json', data);"
 
       - name: 📦 Install Dependencies
         run: npm install
@@ -39,21 +33,34 @@ jobs:
       - name: 🔧 Prebuild (Clean Android Generation)
         run: npx expo prebuild --platform android --clean
 
-      # 🛡️ تعديل التوقيع لنسخة الديباج لضمان نجاح البناء بدون ملف Keystore
       - name: 🛡️ Bypass Signing
         run: |
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' android/app/build.gradle
 
-      # 📝 حقن إعدادات 16KB بطريقة برمجية في ملف gradle.properties (الأكثر استقراراً)
-      - name: 📝 Inject 16KB Config
+      - name: 🚀 Force 16KB Alignment (Safe Injection)
         run: |
+          # 1. إجبار عدم الضغط في ملف الخصائص
           echo "android.bundle.enableUncompressedNativeLibs=true" >> android/gradle.properties
-          # إضافة إعداد منع الضغط في ملف build.gradle
-          sed -i '/android {/a \    aaptOptions { noCompress "so" }' android/app/build.gradle
+          
+          # 2. حقن الإعدادات باستخدام سكربت بسيط جداً لا يكسر الـ YAML
+          node -e "
+          const fs = require('fs');
+          let content = fs.readFileSync('android/app/build.gradle', 'utf8');
+          
+          // إعدادات التغليف وعدم الضغط
+          const packagingConfigs = '\n    packaging { jniLibs { useLegacyPackaging = false } }\n    aaptOptions { noCompress \"so\" }\n';
+          content = content.replace(/android {/, 'android {' + packagingConfigs);
+          
+          // إعدادات المحاذاة للمكتبات الأصلية (16KB)
+          const alignmentConfigs = '\n        externalNativeBuild { cmake { cppFlags \"-z max-page-size=16384\" } }\n';
+          content = content.replace(/defaultConfig {/, 'defaultConfig {' + alignmentConfigs);
+          
+          fs.writeFileSync('android/app/build.gradle', content);
+          "
 
       - name: 🏗 Build AAB (Production)
         working-directory: android
-        run: ./gradlew bundleRelease -x lint --no-daemon
+        run: ./gradlew bundleRelease -x lint --no-daemon -Pandroid.bundle.enableUncompressedNativeLibs=true
 
       - name: 📤 Upload AAB Artifact
         uses: actions/upload-artifact@v4
